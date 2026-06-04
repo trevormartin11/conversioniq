@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { getCurrentUser } from "@/lib/auth";
-import { addCampaign } from "@/lib/data/store";
+import { addCampaign, ensureData } from "@/lib/data/store";
 
 export async function createCampaignAction(input: {
   name: string;
@@ -10,9 +10,10 @@ export async function createCampaignAction(input: {
   personaId: string;
   dailyCap: number;
 }) {
+  await ensureData();
   const user = await getCurrentUser();
   if (!input.name.trim()) return { ok: false, error: "Campaign name is required." };
-  const campaign = addCampaign(
+  const campaign = await addCampaign(
     {
       name: input.name.trim(),
       vertical: input.vertical.trim() || "General",

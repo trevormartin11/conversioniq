@@ -1,9 +1,10 @@
 "use server";
 
-import { dedupeAgainstUniverse, isSuppressed, searchUniverse } from "@/lib/data/store";
+import { dedupeAgainstUniverse, ensureData, isSuppressed, searchUniverse } from "@/lib/data/store";
 
 /** "Have we ever touched this person or domain?" — instant lookup. */
 export async function checkTouchedAction(value: string) {
+  await ensureData();
   const v = value.trim();
   if (!v) return { ok: false as const };
   const { suppressed, entry } = isSuppressed(v.includes("@") ? v : `x@${v}`);
@@ -22,6 +23,7 @@ export async function checkTouchedAction(value: string) {
  * universe BEFORE anyone enters a campaign — the load-time suppression gate.
  */
 export async function dedupeListAction(text: string) {
+  await ensureData();
   const emails = text
     .split(/[\s,]+/)
     .map((s) => s.trim())

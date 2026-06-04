@@ -2,7 +2,7 @@ import { Lightbulb, Trophy } from "lucide-react";
 import { Card, CardBody, SectionHeader } from "@/components/ui/card";
 import { Tag } from "@/components/ui/badge";
 import { PhaseBanner } from "@/components/ui/phase-banner";
-import { getVariants } from "@/lib/data/store";
+import { ensureData, getVariants } from "@/lib/data/store";
 import { suggestCopy } from "@/lib/ai/copy";
 import { integrations } from "@/lib/config";
 import { num, pct, rate } from "@/lib/format";
@@ -10,6 +10,7 @@ import { num, pct, rate } from "@/lib/format";
 export const dynamic = "force-dynamic";
 
 export default async function CopyPage() {
+  await ensureData();
   const variants = getVariants();
   const suggestions = await suggestCopy(variants);
   const best = [...variants].sort((a, b) => rate(b.positives, b.sent) - rate(a.positives, a.sent))[0];

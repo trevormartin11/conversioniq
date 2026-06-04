@@ -1,13 +1,13 @@
 /**
  * Data-access layer.
  *
- * In MOCK mode (no Supabase keys) this serves a single mutable in-memory
- * dataset built from the seed — good enough to browse, demo, and exercise every
- * action (approvals persist for the life of the server process). When Supabase
- * keys are present, swap the bodies here for real queries; every page and action
- * goes through these functions, so the rest of the app doesn't change.
+ * MOCK mode: a mutable in-memory dataset from the seed (mutations persist for the
+ * server process). LIVE mode (Supabase configured): ensureData() hydrates the
+ * same Dataset shape from the DB per request, and mutations write through to
+ * Supabase. Selectors/getters stay synchronous and unchanged — pages/actions
+ * just `await ensureData()` first.
  */
-
+import { cache } from "react";
 import { DATA_MODE } from "@/lib/config";
 import type {
   AutomationLevel,
@@ -20,8 +20,11 @@ import type {
   SuppressionEntry,
 } from "./types";
 import { buildSeed } from "./seed";
+import { loadAutomationLevel, loadDatasetLive } from "./live";
+import { supabaseAdmin } from "./supabase";
 
-// --- singleton --------------------------------------------------------------
+const LIVE = DATA_MODE === "live";
+
 let _data: Dataset | null = null;
 let _automationLevel: AutomationLevel = "approve_all";
 
@@ -30,11 +33,32 @@ function db(): Dataset {
   return _data;
 }
 
+const hydrateLive = cache(async () => {
+  _data = await loadDatasetLive();
+  _automationLevel = await loadAutomationLevel();
+});
+
+/** Populate the in-memory dataset for this request (live: from Supabase). */
+export async function ensureData(): Promise<void> {
+  if (LIVE) await hydrateLive();
+  else if (!_data) _data = buildSeed();
+}
+
+async function liveUpsert(table: string, row: Record<string, unknown>, onConflict = "id") {
+  if (!LIVE) return;
+  const { error } = await supabaseAdmin().from(table).upsert(row, { onConflict });
+  if (error) throw new Error(`${table} write failed: ${error.message}`);
+}
+async function liveDeleteRow(table: string, id: string) {
+  if (!LIVE) return;
+  await supabaseAdmin().from(table).delete().eq("id", id);
+}
+
 export function dataMode() {
   return DATA_MODE;
 }
 
-// --- raw getters ------------------------------------------------------------
+// --- raw getters (sync; read the hydrated dataset) --------------------------
 export const getDataset = (): Dataset => db();
 export const getUsers = () => db().users;
 export const getPersonas = () => db().personas;
@@ -61,46 +85,44 @@ export const getInbox = (id: string) => db().inboxes.find((i) => i.id === id) ??
 
 // --- automation dial --------------------------------------------------------
 export const getAutomationLevel = () => _automationLevel;
-export function setAutomationLevel(level: AutomationLevel) {
+export async function setAutomationLevel(level: AutomationLevel) {
   _automationLevel = level;
-  pushAudit("system", "automation.level_changed", "settings", null, { level });
+  await liveUpsert("settings", { key: "automation_level", value: level }, "key");
+  await pushAudit("system", "automation.level_changed", "settings", null, { level });
   return _automationLevel;
 }
 
-// --- audit helper -----------------------------------------------------------
-export function pushAudit(
+// --- audit ------------------------------------------------------------------
+export async function pushAudit(
   actor: string,
   action: string,
   entity: string,
   entityId: string | null,
   meta: Record<string, unknown> = {},
 ) {
-  db().audit.unshift({
-    id: `a_${Math.random().toString(36).slice(2, 9)}`,
-    actor,
-    action,
-    entity,
-    entityId,
-    meta,
-    createdAt: new Date().toISOString(),
-  });
+  const id = `a_${Math.random().toString(36).slice(2, 9)}`;
+  const createdAt = new Date().toISOString();
+  db().audit.unshift({ id, actor, action, entity, entityId, meta, createdAt });
+  await liveUpsert("audit_log", { id, actor, action, entity, entity_id: entityId, meta, created_at: createdAt });
 }
 
 // --- reply mutations --------------------------------------------------------
-export function updateReplyStatus(id: string, status: ReplyStatus, actor: string): Reply | null {
+export async function updateReplyStatus(id: string, status: ReplyStatus, actor: string): Promise<Reply | null> {
   const reply = getReply(id);
   if (!reply) return null;
   reply.status = status;
   reply.handledBy = actor;
   reply.handledAt = new Date().toISOString();
-  pushAudit(actor, `reply.${status}`, "reply", id, { lead: reply.fromName });
+  await liveUpsert("replies", { id, status, handled_by: actor, handled_at: reply.handledAt });
+  await pushAudit(actor, `reply.${status}`, "reply", id, { lead: reply.fromName });
   return reply;
 }
 
-export function saveReplyDraft(id: string, draft: string): Reply | null {
+export async function saveReplyDraft(id: string, draft: string): Promise<Reply | null> {
   const reply = getReply(id);
   if (!reply) return null;
   reply.aiDraft = draft;
+  await liveUpsert("replies", { id, ai_draft: draft });
   return reply;
 }
 
@@ -109,7 +131,6 @@ function norm(s: string) {
   return s.trim().toLowerCase();
 }
 
-/** Is this email or its domain already in the contacted + DNC universe? */
 export function isSuppressed(email: string): { suppressed: boolean; entry?: SuppressionEntry } {
   const e = norm(email);
   const domain = e.split("@")[1] ?? "";
@@ -119,17 +140,9 @@ export function isSuppressed(email: string): { suppressed: boolean; entry?: Supp
   return { suppressed: !!entry, entry };
 }
 
-/**
- * Dedupe a candidate list against the ENTIRE suppression universe BEFORE anyone
- * enters a campaign — the "don't get caught in a later net" requirement. Returns
- * the clean list plus the rejects with reasons.
- */
 export function dedupeAgainstUniverse(
   candidates: { email: string; [k: string]: unknown }[],
-): {
-  clean: typeof candidates;
-  rejected: { email: string; reason: string }[];
-} {
+): { clean: typeof candidates; rejected: { email: string; reason: string }[] } {
   const clean: typeof candidates = [];
   const rejected: { email: string; reason: string }[] = [];
   const seen = new Set<string>();
@@ -141,23 +154,20 @@ export function dedupeAgainstUniverse(
     }
     seen.add(e);
     const { suppressed, entry } = isSuppressed(c.email);
-    if (suppressed) {
-      rejected.push({ email: c.email, reason: entry?.reason ?? "suppressed" });
-    } else {
-      clean.push(c);
-    }
+    if (suppressed) rejected.push({ email: c.email, reason: entry?.reason ?? "suppressed" });
+    else clean.push(c);
   }
   return { clean, rejected };
 }
 
-export function addSuppression(entry: Omit<SuppressionEntry, "id" | "createdAt">, actor = "system") {
-  const row: SuppressionEntry = {
-    ...entry,
-    id: `sup_${Math.random().toString(36).slice(2, 9)}`,
-    createdAt: new Date().toISOString(),
-  };
+export async function addSuppression(entry: Omit<SuppressionEntry, "id" | "createdAt">, actor = "system") {
+  const row: SuppressionEntry = { ...entry, id: `sup_${Math.random().toString(36).slice(2, 9)}`, createdAt: new Date().toISOString() };
   db().suppression.unshift(row);
-  pushAudit(actor, "lead.suppressed", "suppression", row.id, { reason: row.reason, email: row.email });
+  await liveUpsert("suppression", {
+    id: row.id, email: row.email, domain: row.domain, reason: row.reason,
+    source: row.source, lead_id: row.leadId, note: row.note, created_at: row.createdAt,
+  });
+  await pushAudit(actor, "lead.suppressed", "suppression", row.id, { reason: row.reason, email: row.email });
   return row;
 }
 
@@ -173,93 +183,91 @@ export function searchUniverse(query: string) {
         `${l.firstName} ${l.lastName}`.toLowerCase().includes(q),
     ).slice(0, 50),
     suppression: db().suppression.filter(
-      (s) => (s.email?.toLowerCase().includes(q)) || (s.domain?.toLowerCase().includes(q)),
+      (s) => s.email?.toLowerCase().includes(q) || s.domain?.toLowerCase().includes(q),
     ).slice(0, 50),
   };
 }
 
-// --- credit guard (CIQ spend is gated — hard rule) --------------------------
-export function decideCreditRequest(
-  id: string,
-  decision: "approved" | "denied",
-  actor: string,
-): CreditSpendRequest | null {
+// --- credit guard -----------------------------------------------------------
+export async function decideCreditRequest(id: string, decision: "approved" | "denied", actor: string): Promise<CreditSpendRequest | null> {
   const req = db().creditRequests.find((r) => r.id === id);
   if (!req) return null;
   req.status = decision;
   req.decidedBy = actor;
   req.decidedAt = new Date().toISOString();
-  pushAudit(actor, `credit.${decision}`, "apollo_ciq", id, { amount: req.amount });
+  await liveUpsert("credit_requests", { id, status: decision, decided_by: actor, decided_at: req.decidedAt });
+  await pushAudit(actor, `credit.${decision}`, "apollo_ciq", id, { amount: req.amount });
   return req;
 }
 
-export function createCreditRequest(
-  input: Pick<CreditSpendRequest, "provider" | "amount" | "reason" | "requestedBy">,
-): CreditSpendRequest {
-  const req: CreditSpendRequest = {
-    ...input,
-    id: `cr_${Math.random().toString(36).slice(2, 9)}`,
-    status: "pending",
-    decidedBy: null,
-    createdAt: new Date().toISOString(),
-    decidedAt: null,
-  };
+export async function createCreditRequest(input: Pick<CreditSpendRequest, "provider" | "amount" | "reason" | "requestedBy">): Promise<CreditSpendRequest> {
+  const req: CreditSpendRequest = { ...input, id: `cr_${Math.random().toString(36).slice(2, 9)}`, status: "pending", decidedBy: null, createdAt: new Date().toISOString(), decidedAt: null };
   db().creditRequests.unshift(req);
-  pushAudit(input.requestedBy, "credit.spend_requested", input.provider, req.id, { amount: input.amount });
+  await liveUpsert("credit_requests", {
+    id: req.id, provider: req.provider, amount: req.amount, reason: req.reason,
+    requested_by: req.requestedBy, status: req.status, created_at: req.createdAt,
+  });
+  await pushAudit(input.requestedBy, "credit.spend_requested", input.provider, req.id, { amount: input.amount });
   return req;
 }
 
-// --- campaigns --------------------------------------------------------------
-export function addCampaign(
-  input: Pick<Campaign, "name" | "vertical" | "personaId" | "dailyCap">,
-  actor = "system",
-): Campaign {
-  const slug = input.vertical.toLowerCase().replace(/[^a-z]+/g, "_") || "general";
-  const campaign: Campaign = {
-    id: `c_${Math.random().toString(36).slice(2, 9)}`,
-    name: input.name,
-    vertical: input.vertical || "General",
-    personaId: input.personaId,
-    status: "draft", // staged — not launched in Instantly until reviewed
-    instantlyCampaignId: null,
-    listVersion: `${slug}_v1`,
-    inboxIds: [],
-    dailyCap: input.dailyCap || 80,
-    createdAt: new Date().toISOString(),
-  };
-  db().campaigns.unshift(campaign);
-  pushAudit(actor, "campaign.created", "campaign", campaign.id, { name: campaign.name, vertical: campaign.vertical });
-  return campaign;
+export async function executeCreditSpend(id: string, actor: string): Promise<CreditSpendRequest | null> {
+  const req = db().creditRequests.find((r) => r.id === id);
+  if (!req || req.status !== "approved") return null;
+  req.status = "executed";
+  await liveUpsert("credit_requests", { id, status: "executed" });
+  await pushAudit(actor, "credit.executed", "apollo_ciq", id, { amount: req.amount });
+  return req;
 }
 
 // --- costs (P&L) ------------------------------------------------------------
-export function addCost(input: Omit<Cost, "id" | "startedAt" | "source" | "createdBy">, actor = "system"): Cost {
-  const cost: Cost = {
-    ...input,
-    id: `co_${Math.random().toString(36).slice(2, 9)}`,
-    startedAt: new Date().toISOString(),
-    source: "manual",
-    createdBy: actor,
-  };
+export async function addCost(input: Omit<Cost, "id" | "startedAt" | "source" | "createdBy">, actor = "system"): Promise<Cost> {
+  const cost: Cost = { ...input, id: `co_${Math.random().toString(36).slice(2, 9)}`, startedAt: new Date().toISOString(), source: "manual", createdBy: actor };
   db().costs.unshift(cost);
-  pushAudit(actor, "cost.added", "cost", cost.id, { vendor: cost.vendor, amount: cost.amount, cadence: cost.cadence });
+  await liveUpsert("costs", {
+    id: cost.id, category: cost.category, vendor: cost.vendor, description: cost.description,
+    amount: cost.amount, cadence: cost.cadence, status: cost.status, started_at: cost.startedAt,
+    next_charge_at: cost.nextChargeAt, source: cost.source, note: cost.note, created_by: cost.createdBy,
+  });
+  await pushAudit(actor, "cost.added", "cost", cost.id, { vendor: cost.vendor, amount: cost.amount, cadence: cost.cadence });
   return cost;
 }
 
-export function deleteCost(id: string, actor = "system"): boolean {
+export async function deleteCost(id: string, actor = "system"): Promise<boolean> {
   const costs = db().costs;
   const i = costs.findIndex((c) => c.id === id);
   if (i === -1) return false;
   costs.splice(i, 1);
-  pushAudit(actor, "cost.removed", "cost", id, {});
+  await liveDeleteRow("costs", id);
+  await pushAudit(actor, "cost.removed", "cost", id, {});
   return true;
 }
 
+// --- campaigns --------------------------------------------------------------
+export async function addCampaign(input: Pick<Campaign, "name" | "vertical" | "personaId" | "dailyCap">, actor = "system"): Promise<Campaign> {
+  const slug = input.vertical.toLowerCase().replace(/[^a-z]+/g, "_") || "general";
+  const campaign: Campaign = {
+    id: `c_${Math.random().toString(36).slice(2, 9)}`,
+    name: input.name, vertical: input.vertical || "General", personaId: input.personaId,
+    status: "draft", instantlyCampaignId: null, listVersion: `${slug}_v1`, inboxIds: [],
+    dailyCap: input.dailyCap || 80, createdAt: new Date().toISOString(),
+  };
+  db().campaigns.unshift(campaign);
+  await liveUpsert("campaigns", {
+    id: campaign.id, name: campaign.name, vertical: campaign.vertical, persona_id: campaign.personaId,
+    status: campaign.status, list_version: campaign.listVersion, inbox_ids: campaign.inboxIds,
+    daily_cap: campaign.dailyCap, created_at: campaign.createdAt,
+  });
+  await pushAudit(actor, "campaign.created", "campaign", campaign.id, { name: campaign.name, vertical: campaign.vertical });
+  return campaign;
+}
+
 // --- deliverability ---------------------------------------------------------
-export function pauseInbox(id: string, actor: string, reason: string) {
+export async function pauseInbox(id: string, actor: string, reason: string) {
   const inbox = getInbox(id);
   if (!inbox) return null;
   inbox.status = "paused";
-  pushAudit(actor, "inbox.paused", "inbox", id, { reason });
+  await liveUpsert("inboxes", { id, status: "paused" });
+  await pushAudit(actor, "inbox.paused", "inbox", id, { reason });
   return inbox;
 }

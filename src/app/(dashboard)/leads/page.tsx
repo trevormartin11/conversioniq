@@ -2,13 +2,14 @@ import { Card, CardBody, SectionHeader } from "@/components/ui/card";
 import { Stat } from "@/components/ui/stat";
 import { Tag } from "@/components/ui/badge";
 import { SuppressionTools } from "@/components/leads/suppression-tools";
-import { getLeads, getSuppression } from "@/lib/data/store";
+import { ensureData, getLeads, getSuppression } from "@/lib/data/store";
 import { num, titleCase } from "@/lib/format";
 import type { SuppressionReason } from "@/lib/data/types";
 
 export const dynamic = "force-dynamic";
 
 export default async function LeadsPage({ searchParams }: { searchParams: Promise<{ q?: string }> }) {
+  await ensureData();
   const { q } = await searchParams;
   const query = (q ?? "").toLowerCase().trim();
   const leads = getLeads();

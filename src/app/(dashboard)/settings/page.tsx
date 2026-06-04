@@ -3,7 +3,7 @@ import { Card, CardBody, SectionHeader } from "@/components/ui/card";
 import { Tag } from "@/components/ui/badge";
 import { UserSwitcher } from "@/components/settings/user-switcher";
 import { getCurrentUser, listPartners } from "@/lib/auth";
-import { getAutomationLevel } from "@/lib/data/store";
+import { ensureData, getAutomationLevel } from "@/lib/data/store";
 import { integrationStatuses } from "@/lib/integrations";
 import { appConfig, DATA_MODE } from "@/lib/config";
 import { pct, titleCase } from "@/lib/format";
@@ -20,6 +20,7 @@ const SETUP_STEPS = [
 ] as const;
 
 export default async function SettingsPage() {
+  await ensureData();
   const user = await getCurrentUser();
   const partners = listPartners();
   const statuses = integrationStatuses();

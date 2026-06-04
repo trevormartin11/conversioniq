@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { getCurrentUser } from "@/lib/auth";
 import {
   addSuppression,
+  ensureData,
   getLead,
   getReply,
   saveReplyDraft,
@@ -20,36 +21,38 @@ function revalidate() {
 }
 
 export async function approveAndSendAction(id: string, body: string) {
+  await ensureData();
   const user = await getCurrentUser();
-  saveReplyDraft(id, body);
-  // In live mode this is where we'd POST the reply through Instantly on the
-  // original thread. In mock mode we record the approval + send.
-  updateReplyStatus(id, "sent", user.name);
+  await saveReplyDraft(id, body);
+  // Live: POST the reply through Instantly on the original thread here.
+  await updateReplyStatus(id, "sent", user.name);
   revalidate();
   return { ok: true };
 }
 
 export async function skipReplyAction(id: string) {
+  await ensureData();
   const user = await getCurrentUser();
-  updateReplyStatus(id, "skipped", user.name);
+  await updateReplyStatus(id, "skipped", user.name);
   revalidate();
   return { ok: true };
 }
 
 export async function snoozeReplyAction(id: string) {
+  await ensureData();
   const user = await getCurrentUser();
-  updateReplyStatus(id, "snoozed", user.name);
+  await updateReplyStatus(id, "snoozed", user.name);
   revalidate();
   return { ok: true };
 }
 
-/** Negative / unsubscribe -> suppress globally + flag Zoho DNC (auto-action). */
 export async function suppressFromReplyAction(id: string) {
+  await ensureData();
   const user = await getCurrentUser();
   const reply = getReply(id);
   if (!reply) return { ok: false };
   const lead = getLead(reply.leadId);
-  addSuppression(
+  await addSuppression(
     {
       email: reply.fromEmail,
       domain: null,
@@ -62,24 +65,25 @@ export async function suppressFromReplyAction(id: string) {
   );
   // Live: zoho.setDoNotContact(lead.zohoLeadId) — canonical DNC write.
   void lead;
-  updateReplyStatus(id, "suppressed", user.name);
+  await updateReplyStatus(id, "suppressed", user.name);
   revalidate();
   return { ok: true };
 }
 
 export async function regenerateDraftAction(id: string) {
+  await ensureData();
   const reply = getReply(id);
   if (!reply) return { ok: false, draft: "" };
   const lead = getLead(reply.leadId);
   const { draft } = await draftReply(reply, lead);
-  if (draft) saveReplyDraft(id, draft);
+  if (draft) await saveReplyDraft(id, draft);
   revalidate();
   return { ok: true, draft: draft ?? "" };
 }
 
 export async function setAutomationAction(level: AutomationLevel) {
-  setAutomationLevel(level);
-  // Notify the team so a change in posture is visible.
+  await ensureData();
+  await setAutomationLevel(level);
   void sendTelegram(`⚙️ Reply automation set to *${level.replace("_", " ")}*.`);
   revalidate();
   return { ok: true };

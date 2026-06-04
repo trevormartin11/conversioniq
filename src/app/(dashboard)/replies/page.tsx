@@ -1,10 +1,11 @@
 import { ReplyQueue, type ReplyView } from "@/components/replies/reply-queue";
-import { getAutomationLevel, getLead, getReplies } from "@/lib/data/store";
+import { ensureData, getAutomationLevel, getLead, getReplies } from "@/lib/data/store";
 import { integrations } from "@/lib/config";
 
 export const dynamic = "force-dynamic";
 
-export default function RepliesPage() {
+export default async function RepliesPage() {
+  await ensureData();
   const replies: ReplyView[] = getReplies()
     .slice()
     .sort((a, b) => {

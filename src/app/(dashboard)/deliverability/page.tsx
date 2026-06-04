@@ -3,14 +3,15 @@ import { Stat } from "@/components/ui/stat";
 import { HealthBadge, Tag } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/charts";
 import { deliverabilitySummary } from "@/lib/data/queries";
-import { getDomains, getInboxes, getPersonas } from "@/lib/data/store";
+import { ensureData, getDomains, getInboxes, getPersonas } from "@/lib/data/store";
 import { appConfig } from "@/lib/config";
 import { num, pct, titleCase } from "@/lib/format";
 import type { Health } from "@/lib/data/types";
 
 export const dynamic = "force-dynamic";
 
-export default function DeliverabilityPage() {
+export default async function DeliverabilityPage() {
+  await ensureData();
   const s = deliverabilitySummary();
   const domains = getDomains();
   const inboxes = getInboxes();

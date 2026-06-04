@@ -3,12 +3,13 @@ import { Stat } from "@/components/ui/stat";
 import { LabeledBar } from "@/components/ui/charts";
 import { CostManager, type CostView } from "@/components/costs/cost-manager";
 import { costSummary } from "@/lib/data/queries";
-import { getCosts } from "@/lib/data/store";
+import { ensureData, getCosts } from "@/lib/data/store";
 import { usd, titleCase } from "@/lib/format";
 
 export const dynamic = "force-dynamic";
 
-export default function CostsPage() {
+export default async function CostsPage() {
+  await ensureData();
   const s = costSummary();
   const costs: CostView[] = getCosts().map((c) => ({
     id: c.id,

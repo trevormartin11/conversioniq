@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { getCurrentUser } from "@/lib/auth";
-import { createCreditRequest, decideCreditRequest, getCreditRequests, pushAudit } from "@/lib/data/store";
+import { createCreditRequest, decideCreditRequest, ensureData, executeCreditSpend } from "@/lib/data/store";
 
 function revalidate() {
   revalidatePath("/credits");
@@ -10,40 +10,39 @@ function revalidate() {
 }
 
 export async function requestCreditAction(amount: number, reason: string) {
+  await ensureData();
   const user = await getCurrentUser();
   if (!amount || amount <= 0) return { ok: false, error: "Enter a positive amount." };
-  createCreditRequest({ provider: "apollo_ciq", amount, reason: reason || "(no reason given)", requestedBy: user.name });
+  await createCreditRequest({ provider: "apollo_ciq", amount, reason: reason || "(no reason given)", requestedBy: user.name });
   revalidate();
   return { ok: true };
 }
 
 export async function approveCreditAction(id: string) {
+  await ensureData();
   const user = await getCurrentUser();
-  decideCreditRequest(id, "approved", user.name);
+  await decideCreditRequest(id, "approved", user.name);
   revalidate();
   return { ok: true };
 }
 
 export async function denyCreditAction(id: string) {
+  await ensureData();
   const user = await getCurrentUser();
-  decideCreditRequest(id, "denied", user.name);
+  await decideCreditRequest(id, "denied", user.name);
   revalidate();
   return { ok: true };
 }
 
 /**
- * The ONLY path that actually spends CIQ credits. Hard rule: refuses unless the
- * request exists and is approved. In live mode this is where
- * apollo.enrichWithCiqCredits(...) runs with the approval payload. Every spend
- * is audit-logged.
+ * The ONLY path that spends CIQ credits. Refuses unless the request is approved.
+ * Live: this is where apollo.enrichWithCiqCredits(...) runs with the approval.
  */
 export async function executeCreditSpendAction(id: string) {
+  await ensureData();
   const user = await getCurrentUser();
-  const req = getCreditRequests().find((r) => r.id === id);
-  if (!req) return { ok: false, error: "Request not found." };
-  if (req.status !== "approved") return { ok: false, error: "Refused — spend must be approved first." };
-  req.status = "executed";
-  pushAudit(user.name, "credit.executed", "apollo_ciq", id, { amount: req.amount });
+  const res = await executeCreditSpend(id, user.name);
+  if (!res) return { ok: false, error: "Refused — spend must be approved first." };
   revalidate();
   return { ok: true };
 }

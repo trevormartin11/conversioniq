@@ -5,12 +5,13 @@ import { Button } from "@/components/ui/button";
 import { PhaseBanner } from "@/components/ui/phase-banner";
 import { NewCampaignForm } from "@/components/campaigns/new-campaign-form";
 import { campaignCards } from "@/lib/data/queries";
-import { getCampaigns, getPersonas } from "@/lib/data/store";
+import { ensureData, getCampaigns, getPersonas } from "@/lib/data/store";
 import { num, pct, titleCase } from "@/lib/format";
 
 export const dynamic = "force-dynamic";
 
-export default function CampaignsPage() {
+export default async function CampaignsPage() {
+  await ensureData();
   const campaigns = getCampaigns();
   const cards = campaignCards();
   const personas = getPersonas();

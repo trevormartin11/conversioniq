@@ -2,11 +2,13 @@ import { Card, CardBody, SectionHeader } from "@/components/ui/card";
 import { Stat } from "@/components/ui/stat";
 import { PhaseBanner } from "@/components/ui/phase-banner";
 import { pipeline, residual } from "@/lib/data/queries";
+import { ensureData } from "@/lib/data/store";
 import { num, pct, titleCase, usd } from "@/lib/format";
 
 export const dynamic = "force-dynamic";
 
-export default function PipelinePage() {
+export default async function PipelinePage() {
+  await ensureData();
   const p = pipeline();
   const r = residual();
   const top = p.funnel[0]?.count || 1;

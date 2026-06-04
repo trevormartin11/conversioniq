@@ -1,7 +1,7 @@
 import { CheckCircle2, Circle, XCircle } from "lucide-react";
 import { Card, CardBody, SectionHeader } from "@/components/ui/card";
 import { Tag } from "@/components/ui/badge";
-import { getAudit, getJobs } from "@/lib/data/store";
+import { ensureData, getAudit, getJobs } from "@/lib/data/store";
 import { integrationStatuses } from "@/lib/integrations";
 import { ago, titleCase } from "@/lib/format";
 
@@ -14,7 +14,8 @@ const JOB_LABELS: Record<string, string> = {
   weekly_report: "Weekly report",
 };
 
-export default function AutomationPage() {
+export default async function AutomationPage() {
+  await ensureData();
   const jobs = getJobs();
   const statuses = integrationStatuses();
   const audit = getAudit().slice(0, 12);

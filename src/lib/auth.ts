@@ -5,10 +5,11 @@
  * this one function and won't change.
  */
 import { cookies } from "next/headers";
-import { getUsers } from "@/lib/data/store";
+import { ensureData, getUsers } from "@/lib/data/store";
 import type { User } from "@/lib/data/types";
 
 export async function getCurrentUser(): Promise<User> {
+  await ensureData();
   const users = getUsers();
   try {
     const jar = await cookies();

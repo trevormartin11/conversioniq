@@ -3,13 +3,14 @@ import { Card, CardBody, SectionHeader } from "@/components/ui/card";
 import { Progress } from "@/components/ui/charts";
 import { CreditControls, type RequestView } from "@/components/credits/credit-controls";
 import { creditSummary } from "@/lib/data/queries";
-import { getAudit, getCreditRequests } from "@/lib/data/store";
+import { ensureData, getAudit, getCreditRequests } from "@/lib/data/store";
 import { getCurrentUser } from "@/lib/auth";
 import { ago, num, pct } from "@/lib/format";
 
 export const dynamic = "force-dynamic";
 
 export default async function CreditsPage() {
+  await ensureData();
   const meters = creditSummary();
   const requests: RequestView[] = getCreditRequests().map((r) => ({
     id: r.id,

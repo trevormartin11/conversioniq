@@ -5,6 +5,7 @@ import { Stat } from "@/components/ui/stat";
 import { HealthBadge } from "@/components/ui/badge";
 import { LabeledBar, Sparkline } from "@/components/ui/charts";
 import { commandSummary, deliverabilitySummary } from "@/lib/data/queries";
+import { ensureData } from "@/lib/data/store";
 import { getCurrentUser } from "@/lib/auth";
 import { num, pct, titleCase } from "@/lib/format";
 import type { CampaignCard as CardData } from "@/lib/data/queries";
@@ -12,6 +13,7 @@ import type { CampaignCard as CardData } from "@/lib/data/queries";
 export const dynamic = "force-dynamic";
 
 export default async function CommandCenter() {
+  await ensureData();
   const s = commandSummary();
   const deliver = deliverabilitySummary();
   const user = await getCurrentUser();

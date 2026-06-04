@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { getCurrentUser } from "@/lib/auth";
-import { addCost, deleteCost } from "@/lib/data/store";
+import { addCost, deleteCost, ensureData } from "@/lib/data/store";
 import type { CostCadence, CostCategory } from "@/lib/data/types";
 
 export async function createCostAction(input: {
@@ -13,10 +13,11 @@ export async function createCostAction(input: {
   cadence: CostCadence;
   note: string;
 }) {
+  await ensureData();
   const user = await getCurrentUser();
   if (!input.vendor.trim()) return { ok: false, error: "Vendor is required." };
   if (!(Number(input.amount) >= 0)) return { ok: false, error: "Enter a valid amount." };
-  addCost(
+  await addCost(
     {
       category: input.category,
       vendor: input.vendor.trim(),
@@ -35,8 +36,9 @@ export async function createCostAction(input: {
 }
 
 export async function deleteCostAction(id: string) {
+  await ensureData();
   const user = await getCurrentUser();
-  deleteCost(id, user.name);
+  await deleteCost(id, user.name);
   revalidatePath("/costs");
   return { ok: true };
 }
