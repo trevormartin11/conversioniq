@@ -1,8 +1,9 @@
-import { Copy, Pause, Play, Plus } from "lucide-react";
+import { Copy, Pause, Play } from "lucide-react";
 import { Card, CardBody } from "@/components/ui/card";
 import { HealthBadge, Tag } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { PhaseBanner } from "@/components/ui/phase-banner";
+import { NewCampaignForm } from "@/components/campaigns/new-campaign-form";
 import { campaignCards } from "@/lib/data/queries";
 import { getCampaigns, getPersonas } from "@/lib/data/store";
 import { num, pct, titleCase } from "@/lib/format";
@@ -23,11 +24,11 @@ export default function CampaignsPage() {
           <h1 className="text-xl font-semibold text-slate-100">Campaigns</h1>
           <p className="text-sm text-slate-500">Parallel cells by vertical.</p>
         </div>
-        <Button variant="primary" disabled><Plus className="h-4 w-4" /> New</Button>
+        <NewCampaignForm personas={personas} />
       </div>
 
       <PhaseBanner phase={2}>
-        Create / pause / clone, inbox & persona assignment, schedules and sequence editing are wired here next. Today this reads live campaign state from Instantly.
+        You can stage draft campaigns now. Pause / clone, inbox & persona assignment, schedules and sequence editing — plus launching into Instantly — are wired here next.
       </PhaseBanner>
 
       <div className="space-y-3">

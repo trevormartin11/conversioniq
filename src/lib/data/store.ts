@@ -11,6 +11,7 @@
 import { DATA_MODE } from "@/lib/config";
 import type {
   AutomationLevel,
+  Campaign,
   CreditSpendRequest,
   Dataset,
   Reply,
@@ -204,6 +205,29 @@ export function createCreditRequest(
   db().creditRequests.unshift(req);
   pushAudit(input.requestedBy, "credit.spend_requested", input.provider, req.id, { amount: input.amount });
   return req;
+}
+
+// --- campaigns --------------------------------------------------------------
+export function addCampaign(
+  input: Pick<Campaign, "name" | "vertical" | "personaId" | "dailyCap">,
+  actor = "system",
+): Campaign {
+  const slug = input.vertical.toLowerCase().replace(/[^a-z]+/g, "_") || "general";
+  const campaign: Campaign = {
+    id: `c_${Math.random().toString(36).slice(2, 9)}`,
+    name: input.name,
+    vertical: input.vertical || "General",
+    personaId: input.personaId,
+    status: "draft", // staged — not launched in Instantly until reviewed
+    instantlyCampaignId: null,
+    listVersion: `${slug}_v1`,
+    inboxIds: [],
+    dailyCap: input.dailyCap || 80,
+    createdAt: new Date().toISOString(),
+  };
+  db().campaigns.unshift(campaign);
+  pushAudit(actor, "campaign.created", "campaign", campaign.id, { name: campaign.name, vertical: campaign.vertical });
+  return campaign;
 }
 
 // --- deliverability ---------------------------------------------------------
