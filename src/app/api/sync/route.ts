@@ -11,8 +11,11 @@ export const maxDuration = 60;
  * reply sync, or hit it from the dashboard's "Sync now".
  */
 async function run(req: NextRequest) {
-  const secret = process.env.SYNC_SECRET;
-  if (secret && req.headers.get("authorization") !== `Bearer ${secret}`) {
+  // Accept either SYNC_SECRET (manual) or CRON_SECRET (Vercel Cron auto-bearer).
+  const auth = req.headers.get("authorization");
+  const ok = (s?: string) => !!s && auth === `Bearer ${s}`;
+  const gated = process.env.SYNC_SECRET || process.env.CRON_SECRET;
+  if (gated && !ok(process.env.SYNC_SECRET) && !ok(process.env.CRON_SECRET)) {
     return NextResponse.json({ ok: false, error: "unauthorized" }, { status: 401 });
   }
   if (!integrations.supabase) {

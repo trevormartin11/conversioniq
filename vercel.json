@@ -4,6 +4,10 @@
     {
       "path": "/api/cron/sync-replies",
       "schedule": "*/5 * * * *"
+    },
+    {
+      "path": "/api/sync",
+      "schedule": "0 * * * *"
     }
   ]
 }
