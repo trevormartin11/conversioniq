@@ -48,7 +48,7 @@ export function NewCampaignForm({ personas }: { personas: Pick<Persona, "id" | "
           <X className="h-4 w-4" />
         </button>
       </div>
-      <p className="mt-0.5 text-xs text-slate-500">Creates a draft cell. It won't send until you launch it in Instantly.</p>
+      <p className="mt-0.5 text-xs text-slate-500">Creates a draft cell. It stays off until you launch it in Instantly.</p>
       <div className="mt-3 space-y-2">
         <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Name (e.g. Med Spa — Texas)" className="h-10 w-full rounded-lg border border-ink-700 bg-ink-950 px-3 text-sm text-slate-200 focus:border-brand-500 focus:outline-none" />
         <input value={vertical} onChange={(e) => setVertical(e.target.value)} placeholder="Vertical (e.g. Med Spa)" className="h-10 w-full rounded-lg border border-ink-700 bg-ink-950 px-3 text-sm text-slate-200 focus:border-brand-500 focus:outline-none" />
