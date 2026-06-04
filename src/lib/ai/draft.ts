@@ -1,17 +1,21 @@
 /** Reply drafting — Claude grounded in Trevor's outreach voice, rules templates as fallback. */
 import { aiAvailable, complete } from "@/lib/integrations/anthropic";
 import { voiceSystemPrompt } from "./voice";
-import type { Lead, Reply, ReplyClass } from "@/lib/data/types";
+import type { ReplyClass } from "@/lib/data/types";
 
 export interface Draft {
   draft: string | null;
   source: "ai" | "rules" | null;
 }
 
+/** Minimal shapes so this works from both the store (full Reply/Lead) and syncs. */
+type ReplyLike = { classification: ReplyClass; body: string; fromName: string };
+type LeadLike = { firstName?: string; company?: string; vertical?: string; title?: string } | null;
+
 /** Classes we never auto-draft a reply for (they get actioned, not answered). */
 const NO_REPLY: ReplyClass[] = ["unsubscribe", "negative", "ooo"];
 
-function rulesDraft(reply: Reply, lead: Lead | null): Draft {
+function rulesDraft(reply: ReplyLike, lead: LeadLike): Draft {
   const name = lead?.firstName || reply.fromName.split(" ")[0] || "there";
   const company = lead?.company || "your spa";
   const map: Partial<Record<ReplyClass, string>> = {
@@ -25,7 +29,7 @@ function rulesDraft(reply: Reply, lead: Lead | null): Draft {
   return draft ? { draft, source: "rules" } : { draft: null, source: null };
 }
 
-export async function draftReply(reply: Reply, lead: Lead | null): Promise<Draft> {
+export async function draftReply(reply: ReplyLike, lead: LeadLike): Promise<Draft> {
   if (NO_REPLY.includes(reply.classification)) return { draft: null, source: null };
   if (!aiAvailable()) return rulesDraft(reply, lead);
   try {

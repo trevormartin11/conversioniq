@@ -67,10 +67,69 @@ export async function listEmails(params: Record<string, string> = {}): Promise<u
   return data.items ?? [];
 }
 
+export interface InstantlyCampaign {
+  id: string;
+  name?: string;
+  status?: number;
+  daily_limit?: number;
+  sequences?: unknown;
+}
+
+/** GET /campaigns with cursor pagination. */
+export async function listAllCampaigns(): Promise<InstantlyCampaign[]> {
+  const out: InstantlyCampaign[] = [];
+  let cursor: string | undefined;
+  for (let i = 0; i < 25; i++) {
+    const qs = new URLSearchParams({ limit: "100" });
+    if (cursor) qs.set("starting_after", cursor);
+    const data = await httpJson<{ items?: InstantlyCampaign[]; next_starting_after?: string }>("instantly", `${BASE}/campaigns?${qs}`, { headers: headers() });
+    const items = data.items ?? [];
+    out.push(...items);
+    if (!data.next_starting_after || items.length === 0) break;
+    cursor = data.next_starting_after;
+  }
+  return out;
+}
+
+export interface InstantlyEmail {
+  id: string;
+  eaccount?: string;
+  from_address_email?: string;
+  subject?: string;
+  body?: { html?: string; text?: string } | string;
+  campaign_id?: string;
+  lead_id?: string;
+  timestamp_email?: string;
+  thread_id?: string;
+  message_id?: string;
+  ue_type?: number;
+}
+
+/** GET /emails — the unibox, cursor-paginated. Includes sent + received. */
+export async function listAllEmails(max = 1000): Promise<InstantlyEmail[]> {
+  const out: InstantlyEmail[] = [];
+  let cursor: string | undefined;
+  for (let i = 0; i < 25 && out.length < max; i++) {
+    const qs = new URLSearchParams({ limit: "100" });
+    if (cursor) qs.set("starting_after", cursor);
+    const data = await httpJson<{ items?: InstantlyEmail[]; next_starting_after?: string }>("instantly", `${BASE}/emails?${qs}`, { headers: headers() });
+    const items = data.items ?? [];
+    out.push(...items);
+    if (!data.next_starting_after || items.length === 0) break;
+    cursor = data.next_starting_after;
+  }
+  return out;
+}
+
+/** GET /campaigns/analytics — per-campaign totals (sent/opens/replies). */
+export async function getCampaignAnalytics(): Promise<Record<string, unknown>[]> {
+  const data = await httpJson<Record<string, unknown>[] | { items?: Record<string, unknown>[] }>("instantly", `${BASE}/campaigns/analytics`, { headers: headers() });
+  return Array.isArray(data) ? data : data.items ?? [];
+}
+
 /**
  * POST /campaigns. NOTE: campaign_schedule.schedules[].timezone must be a valid
- * Instantly enum — "America/New_York" was REJECTED in testing. Fetch the allowed
- * list and map before creating.
+ * Instantly enum — "America/New_York" was REJECTED in testing.
  */
 export async function createCampaign(payload: unknown): Promise<unknown> {
   return httpJson("instantly", `${BASE}/campaigns`, { method: "POST", headers: headers(), body: JSON.stringify(payload) });

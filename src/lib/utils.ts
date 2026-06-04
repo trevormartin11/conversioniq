@@ -15,3 +15,21 @@ export function uid(prefix = "id"): string {
 export function clamp(n: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, n));
 }
+
+/** Convert email HTML to readable plain text (for sequence bodies / replies). */
+export function stripHtml(html: string): string {
+  return html
+    .replace(/<br\s*\/?>(?=)/gi, "\n")
+    .replace(/<\/(div|p|li|tr)>/gi, "\n")
+    .replace(/<[^>]+>/g, "")
+    .replace(/&nbsp;/gi, " ")
+    .replace(/&amp;/gi, "&")
+    .replace(/&lt;/gi, "<")
+    .replace(/&gt;/gi, ">")
+    .replace(/&quot;/gi, '"')
+    .replace(/&#39;|&rsquo;|&#8217;/gi, "’")
+    .replace(/&ldquo;|&rdquo;|&#8220;|&#8221;/gi, '"')
+    .replace(/&mdash;|&#8212;/gi, "—")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
