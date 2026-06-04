@@ -1,9 +1,8 @@
-import { Copy, Pause, Play } from "lucide-react";
 import { Card, CardBody } from "@/components/ui/card";
 import { HealthBadge, Tag } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import { PhaseBanner } from "@/components/ui/phase-banner";
 import { NewCampaignForm } from "@/components/campaigns/new-campaign-form";
+import { CampaignActions } from "@/components/campaigns/campaign-actions";
 import { campaignCards } from "@/lib/data/queries";
 import { ensureData, getCampaigns, getPersonas } from "@/lib/data/store";
 import { num, pct, titleCase } from "@/lib/format";
@@ -29,7 +28,7 @@ export default async function CampaignsPage() {
       </div>
 
       <PhaseBanner phase={2}>
-        You can stage draft campaigns now. Pause / clone, inbox & persona assignment, schedules and sequence editing — plus launching into Instantly — are wired here next.
+        Launch, pause, clone, and stage campaigns are live (synced from Instantly). Inbox/persona assignment, schedule editing, and inline sequence editing are next.
       </PhaseBanner>
 
       <div className="space-y-3">
@@ -57,9 +56,8 @@ export default async function CampaignsPage() {
                     <Mini label="Bounce" value={pct(card.bounceRate, 1)} />
                   </div>
                 )}
-                <div className="mt-3 flex gap-2">
-                  <Button size="sm" variant="ghost" disabled>{c.status === "active" ? <><Pause className="h-3.5 w-3.5" /> Pause</> : <><Play className="h-3.5 w-3.5" /> Launch</>}</Button>
-                  <Button size="sm" variant="ghost" disabled><Copy className="h-3.5 w-3.5" /> Clone</Button>
+                <div className="mt-3">
+                  <CampaignActions id={c.id} status={c.status} />
                 </div>
               </CardBody>
             </Card>

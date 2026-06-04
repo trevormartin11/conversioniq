@@ -144,3 +144,8 @@ export async function addToBlocklist(entries: string[]): Promise<unknown> {
 export async function pauseCampaign(id: string): Promise<unknown> {
   return httpJson("instantly", `${BASE}/campaigns/${id}/pause`, { method: "POST", headers: headers() });
 }
+
+/** Activate (launch / resume) a campaign. */
+export async function activateCampaign(id: string): Promise<unknown> {
+  return httpJson("instantly", `${BASE}/campaigns/${id}/activate`, { method: "POST", headers: headers() });
+}

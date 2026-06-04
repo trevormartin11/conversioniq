@@ -262,6 +262,35 @@ export async function addCampaign(input: Pick<Campaign, "name" | "vertical" | "p
   return campaign;
 }
 
+export async function setCampaignStatus(id: string, status: Campaign["status"], actor: string) {
+  const c = getCampaign(id);
+  if (!c) return null;
+  c.status = status;
+  await liveUpsert("campaigns", { id, status });
+  await pushAudit(actor, `campaign.${status}`, "campaign", id, { name: c.name });
+  return c;
+}
+
+export async function cloneCampaign(id: string, actor: string): Promise<Campaign | null> {
+  const src = getCampaign(id);
+  if (!src) return null;
+  const newId = `c_${Math.random().toString(36).slice(2, 9)}`;
+  const clone: Campaign = { ...src, id: newId, name: `${src.name} (copy)`, status: "draft", instantlyCampaignId: null, createdAt: new Date().toISOString() };
+  db().campaigns.unshift(clone);
+  await liveUpsert("campaigns", {
+    id: newId, name: clone.name, vertical: clone.vertical, persona_id: clone.personaId,
+    status: "draft", list_version: clone.listVersion, inbox_ids: clone.inboxIds,
+    daily_cap: clone.dailyCap, created_at: clone.createdAt,
+  });
+  for (const v of db().variants.filter((x) => x.campaignId === id)) {
+    const vid = `sv_${newId}_${v.step}_${v.variant}`;
+    db().variants.push({ ...v, id: vid, campaignId: newId, sent: 0, opens: 0, replies: 0, positives: 0 });
+    await liveUpsert("sequence_variants", { id: vid, campaign_id: newId, step: v.step, variant: v.variant, subject: v.subject, body: v.body, sent: 0, opens: 0, replies: 0, positives: 0, approved: v.approved });
+  }
+  await pushAudit(actor, "campaign.cloned", "campaign", newId, { from: id, name: clone.name });
+  return clone;
+}
+
 // --- deliverability ---------------------------------------------------------
 export async function pauseInbox(id: string, actor: string, reason: string) {
   const inbox = getInbox(id);

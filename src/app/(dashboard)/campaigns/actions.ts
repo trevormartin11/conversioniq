@@ -2,7 +2,46 @@
 
 import { revalidatePath } from "next/cache";
 import { getCurrentUser } from "@/lib/auth";
-import { addCampaign, ensureData } from "@/lib/data/store";
+import { addCampaign, cloneCampaign, ensureData, getCampaign, setCampaignStatus } from "@/lib/data/store";
+import { activateCampaign, pauseCampaign } from "@/lib/integrations/instantly";
+import { integrations } from "@/lib/config";
+
+function revalidate() {
+  revalidatePath("/campaigns");
+  revalidatePath("/");
+}
+
+export async function pauseCampaignAction(id: string) {
+  await ensureData();
+  const user = await getCurrentUser();
+  const c = getCampaign(id);
+  if (c?.instantlyCampaignId && integrations.instantly) {
+    try { await pauseCampaign(c.instantlyCampaignId); } catch (e) { return { ok: false, error: (e as Error).message }; }
+  }
+  await setCampaignStatus(id, "paused", user.name);
+  revalidate();
+  return { ok: true };
+}
+
+export async function launchCampaignAction(id: string) {
+  await ensureData();
+  const user = await getCurrentUser();
+  const c = getCampaign(id);
+  if (c?.instantlyCampaignId && integrations.instantly) {
+    try { await activateCampaign(c.instantlyCampaignId); } catch (e) { return { ok: false, error: (e as Error).message }; }
+  }
+  await setCampaignStatus(id, "active", user.name);
+  revalidate();
+  return { ok: true };
+}
+
+export async function cloneCampaignAction(id: string) {
+  await ensureData();
+  const user = await getCurrentUser();
+  const c = await cloneCampaign(id, user.name);
+  revalidate();
+  return { ok: !!c, id: c?.id };
+}
 
 export async function createCampaignAction(input: {
   name: string;
