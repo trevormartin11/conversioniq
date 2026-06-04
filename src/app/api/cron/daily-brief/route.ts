@@ -1,9 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
-import { integrations } from "@/lib/config";
-import { syncReplies } from "@/lib/sync/replies";
+import { sendDailyBrief } from "@/lib/jobs/digest";
 
 export const dynamic = "force-dynamic";
-export const maxDuration = 60;
 
 function authorized(req: NextRequest) {
   const auth = req.headers.get("authorization");
@@ -12,16 +10,12 @@ function authorized(req: NextRequest) {
   return !gated || ok(process.env.SYNC_SECRET) || ok(process.env.CRON_SECRET);
 }
 
-/** Frequent reply sync (every ~5 min): pull the unibox, classify, draft, queue. */
 async function run(req: NextRequest) {
   if (!authorized(req)) return NextResponse.json({ ok: false, error: "unauthorized" }, { status: 401 });
-  if (!integrations.instantly || !integrations.supabase) {
-    return NextResponse.json({ ok: true, skipped: "instantly/supabase not configured" });
-  }
   try {
-    return NextResponse.json({ ok: true, ...(await syncReplies()) });
+    return NextResponse.json({ ok: true, ...(await sendDailyBrief()) });
   } catch (e) {
-    return NextResponse.json({ ok: false, error: (e as Error).message }, { status: 502 });
+    return NextResponse.json({ ok: false, error: (e as Error).message }, { status: 500 });
   }
 }
 

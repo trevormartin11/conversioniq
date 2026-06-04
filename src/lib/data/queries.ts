@@ -6,10 +6,10 @@
 import { appConfig } from "@/lib/config";
 import { rate } from "@/lib/format";
 import {
-  getAlerts,
   getCampaigns,
   getCosts,
   getCreditMeters,
+  getCreditRequests,
   getDemos,
   getInboxes,
   getLeads,
@@ -17,6 +17,7 @@ import {
   getReplies,
 } from "./store";
 import type {
+  Alert,
   Campaign,
   CostCategory,
   Health,
@@ -78,7 +79,7 @@ export interface CommandSummary {
   hotCount: number;
   demosBooked: number;
   replyClassCounts: Record<ReplyClass, number>;
-  alerts: ReturnType<typeof getAlerts>;
+  alerts: Alert[];
   cards: CampaignCard[];
   trend: { date: string; sends: number; replies: number; positives: number }[];
 }
@@ -94,6 +95,17 @@ export function commandSummary(): CommandSummary {
   const replyClassCounts = {} as Record<ReplyClass, number>;
   for (const r of replies) replyClassCounts[r.classification] = (replyClassCounts[r.classification] ?? 0) + 1;
 
+  // Alerts are derived live from current state (paused inboxes, gated spend, hot replies).
+  const now = new Date().toISOString();
+  const paused = getInboxes().filter((i) => i.status === "paused");
+  const pendingCredits = getCreditRequests().filter((r) => r.status === "pending");
+  const pendingReplies = replies.filter((r) => r.status === "pending");
+  const hotPending = pendingReplies.filter((r) => r.hot);
+  const alerts: Alert[] = [];
+  if (paused.length) alerts.push({ id: "al_paused", level: "red", title: `${paused.length} inbox${paused.length > 1 ? "es" : ""} paused`, detail: "Paused to protect domain reputation. Review in Deliverability.", createdAt: now, source: "deliverability" });
+  if (pendingCredits.length) alerts.push({ id: "al_credits", level: "yellow", title: "CIQ credit spend awaiting approval", detail: `${pendingCredits.length} request(s) need a decision.`, createdAt: now, source: "credits" });
+  if (hotPending.length) alerts.push({ id: "al_hot", level: "green", title: `${hotPending.length} hot repl${hotPending.length > 1 ? "ies" : "y"} waiting`, detail: "Interested / question replies need a look.", createdAt: now, source: "replies" });
+
   return {
     today: {
       sends: sum("sends"),
@@ -107,7 +119,7 @@ export function commandSummary(): CommandSummary {
     hotCount: replies.filter((r) => r.hot && r.status === "pending").length,
     demosBooked: getDemos().filter((d) => d.status === "booked").length,
     replyClassCounts,
-    alerts: getAlerts(),
+    alerts,
     cards: campaignCards(),
     trend: metrics
       .filter((m) => m.campaignId === "c_medspa")
