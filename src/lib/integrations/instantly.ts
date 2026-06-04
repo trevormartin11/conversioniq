@@ -17,14 +17,38 @@ function headers() {
 
 export interface InstantlyAccount {
   email: string;
+  first_name?: string;
+  last_name?: string;
   warmup_status?: number | string;
-  status?: string;
+  stat_warmup_score?: number;
+  status?: number | string;
+  setup_pending?: boolean;
 }
 
-/** GET /accounts — inboxes incl. warmup_status. */
+/** GET /accounts — one page of inboxes incl. warmup score/status. */
 export async function listAccounts(): Promise<InstantlyAccount[]> {
-  const data = await httpJson<{ items?: InstantlyAccount[] }>("instantly", `${BASE}/accounts`, { headers: headers() });
+  const data = await httpJson<{ items?: InstantlyAccount[] }>("instantly", `${BASE}/accounts?limit=100`, { headers: headers() });
   return data.items ?? [];
+}
+
+/** GET /accounts with cursor pagination — every inbox across the org. */
+export async function listAllAccounts(): Promise<InstantlyAccount[]> {
+  const out: InstantlyAccount[] = [];
+  let cursor: string | undefined;
+  for (let i = 0; i < 25; i++) {
+    const qs = new URLSearchParams({ limit: "100" });
+    if (cursor) qs.set("starting_after", cursor);
+    const data = await httpJson<{ items?: InstantlyAccount[]; next_starting_after?: string }>(
+      "instantly",
+      `${BASE}/accounts?${qs}`,
+      { headers: headers() },
+    );
+    const items = data.items ?? [];
+    out.push(...items);
+    if (!data.next_starting_after || items.length === 0) break;
+    cursor = data.next_starting_after;
+  }
+  return out;
 }
 
 /** GET /campaigns. */
