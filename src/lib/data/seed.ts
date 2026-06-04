@@ -203,19 +203,19 @@ const replySeeds: ReplySeed[] = [
     lead: 3, cls: "interested", hot: true, conf: 0.96,
     subject: "Re: cutting front-desk follow-up at Radiance",
     body: "This is interesting timing — we lose a ton of leads after hours and on weekends. How does the demo work and how long does setup actually take?",
-    draft: "Hi Sarah — great to hear, and you're describing exactly what we fix: leads that come in after hours or on weekends get engaged and booked automatically, 24/7. Setup is genuinely fast — most med spas are live in minutes, no developers. Best next step is a quick 15-minute demo where the team shows it running on a med-spa flow. Do you have time Thursday at 11a or 2p ET?",
+    draft: "Glad it landed — that after-hours leak is exactly the thing. The demo's quick: 15 minutes where the team shows it answering real med-spa DMs and booking the consult. Setup's fast too — quick to turn on, no developers. Want me to grab you a slot Thursday, 11a or 2p ET?\n\nTrevor",
   },
   {
     lead: 11, cls: "question", hot: true, conf: 0.9,
     subject: "Re: AI booking for Glow Aesthetics",
     body: "Does this just replace our scheduler, or does it work with what we already use? We're on a GoHighLevel setup.",
-    draft: "Good question — it doesn't replace your stack. ConversionIQ is an intelligent overlay that works alongside GoHighLevel, so nothing you've built goes away. It handles the engagement and booking across web/SMS/social automatically and writes back into your system. Easiest to see it on a 15-minute demo — would Wednesday afternoon work?",
+    draft: "Good question — it doesn't replace it. It works alongside GoHighLevel, so nothing you've built goes away; it just answers the DMs, comments and site chat and books into what you already use. Easiest to see it live — worth a quick 15 minutes this week?\n\nTrevor",
   },
   {
     lead: 21, cls: "objection", conf: 0.84,
     subject: "Re: quick question",
     body: "We tried a chatbot before and it was robotic and off-brand. Not interested in another one.",
-    draft: "Totally fair — most bots are scripted and it shows. This is different: the agents use intent-based reasoning and are tethered to your brand data, so replies stay on-brand (clients describe it as 100% on-brand). If it's easier to judge by seeing it than to take my word, I can show you 3 minutes of it handling real med-spa questions on a quick demo. Worth a look?",
+    draft: "Totally fair — that's the first thing owners worry about. The difference: you set the voice and the rules, it stays inside them, and anything sensitive routes to your team. No rogue, off-brand replies. Rather than take my word, I can send a 30-second clip of it handling real med-spa questions. Worth a look?\n\nTrevor",
   },
   {
     lead: 34, cls: "not_now", conf: 0.88,
@@ -251,7 +251,7 @@ const replySeeds: ReplySeed[] = [
     lead: 8, cls: "interested", hot: true, conf: 0.93,
     subject: "Re: never miss a lead at Lux Med Spa",
     body: "We definitely miss inquiries on Instagram DMs. What does pricing look like?",
-    draft: "That's one of the most common gaps we hear — DMs and comments slipping through. ConversionIQ has agents that engage social comments and DMs automatically so nothing gets missed. On pricing: the team tailors it on the demo since it depends on volume/channels, and there's a 14-day free trial to start (no credit card). Want me to get you on a 15-minute demo this week so they can walk through both?",
+    draft: "Yep — the IG DMs are the classic leak. It answers those, plus comments and site chat, in your voice and books the consult. On pricing, the team tailors it on the demo since it depends on your volume and channels, and there's a free trial to start. Want a quick 15-minute walkthrough this week?\n\nTrevor",
   },
   {
     lead: 19, cls: "question", conf: 0.78,
@@ -336,8 +336,8 @@ const demos: Demo[] = [
 
 // --- sequence variants (Med Spa step 1 A/B) ---------------------------------
 const variants: SequenceVariant[] = [
-  { id: "v_a", campaignId: "c_medspa", step: 1, variant: "A", subject: "{{first_name}}, leads slipping after hours at {{company}}?", body: "Hi {{first_name}} — quick one. Most med spas lose inquiries that come in after hours or on weekends...", sent: 640, opens: 402, replies: 41, positives: 14, approved: true },
-  { id: "v_b", campaignId: "c_medspa", step: 1, variant: "B", subject: "never miss another {{company}} lead", body: "Hi {{first_name}} — what happens to the inquiries that hit {{company}} at 9pm or Sunday?...", sent: 638, opens: 358, replies: 33, positives: 9, approved: true },
+  { id: "v_a", campaignId: "c_medspa", step: 1, variant: "A", subject: "quick question", body: "{{firstName}},\n\nWhen someone messages {{companyName}} after you've closed — \"how much is X?\", \"any openings?\" — what happens to those right now?\n\nAsking because for most spas that's where bookings quietly leak: good inquiry, answered too late, books somewhere else.\n\nMind if I show you how a few spas are catching those automatically?\n\nTrevor", sent: 642, opens: 402, replies: 41, positives: 14, approved: true },
+  { id: "v_b", campaignId: "c_medspa", step: 1, variant: "B", subject: "the 9pm stuff", body: "{{firstName}},\n\nWhat happens to the late-night \"how much is Botox?\" DMs {{companyName}} gets after you've closed?\n\nFor most spas they go to whoever answers first. Curious if that's a non-issue for you, or a quiet annoyance.\n\nWorth a peek at how a few spas are catching them automatically?\n\nTrevor", sent: 638, opens: 358, replies: 33, positives: 9, approved: true },
 ];
 
 // --- daily metrics (last 14 days, global + medspa) --------------------------
