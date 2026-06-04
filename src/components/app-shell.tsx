@@ -56,7 +56,10 @@ export function AppShell({
           </button>
           <div className="md:hidden"><Brand compact /></div>
           <div className="ml-auto flex items-center gap-3">
-            <span className="hidden text-xs text-slate-500 sm:inline">{dataMode === "mock" ? "Preview · seed data" : "Live"}</span>
+            <span className="hidden items-center gap-1.5 rounded-full bg-white/5 px-2.5 py-1 text-xs text-slate-300 sm:inline-flex">
+              <span className={cn("h-1.5 w-1.5 rounded-full", dataMode === "live" ? "bg-ok" : "bg-warn")} />
+              {dataMode === "live" ? "Live" : "Preview"}
+            </span>
             <UserChip user={user} />
           </div>
         </header>

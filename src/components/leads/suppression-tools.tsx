@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 import { Search, ShieldCheck, ShieldX, Upload } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Tag } from "@/components/ui/badge";
@@ -10,15 +10,22 @@ import { checkTouchedAction, dedupeListAction } from "@/app/(dashboard)/leads/ac
 type CheckResult = Awaited<ReturnType<typeof checkTouchedAction>>;
 type DedupeResult = Awaited<ReturnType<typeof dedupeListAction>>;
 
-export function SuppressionTools() {
+export function SuppressionTools({ initialCheck }: { initialCheck?: string }) {
   const [pending, startTransition] = useTransition();
 
   // --- touch checker ---
-  const [q, setQ] = useState("");
+  const [q, setQ] = useState(initialCheck ?? "");
   const [result, setResult] = useState<CheckResult | null>(null);
-  function check() {
-    startTransition(async () => setResult(await checkTouchedAction(q)));
+  function runCheck(value: string) {
+    startTransition(async () => setResult(await checkTouchedAction(value)));
   }
+  function check() {
+    runCheck(q);
+  }
+  useEffect(() => {
+    if (initialCheck) runCheck(initialCheck);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialCheck]);
 
   // --- list dedupe ---
   const [list, setList] = useState("");

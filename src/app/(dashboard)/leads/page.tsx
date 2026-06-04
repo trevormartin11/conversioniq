@@ -8,9 +8,9 @@ import type { SuppressionReason } from "@/lib/data/types";
 
 export const dynamic = "force-dynamic";
 
-export default async function LeadsPage({ searchParams }: { searchParams: Promise<{ q?: string }> }) {
+export default async function LeadsPage({ searchParams }: { searchParams: Promise<{ q?: string; check?: string }> }) {
   await ensureData();
-  const { q } = await searchParams;
+  const { q, check } = await searchParams;
   const query = (q ?? "").toLowerCase().trim();
   const leads = getLeads();
   const suppression = getSuppression();
@@ -40,7 +40,7 @@ export default async function LeadsPage({ searchParams }: { searchParams: Promis
       </div>
 
       {/* Tools */}
-      <SuppressionTools />
+      <SuppressionTools initialCheck={check} />
 
       {/* Lead table */}
       <section>
