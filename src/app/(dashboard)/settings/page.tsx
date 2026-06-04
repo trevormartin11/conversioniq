@@ -1,5 +1,5 @@
 import { CheckCircle2, Circle, ExternalLink } from "lucide-react";
-import { Card, CardBody, SectionHeader } from "@/components/ui/card";
+import { Card, CardBody, PageHeader, SectionHeader } from "@/components/ui/card";
 import { Tag } from "@/components/ui/badge";
 import { UserSwitcher } from "@/components/settings/user-switcher";
 import { getCurrentUser, listPartners } from "@/lib/auth";
@@ -28,10 +28,11 @@ export default async function SettingsPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-xl font-semibold text-slate-100">Settings</h1>
-        <p className="text-sm text-slate-500">Integrations, access, and operating rules. Currently <Tag tone={DATA_MODE === "live" ? "ok" : "warn"}>{DATA_MODE === "live" ? "Live data" : "Preview / seed data"}</Tag></p>
-      </div>
+      <PageHeader
+        title="Settings"
+        subtitle="Integrations, access, and operating rules."
+        action={<Tag tone={DATA_MODE === "live" ? "ok" : "warn"}>{DATA_MODE === "live" ? "Live data" : "Preview / seed data"}</Tag>}
+      />
 
       {/* Acting user */}
       <section>

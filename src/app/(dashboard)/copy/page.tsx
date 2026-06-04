@@ -1,5 +1,5 @@
 import { Lightbulb, Trophy } from "lucide-react";
-import { Card, CardBody, SectionHeader } from "@/components/ui/card";
+import { Card, CardBody, PageHeader, SectionHeader } from "@/components/ui/card";
 import { Tag } from "@/components/ui/badge";
 import { PhaseBanner } from "@/components/ui/phase-banner";
 import { ensureData, getVariants } from "@/lib/data/store";
@@ -17,10 +17,7 @@ export default async function CopyPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-xl font-semibold text-slate-100">Copy Coach</h1>
-        <p className="text-sm text-slate-500">AI reads your real results and suggests what to test next. {integrations.anthropic ? "Powered by Claude." : "Rules-based until a Claude key is added."}</p>
-      </div>
+      <PageHeader title="Copy Coach" subtitle={`AI reads your real results and suggests what to test next. ${integrations.anthropic ? "Powered by Claude." : "Rules-based until a Claude key is added."}`} />
 
       <PhaseBanner phase={2}>
         Approving outgoing copy, launching A/B variants, and pushing winners back to Instantly are wired here next. Below is live analysis of current variants.

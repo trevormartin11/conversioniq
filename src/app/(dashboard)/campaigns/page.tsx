@@ -1,4 +1,4 @@
-import { Card, CardBody } from "@/components/ui/card";
+import { Card, CardBody, PageHeader } from "@/components/ui/card";
 import { HealthBadge, Tag } from "@/components/ui/badge";
 import { PhaseBanner } from "@/components/ui/phase-banner";
 import { NewCampaignForm } from "@/components/campaigns/new-campaign-form";
@@ -19,13 +19,7 @@ export default async function CampaignsPage() {
 
   return (
     <div className="space-y-5">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-xl font-semibold text-slate-100">Campaigns</h1>
-          <p className="text-sm text-slate-500">Parallel cells by vertical.</p>
-        </div>
-        <NewCampaignForm personas={personas} />
-      </div>
+      <PageHeader title="Campaigns" subtitle="Parallel cells by vertical." action={<NewCampaignForm personas={personas} />} />
 
       <PhaseBanner phase={2}>
         Launch, pause, clone, and stage campaigns are live (synced from Instantly). Inbox/persona assignment, schedule editing, and inline sequence editing are next.

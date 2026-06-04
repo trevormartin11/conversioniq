@@ -1,4 +1,4 @@
-import { Card, CardBody, SectionHeader } from "@/components/ui/card";
+import { Card, CardBody, PageHeader, SectionHeader } from "@/components/ui/card";
 import { Stat } from "@/components/ui/stat";
 import { Tag } from "@/components/ui/badge";
 import { SuppressionTools } from "@/components/leads/suppression-tools";
@@ -29,10 +29,7 @@ export default async function LeadsPage({ searchParams }: { searchParams: Promis
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-xl font-semibold text-slate-100">Leads & Suppression</h1>
-        <p className="text-sm text-slate-500">Master lead table (from Zoho) + the global suppression universe, enforced at load time.</p>
-      </div>
+      <PageHeader title="Leads & Suppression" subtitle="Master lead table (from Zoho) + the global suppression universe, enforced at load time." />
 
       {/* Universe stats */}
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">

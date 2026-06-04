@@ -1,4 +1,5 @@
 import { ReplyQueue, type ReplyView } from "@/components/replies/reply-queue";
+import { PageHeader } from "@/components/ui/card";
 import { ensureData, getAutomationLevel, getLead, getReplies } from "@/lib/data/store";
 import { integrations } from "@/lib/config";
 
@@ -37,10 +38,7 @@ export default async function RepliesPage() {
 
   return (
     <div className="space-y-5">
-      <div>
-        <h1 className="text-xl font-semibold text-slate-100">Reply Approval</h1>
-        <p className="text-sm text-slate-500">Every reply across all inboxes, AI-sorted with a drafted response. Approve, edit, or send.</p>
-      </div>
+      <PageHeader title="Reply Approval" subtitle="Every reply across all inboxes, AI-sorted with a drafted response. Approve, edit, or send." />
       <ReplyQueue replies={replies} automationLevel={getAutomationLevel()} aiAvailable={integrations.anthropic} />
     </div>
   );

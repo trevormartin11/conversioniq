@@ -7,6 +7,7 @@ import {
   ensureData,
   getLead,
   getReply,
+  revertReplyToPending,
   saveReplyDraft,
   setAutomationLevel,
   updateReplyStatus,
@@ -66,6 +67,14 @@ export async function suppressFromReplyAction(id: string) {
   // Live: zoho.setDoNotContact(lead.zohoLeadId) — canonical DNC write.
   void lead;
   await updateReplyStatus(id, "suppressed", user.name);
+  revalidate();
+  return { ok: true };
+}
+
+export async function revertReplyAction(id: string) {
+  await ensureData();
+  const user = await getCurrentUser();
+  await revertReplyToPending(id, user.name);
   revalidate();
   return { ok: true };
 }

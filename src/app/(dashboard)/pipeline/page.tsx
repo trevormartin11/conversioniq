@@ -1,4 +1,4 @@
-import { Card, CardBody, SectionHeader } from "@/components/ui/card";
+import { Card, CardBody, PageHeader, SectionHeader } from "@/components/ui/card";
 import { Stat } from "@/components/ui/stat";
 import { PhaseBanner } from "@/components/ui/phase-banner";
 import { pipeline, residual } from "@/lib/data/queries";
@@ -15,10 +15,7 @@ export default async function PipelinePage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-xl font-semibold text-slate-100">Pipeline & Residual</h1>
-        <p className="text-sm text-slate-500">Funnel from contacted → closed, the demo tracker, and your 20%-split-3-ways residual.</p>
-      </div>
+      <PageHeader title="Pipeline & Residual" subtitle="Funnel from contacted → closed, the demo tracker, and your 20%-split-3-ways residual." />
 
       <PhaseBanner phase={3}>
         Full per-cell breakdowns (which vertical/persona/domain converts) and the weekly report land here. Demo states sync from Zoho.

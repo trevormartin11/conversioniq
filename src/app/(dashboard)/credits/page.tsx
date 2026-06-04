@@ -1,5 +1,5 @@
 import { Lock } from "lucide-react";
-import { Card, CardBody, SectionHeader } from "@/components/ui/card";
+import { Card, CardBody, PageHeader, SectionHeader } from "@/components/ui/card";
 import { Progress } from "@/components/ui/charts";
 import { CreditControls, type RequestView } from "@/components/credits/credit-controls";
 import { creditSummary } from "@/lib/data/queries";
@@ -25,10 +25,7 @@ export default async function CreditsPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-xl font-semibold text-slate-100">Credit Guard</h1>
-        <p className="text-sm text-slate-500">Live Apollo credit meters. CIQ credits are gated — never auto-spent.</p>
-      </div>
+      <PageHeader title="Credit Guard" subtitle="Live Apollo credit meters. CIQ credits are gated — never auto-spent." />
 
       {/* Meters */}
       <div className="grid gap-3 sm:grid-cols-2">

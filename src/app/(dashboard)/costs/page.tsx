@@ -3,6 +3,7 @@ import { Stat } from "@/components/ui/stat";
 import { LabeledBar } from "@/components/ui/charts";
 import { CostManager, type CostView } from "@/components/costs/cost-manager";
 import { costSummary } from "@/lib/data/queries";
+import { PageHeader } from "@/components/ui/card";
 import { ensureData, getCosts } from "@/lib/data/store";
 import { usd, titleCase } from "@/lib/format";
 
@@ -25,10 +26,7 @@ export default async function CostsPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-xl font-semibold text-slate-100">Costs & P&amp;L</h1>
-        <p className="text-sm text-slate-500">Every cost of running the operation — sending, data, email, domains, leads — against your residual, for true net.</p>
-      </div>
+      <PageHeader title="Costs & P&L" subtitle="Every cost of running the operation — sending, data, email, domains, leads — against your residual, for true net." />
 
       {/* Top line */}
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">

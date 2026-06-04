@@ -126,6 +126,18 @@ export async function saveReplyDraft(id: string, draft: string): Promise<Reply |
   return reply;
 }
 
+/** Undo a skip/snooze: return a handled reply to the pending queue. */
+export async function revertReplyToPending(id: string, actor: string): Promise<Reply | null> {
+  const reply = getReply(id);
+  if (!reply) return null;
+  reply.status = "pending";
+  reply.handledBy = null;
+  reply.handledAt = null;
+  await liveUpsert("replies", { id, status: "pending", handled_by: null, handled_at: null });
+  await pushAudit(actor, "reply.reopened", "reply", id, {});
+  return reply;
+}
+
 // --- suppression: the global universe enforced at LOAD time -----------------
 function norm(s: string) {
   return s.trim().toLowerCase();

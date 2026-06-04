@@ -3,6 +3,7 @@ import { Stat } from "@/components/ui/stat";
 import { HealthBadge, Tag } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/charts";
 import { deliverabilitySummary } from "@/lib/data/queries";
+import { PageHeader } from "@/components/ui/card";
 import { ensureData, getDomains, getInboxes, getPersonas } from "@/lib/data/store";
 import { appConfig } from "@/lib/config";
 import { num, pct, titleCase } from "@/lib/format";
@@ -29,10 +30,7 @@ export default async function DeliverabilityPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-xl font-semibold text-slate-100">Deliverability & Inbox Health</h1>
-        <p className="text-sm text-slate-500">Existential with ~{inboxes.length} inboxes. Auto-pause on threshold breach; warmup gate at {appConfig.deliverability.warmupGate}.</p>
-      </div>
+      <PageHeader title="Deliverability & Inbox Health" subtitle={`Existential with ~${inboxes.length} inboxes. Auto-pause on threshold breach; warmup gate at ${appConfig.deliverability.warmupGate}.`} />
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
         <Stat label="Inboxes" value={num(s.total)} />

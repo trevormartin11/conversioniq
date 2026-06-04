@@ -1,5 +1,5 @@
 import { CheckCircle2, Circle, XCircle } from "lucide-react";
-import { Card, CardBody, SectionHeader } from "@/components/ui/card";
+import { Card, CardBody, PageHeader, SectionHeader } from "@/components/ui/card";
 import { Tag } from "@/components/ui/badge";
 import { ensureData, getAudit, getJobs } from "@/lib/data/store";
 import { integrationStatuses } from "@/lib/integrations";
@@ -22,10 +22,7 @@ export default async function AutomationPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-xl font-semibold text-slate-100">Automation Status</h1>
-        <p className="text-sm text-slate-500">Scheduled jobs, integration health, and the activity log.</p>
-      </div>
+      <PageHeader title="Automation Status" subtitle="Scheduled jobs, integration health, and the activity log." />
 
       {/* Jobs */}
       <section>
