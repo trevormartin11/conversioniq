@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { getCurrentUser } from "@/lib/auth";
-import { createCreditRequest, decideCreditRequest, ensureData, executeCreditSpend } from "@/lib/data/store";
+import { createCreditRequest, decideCreditRequest, ensureData, executeCreditSpend, getCreditRequests } from "@/lib/data/store";
 
 function revalidate() {
   revalidatePath("/credits");
@@ -12,8 +12,9 @@ function revalidate() {
 export async function requestCreditAction(amount: number, reason: string) {
   await ensureData();
   const user = await getCurrentUser();
-  if (!amount || amount <= 0) return { ok: false, error: "Enter a positive amount." };
-  await createCreditRequest({ provider: "apollo_ciq", amount, reason: reason || "(no reason given)", requestedBy: user.name });
+  const amt = Math.round(Number(amount));
+  if (!Number.isFinite(amt) || amt <= 0) return { ok: false, error: "Enter a positive whole number of credits." };
+  await createCreditRequest({ provider: "apollo_ciq", amount: amt, reason: reason || "(no reason given)", requestedBy: user.name });
   revalidate();
   return { ok: true };
 }
@@ -21,6 +22,10 @@ export async function requestCreditAction(amount: number, reason: string) {
 export async function approveCreditAction(id: string) {
   await ensureData();
   const user = await getCurrentUser();
+  const req = getCreditRequests().find((r) => r.id === id);
+  if (!req) return { ok: false, error: "Request not found." };
+  if (req.status !== "pending") return { ok: false, error: "This request was already decided." };
+  if (req.requestedBy === user.name) return { ok: false, error: "You can't approve your own request — a partner must approve it." };
   await decideCreditRequest(id, "approved", user.name);
   revalidate();
   return { ok: true };
@@ -29,6 +34,8 @@ export async function approveCreditAction(id: string) {
 export async function denyCreditAction(id: string) {
   await ensureData();
   const user = await getCurrentUser();
+  const req = getCreditRequests().find((r) => r.id === id);
+  if (!req || req.status !== "pending") return { ok: false, error: "This request was already decided." };
   await decideCreditRequest(id, "denied", user.name);
   revalidate();
   return { ok: true };

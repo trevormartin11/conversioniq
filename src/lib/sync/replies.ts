@@ -65,11 +65,8 @@ export async function syncReplies() {
 
     const suppress = cls === "unsubscribe" || cls === "negative";
     const isOoo = cls === "ooo";
-    let status = "pending";
-    if (suppress) status = "suppressed";
-    else if (isOoo) status = "snoozed";
-    else if (level === "auto_all") status = "auto_sent";
-    else if (level === "auto_safe" && cls === "referral") status = "auto_sent";
+    const autoSafe = (appConfig.autoSafeClasses as readonly string[]).includes(cls);
+    const confident = confidence >= 0.85;
 
     let aiDraft: string | null = null;
     let draftSource: string | null = null;
@@ -80,6 +77,14 @@ export async function syncReplies() {
       );
       aiDraft = d.draft;
       draftSource = d.source;
+    }
+
+    let status = "pending";
+    if (suppress) status = "suppressed";
+    else if (isOoo) status = "snoozed";
+    else if ((level === "auto_all" || (level === "auto_safe" && autoSafe)) && confident && (aiDraft?.trim()?.length ?? 0) > 0) {
+      // Only auto-send when confident AND we actually have a non-empty draft.
+      status = "auto_sent";
     }
 
     const hot = appConfig.hotClasses.includes(cls as (typeof appConfig.hotClasses)[number]);

@@ -28,6 +28,9 @@ export async function syncInboxes() {
     const score = typeof a.stat_warmup_score === "number" ? a.stat_warmup_score : 0;
     const status = a.status !== 1 ? "paused" : a.setup_pending || score < 80 ? "warming" : "active";
     inboxes.push({
+      // NB: bounce_rate / spam_complaints / sent_today / daily_cap are intentionally
+      // omitted so a resync never clobbers real values (new rows use schema defaults;
+      // those get populated by per-account analytics, not the /accounts list).
       id: `ib_${slug(a.email)}`,
       email: a.email,
       domain_id: dId,
@@ -35,10 +38,6 @@ export async function syncInboxes() {
       instantly_account_id: a.email,
       warmup_score: score,
       status,
-      daily_cap: 30,
-      sent_today: 0,
-      bounce_rate: 0,
-      spam_complaints: 0,
       last_synced_at: new Date().toISOString(),
     });
   }

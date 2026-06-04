@@ -16,7 +16,8 @@ export async function createCostAction(input: {
   await ensureData();
   const user = await getCurrentUser();
   if (!input.vendor.trim()) return { ok: false, error: "Vendor is required." };
-  if (!(Number(input.amount) >= 0)) return { ok: false, error: "Enter a valid amount." };
+  const amt = Number(input.amount);
+  if (!Number.isFinite(amt) || amt < 0) return { ok: false, error: "Enter a valid amount." };
   await addCost(
     {
       category: input.category,

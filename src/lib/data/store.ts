@@ -75,7 +75,6 @@ export const getJobs = () => db().jobs;
 export const getDemos = () => db().demos;
 export const getVariants = () => db().variants;
 export const getMetrics = () => db().metrics;
-export const getAlerts = () => db().alerts;
 export const getCosts = () => db().costs;
 
 export const getReply = (id: string) => db().replies.find((r) => r.id === id) ?? null;
@@ -110,6 +109,7 @@ export async function pushAudit(
 export async function updateReplyStatus(id: string, status: ReplyStatus, actor: string): Promise<Reply | null> {
   const reply = getReply(id);
   if (!reply) return null;
+  if (reply.status !== "pending") return null; // already handled — don't re-send / re-action
   reply.status = status;
   reply.handledBy = actor;
   reply.handledAt = new Date().toISOString();
@@ -192,6 +192,8 @@ export function searchUniverse(query: string) {
 export async function decideCreditRequest(id: string, decision: "approved" | "denied", actor: string): Promise<CreditSpendRequest | null> {
   const req = db().creditRequests.find((r) => r.id === id);
   if (!req) return null;
+  if (req.status !== "pending") return null; // terminal requests can't be re-decided (no double-spend)
+  if (decision === "approved" && req.requestedBy === actor) return null; // no self-approval
   req.status = decision;
   req.decidedBy = actor;
   req.decidedAt = new Date().toISOString();
@@ -245,7 +247,7 @@ export async function deleteCost(id: string, actor = "system"): Promise<boolean>
 
 // --- campaigns --------------------------------------------------------------
 export async function addCampaign(input: Pick<Campaign, "name" | "vertical" | "personaId" | "dailyCap">, actor = "system"): Promise<Campaign> {
-  const slug = input.vertical.toLowerCase().replace(/[^a-z]+/g, "_") || "general";
+  const slug = input.vertical.toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "") || "general";
   const campaign: Campaign = {
     id: `c_${Math.random().toString(36).slice(2, 9)}`,
     name: input.name, vertical: input.vertical || "General", personaId: input.personaId,

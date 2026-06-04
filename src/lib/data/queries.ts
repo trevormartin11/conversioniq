@@ -77,6 +77,8 @@ export interface CommandSummary {
   today: { sends: number; opens: number; replies: number; positives: number; bounces: number; demos: number };
   queueDepth: number;
   hotCount: number;
+  creditApprovals: number;
+  pausedInboxes: number;
   demosBooked: number;
   replyClassCounts: Record<ReplyClass, number>;
   alerts: Alert[];
@@ -115,15 +117,28 @@ export function commandSummary(): CommandSummary {
       bounces: sum("bounces"),
       demos: sum("demos"),
     },
-    queueDepth: replies.filter((r) => r.status === "pending").length,
-    hotCount: replies.filter((r) => r.hot && r.status === "pending").length,
+    queueDepth: pendingReplies.length,
+    hotCount: hotPending.length,
+    creditApprovals: pendingCredits.length,
+    pausedInboxes: paused.length,
     demosBooked: getDemos().filter((d) => d.status === "booked").length,
     replyClassCounts,
     alerts,
     cards: campaignCards(),
-    trend: metrics
-      .filter((m) => m.campaignId === "c_medspa")
-      .map((m) => ({ date: m.date, sends: m.sends, replies: m.replies, positives: m.positives })),
+    trend: (() => {
+      const byDate = new Map<string, { sends: number; replies: number; positives: number }>();
+      for (const m of metrics) {
+        const cur = byDate.get(m.date) ?? { sends: 0, replies: 0, positives: 0 };
+        cur.sends += m.sends;
+        cur.replies += m.replies;
+        cur.positives += m.positives;
+        byDate.set(m.date, cur);
+      }
+      return [...byDate.entries()]
+        .sort((a, b) => a[0].localeCompare(b[0]))
+        .slice(-14)
+        .map(([date, v]) => ({ date, ...v }));
+    })(),
   };
 }
 

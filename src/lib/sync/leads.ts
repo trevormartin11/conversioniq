@@ -1,9 +1,9 @@
-/** Sync Zoho CRM leads into the hub DB. Zoho stays canonical; this mirrors for analytics. */
+/** Sync Zoho CRM leads into the hub DB + mirror opt-outs into suppression. */
 import { getLeads } from "@/lib/integrations/zoho";
-import { chunkedUpsert } from "@/lib/data/supabase";
+import { chunkedUpsert, supabaseAdmin } from "@/lib/data/supabase";
 import type { LeadStatus } from "@/lib/data/types";
 
-const FIELDS = ["Email", "First_Name", "Last_Name", "Company", "Lead_Status", "Phone"];
+const FIELDS = ["Email", "First_Name", "Last_Name", "Company", "Lead_Status", "Phone", "Email_Opt_Out"];
 
 function mapStatus(s: string | null): LeadStatus {
   if (!s) return "new";
@@ -17,6 +17,7 @@ function mapStatus(s: string | null): LeadStatus {
 
 export async function syncLeads() {
   const rows: Record<string, unknown>[] = [];
+  const optOut: { id: string; email: string }[] = [];
   for (let page = 1; page <= 50; page++) {
     const batch = (await getLeads(FIELDS, page)) as Record<string, unknown>[];
     if (!batch.length) break;
@@ -24,8 +25,9 @@ export async function syncLeads() {
       const get = (k: string) => (l[k] == null ? null : String(l[k]));
       const email = (get("Email") ?? "").trim().toLowerCase();
       if (!email) continue;
+      const id = `zl_${get("id")}`;
       rows.push({
-        id: `zl_${get("id")}`,
+        id,
         email,
         domain: email.split("@")[1] || "unknown",
         first_name: get("First_Name"),
@@ -38,9 +40,23 @@ export async function syncLeads() {
         zoho_lead_id: get("id"),
         created_at: new Date().toISOString(),
       });
+      if (get("Email_Opt_Out") === "true") optOut.push({ id, email });
     }
     if (batch.length < 200) break;
   }
+
   const leads = await chunkedUpsert("leads", rows);
-  return { leads, fetched: rows.length };
+
+  // Mirror Zoho opt-outs into the global suppression universe (skip already-listed).
+  let suppressed = 0;
+  if (optOut.length) {
+    const { data: supRows } = await supabaseAdmin().from("suppression").select("email");
+    const have = new Set((supRows ?? []).map((r: { email: string | null }) => (r.email ?? "").toLowerCase()).filter(Boolean));
+    const inserts = optOut
+      .filter((o) => !have.has(o.email))
+      .map((o) => ({ id: `sup_${o.id}`, email: o.email, domain: null, reason: "dnc", source: "zoho:opt_out", lead_id: o.id, note: "Zoho Email Opt Out", created_at: new Date().toISOString() }));
+    if (inserts.length) suppressed = await chunkedUpsert("suppression", inserts);
+  }
+
+  return { leads, fetched: rows.length, suppressed };
 }

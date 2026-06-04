@@ -19,7 +19,7 @@ export function clamp(n: number, min: number, max: number): number {
 /** Convert email HTML to readable plain text (for sequence bodies / replies). */
 export function stripHtml(html: string): string {
   return html
-    .replace(/<br\s*\/?>(?=)/gi, "\n")
+    .replace(/<br\s*\/?>/gi, "\n")
     .replace(/<\/(div|p|li|tr)>/gi, "\n")
     .replace(/<[^>]+>/g, "")
     .replace(/&nbsp;/gi, " ")

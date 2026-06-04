@@ -55,8 +55,9 @@ export const appConfig = {
   },
   /** Default automation posture — operator can move the dial up over time. */
   defaultAutomationLevel: "approve_all" as const,
-  /** Which reply classes are eligible for auto-send at the "auto_safe" level. */
-  autoSafeClasses: ["ooo", "referral"] as const,
+  /** Which reply classes are auto-SENT at the "auto_safe" level. (OOO is auto-snoozed
+   *  separately; negatives/unsubscribes are always auto-suppressed.) */
+  autoSafeClasses: ["referral"] as const,
   /** Classes that trigger an immediate Telegram ping rather than the digest. */
   hotClasses: ["interested", "question"] as const,
   model: process.env.ANTHROPIC_MODEL || "claude-opus-4-8",

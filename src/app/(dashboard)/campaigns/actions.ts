@@ -15,6 +15,7 @@ export async function pauseCampaignAction(id: string) {
   await ensureData();
   const user = await getCurrentUser();
   const c = getCampaign(id);
+  if (c?.status === "paused") return { ok: true };
   if (c?.instantlyCampaignId && integrations.instantly) {
     try { await pauseCampaign(c.instantlyCampaignId); } catch (e) { return { ok: false, error: (e as Error).message }; }
   }
@@ -27,6 +28,7 @@ export async function launchCampaignAction(id: string) {
   await ensureData();
   const user = await getCurrentUser();
   const c = getCampaign(id);
+  if (c?.status === "active") return { ok: true };
   if (c?.instantlyCampaignId && integrations.instantly) {
     try { await activateCampaign(c.instantlyCampaignId); } catch (e) { return { ok: false, error: (e as Error).message }; }
   }
