@@ -26,16 +26,20 @@ export default async function PipelinePage() {
         <SectionHeader title="Funnel" subtitle="Cumulative — each stage includes everyone who passed it" />
         <Card>
           <CardBody className="space-y-2.5">
-            {p.funnel.map((f) => (
-              <div key={f.stage} className="flex items-center gap-3">
-                <span className="w-28 shrink-0 text-xs text-slate-400">{titleCase(f.stage)}</span>
-                <div className="h-6 flex-1 overflow-hidden rounded-md bg-ink-800">
-                  <div className="flex h-full items-center justify-end rounded-md bg-gradient-to-r from-brand-700 to-brand-500 px-2 text-[11px] font-medium text-white" style={{ width: `${Math.max(6, (f.count / top) * 100)}%` }}>
-                    {f.count}
+            {p.funnel.map((f, i) => {
+              const prev = i > 0 ? p.funnel[i - 1].count : f.count;
+              const conv = prev > 0 ? f.count / prev : 0;
+              return (
+                <div key={f.stage} className="flex items-center gap-3">
+                  <span className="w-24 shrink-0 text-xs text-slate-400 sm:w-28">{titleCase(f.stage)}</span>
+                  <div className="h-7 flex-1 overflow-hidden rounded-md bg-white/5">
+                    <div className="h-full rounded-md bg-gradient-to-r from-brand-600 to-brand-400" style={{ width: `${Math.max(2, top > 0 ? (f.count / top) * 100 : 0)}%`, opacity: 1 - i * 0.08 }} />
                   </div>
+                  <span className="w-10 shrink-0 text-right font-mono text-sm tabular-nums text-slate-100">{f.count}</span>
+                  <span className="w-11 shrink-0 text-right text-[11px] tabular-nums text-slate-500">{i > 0 ? pct(conv) : ""}</span>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </CardBody>
         </Card>
       </section>

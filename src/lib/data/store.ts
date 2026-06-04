@@ -8,7 +8,7 @@
  * just `await ensureData()` first.
  */
 import { cache } from "react";
-import { DATA_MODE } from "@/lib/config";
+import { appConfig, DATA_MODE } from "@/lib/config";
 import type {
   AutomationLevel,
   Campaign,
@@ -230,6 +230,14 @@ export async function executeCreditSpend(id: string, actor: string): Promise<Cre
   if (!req || req.status !== "approved") return null;
   req.status = "executed";
   await liveUpsert("credit_requests", { id, status: "executed" });
+  // Reconcile the gated meter so spend is reflected. (The actual per-lead
+  // apollo.enrichWithCiqCredits calls happen in the enrichment flow with this
+  // approved request id as the audit-logged authorization.)
+  const meter = db().creditMeters.find((m) => m.provider === req.provider);
+  if (meter) {
+    meter.used = Math.min(meter.total, meter.used + req.amount);
+    await liveUpsert("credit_meters", { provider: meter.provider, used: meter.used }, "provider");
+  }
   await pushAudit(actor, "credit.executed", "apollo_ciq", id, { amount: req.amount });
   return req;
 }
@@ -312,5 +320,14 @@ export async function pauseInbox(id: string, actor: string, reason: string) {
   inbox.status = "paused";
   await liveUpsert("inboxes", { id, status: "paused" });
   await pushAudit(actor, "inbox.paused", "inbox", id, { reason });
+  return inbox;
+}
+
+export async function resumeInbox(id: string, actor: string) {
+  const inbox = getInbox(id);
+  if (!inbox) return null;
+  inbox.status = inbox.warmupScore >= appConfig.deliverability.warmupGate ? "active" : "warming";
+  await liveUpsert("inboxes", { id, status: inbox.status });
+  await pushAudit(actor, "inbox.resumed", "inbox", id, {});
   return inbox;
 }

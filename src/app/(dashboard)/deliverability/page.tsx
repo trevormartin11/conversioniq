@@ -4,6 +4,7 @@ import { HealthBadge, Tag } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/charts";
 import { deliverabilitySummary } from "@/lib/data/queries";
 import { PageHeader } from "@/components/ui/card";
+import { InboxActions } from "@/components/deliverability/inbox-actions";
 import { ensureData, getDomains, getInboxes, getPersonas } from "@/lib/data/store";
 import { appConfig } from "@/lib/config";
 import { num, pct, titleCase } from "@/lib/format";
@@ -96,7 +97,10 @@ export default async function DeliverabilityPage() {
                       <p className="truncate text-sm text-slate-200">{i.email}</p>
                       <p className="text-xs text-slate-500">warmup {i.warmupScore} · {i.sentToday}/{i.dailyCap} sent · bounce {pct(i.bounceRate, 1)}</p>
                     </div>
-                    <Tag tone={i.status === "paused" ? "bad" : i.status === "warming" ? "warn" : "slate"}>{titleCase(i.status)}</Tag>
+                    <div className="flex shrink-0 items-center gap-2">
+                      <Tag tone={i.status === "paused" ? "bad" : i.status === "warming" ? "warn" : "slate"}>{titleCase(i.status)}</Tag>
+                      <InboxActions id={i.id} status={i.status} />
+                    </div>
                   </div>
                 ))}
             </div>

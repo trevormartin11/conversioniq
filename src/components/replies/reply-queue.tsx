@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Ban, ChevronDown, Clock, Flame, RefreshCw, Send, X } from "lucide-react";
+import { Ban, ChevronDown, Clock, Flame, Inbox, RefreshCw, Send, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ClassBadge, StatusBadge } from "@/components/ui/badge";
 import { Empty } from "@/components/ui/card";
@@ -234,7 +234,7 @@ export function ReplyQueue({
 
       {/* List */}
       {visible.length === 0 ? (
-        <Empty>Nothing here — queue is clear. New replies appear here as they arrive.</Empty>
+        <Empty icon={Inbox} title="Queue is clear">New replies appear here as they arrive — classified and drafted, ready for one-tap approval.</Empty>
       ) : (
         <div className="space-y-2">
           {visible.map((r) => {

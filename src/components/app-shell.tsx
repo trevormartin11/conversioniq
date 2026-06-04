@@ -6,6 +6,7 @@ import { usePathname } from "next/navigation";
 import { Menu, X, Radio } from "lucide-react";
 import { NAV, PRIMARY_HREFS } from "@/lib/nav";
 import { cn } from "@/lib/utils";
+import { ago } from "@/lib/format";
 import { Toaster } from "@/components/ui/toast";
 import type { User } from "@/lib/data/types";
 
@@ -19,6 +20,7 @@ export function AppShell({
   queueCount,
   connectedCount,
   totalIntegrations,
+  lastSyncAt,
   children,
 }: {
   user: User;
@@ -26,6 +28,7 @@ export function AppShell({
   queueCount: number;
   connectedCount: number;
   totalIntegrations: number;
+  lastSyncAt: string | null;
   children: React.ReactNode;
 }) {
   const pathname = usePathname();
@@ -42,7 +45,7 @@ export function AppShell({
             <NavLink key={item.href} item={item} active={isActive(pathname, item.href)} badge={item.href === "/replies" ? queueCount : undefined} />
           ))}
         </nav>
-        <DataModePill dataMode={dataMode} connectedCount={connectedCount} totalIntegrations={totalIntegrations} />
+        <DataModePill dataMode={dataMode} connectedCount={connectedCount} totalIntegrations={totalIntegrations} lastSyncAt={lastSyncAt} />
       </aside>
 
       <div className="flex min-w-0 flex-1 flex-col">
@@ -90,7 +93,7 @@ export function AppShell({
                 <NavLink key={item.href} item={item} active={isActive(pathname, item.href)} onClick={() => setDrawer(false)} badge={item.href === "/replies" ? queueCount : undefined} />
               ))}
             </nav>
-            <div className="mt-5"><DataModePill dataMode={dataMode} connectedCount={connectedCount} totalIntegrations={totalIntegrations} /></div>
+            <div className="mt-5"><DataModePill dataMode={dataMode} connectedCount={connectedCount} totalIntegrations={totalIntegrations} lastSyncAt={lastSyncAt} /></div>
           </div>
         </div>
       )}
@@ -153,7 +156,7 @@ function UserChip({ user }: { user: User }) {
   );
 }
 
-function DataModePill({ dataMode, connectedCount, totalIntegrations }: { dataMode: "live" | "mock"; connectedCount: number; totalIntegrations: number }) {
+function DataModePill({ dataMode, connectedCount, totalIntegrations, lastSyncAt }: { dataMode: "live" | "mock"; connectedCount: number; totalIntegrations: number; lastSyncAt: string | null }) {
   return (
     <Link href="/settings" className="block rounded-xl border border-ink-800 bg-ink-850 p-3 text-xs hover:border-ink-700">
       <div className="flex items-center gap-2">
@@ -163,6 +166,7 @@ function DataModePill({ dataMode, connectedCount, totalIntegrations }: { dataMod
       <p className="mt-1 text-slate-500">
         {connectedCount}/{totalIntegrations} integrations connected
       </p>
+      {lastSyncAt && <p className="mt-0.5 text-slate-600">Synced {ago(lastSyncAt)}</p>}
     </Link>
   );
 }

@@ -37,7 +37,15 @@ export default async function CommandCenter() {
       {s.alerts.length > 0 && (
         <div className="space-y-2">
           {s.alerts.map((a) => (
-            <div key={a.id} className="flex items-start gap-3 rounded-xl border border-ink-700 bg-ink-850 px-4 py-3">
+            <div
+              key={a.id}
+              className={cn(
+                "flex items-start gap-3 rounded-xl border border-l-2 px-4 py-3",
+                a.level === "red" && "border-bad/30 border-l-bad bg-bad/[0.07]",
+                a.level === "yellow" && "border-warn/30 border-l-warn bg-warn/[0.07]",
+                a.level === "green" && "border-ink-700 border-l-ok bg-ink-850",
+              )}
+            >
               <HealthBadge health={a.level} label={a.level === "red" ? "Urgent" : a.level === "yellow" ? "Attention" : "Info"} />
               <div className="min-w-0 flex-1">
                 <p className="text-sm font-medium text-slate-200">{a.title}</p>
