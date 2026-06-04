@@ -6,6 +6,7 @@ import { usePathname } from "next/navigation";
 import { Menu, X, Radio } from "lucide-react";
 import { NAV, PRIMARY_HREFS } from "@/lib/nav";
 import { cn } from "@/lib/utils";
+import { Toaster } from "@/components/ui/toast";
 import type { User } from "@/lib/data/types";
 
 function isActive(pathname: string, href: string) {
@@ -71,6 +72,8 @@ export function AppShell({
         </button>
       </nav>
 
+      <Toaster />
+
       {/* Mobile drawer */}
       {drawer && (
         <div className="fixed inset-0 z-40 md:hidden" onClick={() => setDrawer(false)}>
@@ -123,8 +126,7 @@ function NavLink({ item, active, badge, onClick }: { item: (typeof NAV)[number];
     >
       <Icon className="h-4 w-4 shrink-0" />
       <span className="flex-1">{item.label}</span>
-      {item.phase > 1 && <span className="text-[9px] font-medium uppercase text-slate-600">P{item.phase}</span>}
-      {!!badge && badge > 0 && <span className="rounded-full bg-warn px-1.5 py-0.5 text-[10px] font-semibold text-ink-950">{badge}</span>}
+      {!!badge && badge > 0 && <span className="rounded-full bg-brand-600 px-1.5 py-0.5 text-[10px] font-semibold text-white">{badge}</span>}
     </Link>
   );
 }

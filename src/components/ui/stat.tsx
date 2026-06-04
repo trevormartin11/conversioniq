@@ -20,9 +20,9 @@ export function Stat({
   }[tone];
   return (
     <div className="card p-4">
-      <div className="text-xs font-medium uppercase tracking-wide text-slate-500">{label}</div>
-      <div className={cn("mt-1 text-2xl font-semibold tabular-nums", toneClass)}>{value}</div>
-      {sub && <div className="mt-0.5 text-xs text-slate-500">{sub}</div>}
+      <div className="text-[11px] font-medium uppercase tracking-wider text-slate-500">{label}</div>
+      <div className={cn("mt-2 font-mono text-[26px] font-semibold leading-none tabular-nums sm:text-3xl", toneClass)}>{value}</div>
+      {sub && <div className="mt-1.5 text-xs text-slate-500">{sub}</div>}
     </div>
   );
 }

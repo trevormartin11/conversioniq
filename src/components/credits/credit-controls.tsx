@@ -4,6 +4,7 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { AlertTriangle, Check, Lock, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { toast } from "@/components/ui/toast";
 import { ago, num } from "@/lib/format";
 import {
   approveCreditAction,
@@ -29,10 +30,12 @@ export function CreditControls({ requests, currentUser }: { requests: RequestVie
   const [reason, setReason] = useState("");
   const [confirmId, setConfirmId] = useState<string | null>(null);
 
-  async function run(key: string, fn: () => Promise<unknown>) {
+  async function run(key: string, fn: () => Promise<unknown>, successMsg?: string) {
     setBusy(key);
-    await fn();
+    const res = (await fn()) as { ok?: boolean; error?: string } | undefined;
     setBusy(null);
+    if (res && res.ok === false) toast.error(res.error ?? "Something went wrong.");
+    else if (successMsg) toast.success(successMsg);
     startTransition(() => router.refresh());
   }
 
@@ -60,7 +63,7 @@ export function CreditControls({ requests, currentUser }: { requests: RequestVie
           <Button
             variant="primary"
             disabled={busy === "request" || !amount}
-            onClick={() => run("request", async () => { await requestCreditAction(Number(amount), reason); setAmount(""); setReason(""); })}
+            onClick={() => run("request", async () => { const r = await requestCreditAction(Number(amount), reason); if (r.ok) { setAmount(""); setReason(""); } return r; }, "Request submitted")}
           >
             Request
           </Button>
@@ -83,10 +86,10 @@ export function CreditControls({ requests, currentUser }: { requests: RequestVie
 
             {r.status === "pending" && (
               <div className="mt-3 flex gap-2">
-                <Button size="sm" variant="ok" disabled={busy === r.id} onClick={() => run(r.id, () => approveCreditAction(r.id))}>
+                <Button size="sm" variant="ok" disabled={busy === r.id} onClick={() => run(r.id, () => approveCreditAction(r.id), "Approved")}>
                   <Check className="h-3.5 w-3.5" /> Approve
                 </Button>
-                <Button size="sm" variant="ghost" disabled={busy === r.id} onClick={() => run(r.id, () => denyCreditAction(r.id))}>
+                <Button size="sm" variant="ghost" disabled={busy === r.id} onClick={() => run(r.id, () => denyCreditAction(r.id), "Denied")}>
                   <X className="h-3.5 w-3.5" /> Deny
                 </Button>
               </div>
@@ -101,7 +104,7 @@ export function CreditControls({ requests, currentUser }: { requests: RequestVie
                     </div>
                     <p className="mt-1 text-xs text-slate-400">This is the only action that spends CIQ credits. It will be audit-logged to {currentUser}.</p>
                     <div className="mt-2 flex gap-2">
-                      <Button size="sm" variant="danger" disabled={busy === r.id} onClick={() => run(r.id, async () => { await executeCreditSpendAction(r.id); setConfirmId(null); })}>
+                      <Button size="sm" variant="danger" disabled={busy === r.id} onClick={() => run(r.id, async () => { const res = await executeCreditSpendAction(r.id); setConfirmId(null); return res; }, `Spent ${num(r.amount)} credits`)}>
                         Yes, spend {num(r.amount)}
                       </Button>
                       <Button size="sm" variant="ghost" onClick={() => setConfirmId(null)}>Cancel</Button>

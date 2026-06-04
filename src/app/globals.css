@@ -34,9 +34,25 @@ body {
 
 @layer components {
   .card {
-    @apply rounded-2xl border border-ink-700/70 bg-ink-850/80 shadow-sm;
+    @apply rounded-2xl border border-white/[0.06] bg-ink-850 shadow-[0_1px_2px_rgba(0,0,0,0.35),0_10px_28px_-16px_rgba(0,0,0,0.7)];
+  }
+  /* add to clickable cards for a subtle interactive lift */
+  .card-link {
+    @apply transition-colors hover:border-white/[0.12] hover:bg-ink-800/70;
   }
   .chip {
     @apply inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium;
+  }
+}
+
+@layer base {
+  /* Visible keyboard focus everywhere (inputs strip the native outline) */
+  input:focus-visible,
+  textarea:focus-visible,
+  select:focus-visible {
+    @apply outline-none ring-2 ring-brand-500/40 border-brand-500;
+  }
+  ::selection {
+    @apply bg-brand-600/30 text-slate-100;
   }
 }

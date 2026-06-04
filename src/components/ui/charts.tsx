@@ -9,20 +9,32 @@ export function Progress({ value, tone = "brand" }: { value: number; tone?: "bra
   );
 }
 
-/** Tiny inline trend line. `data` is any numeric series. */
+/** Inline trend line with gradient area fill, end-point dot, and trend coloring. */
 export function Sparkline({ data, className }: { data: number[]; className?: string }) {
   if (data.length < 2) return null;
-  const w = 120;
-  const h = 32;
+  const w = 240;
+  const h = 48;
+  const pad = 3;
   const min = Math.min(...data);
   const max = Math.max(...data);
   const span = max - min || 1;
-  const pts = data
-    .map((d, i) => `${(i / (data.length - 1)) * w},${h - ((d - min) / span) * (h - 4) - 2}`)
-    .join(" ");
+  const x = (i: number) => (i / (data.length - 1)) * w;
+  const y = (d: number) => h - pad - ((d - min) / span) * (h - pad * 2);
+  const line = data.map((d, i) => `${x(i).toFixed(1)},${y(d).toFixed(1)}`).join(" ");
+  const area = `0,${h} ${line} ${w},${h}`;
+  const up = data[data.length - 1] >= data[0];
+  const gid = `spark_${Math.round(min)}_${Math.round(max)}_${data.length}_${up ? "u" : "d"}`;
   return (
-    <svg viewBox={`0 0 ${w} ${h}`} className={cn("h-8 w-full text-brand-400", className)} preserveAspectRatio="none">
-      <polyline points={pts} fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round" strokeLinecap="round" />
+    <svg viewBox={`0 0 ${w} ${h}`} className={cn("h-12 w-full", up ? "text-ok" : "text-bad", className)}>
+      <defs>
+        <linearGradient id={gid} x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor="currentColor" stopOpacity="0.25" />
+          <stop offset="100%" stopColor="currentColor" stopOpacity="0" />
+        </linearGradient>
+      </defs>
+      <polygon points={area} fill={`url(#${gid})`} />
+      <polyline points={line} fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round" strokeLinecap="round" vectorEffect="non-scaling-stroke" />
+      <circle cx={x(data.length - 1)} cy={y(data[data.length - 1])} r="2.5" fill="currentColor" />
     </svg>
   );
 }

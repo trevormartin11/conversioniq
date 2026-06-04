@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { ClassBadge, StatusBadge } from "@/components/ui/badge";
 import { Empty } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
+import { toast } from "@/components/ui/toast";
 import { ago } from "@/lib/format";
 import type { AutomationLevel, ReplyClass, ReplyStatus } from "@/lib/data/types";
 import {
@@ -45,9 +46,10 @@ type FilterKey = (typeof FILTERS)[number]["key"];
 
 const DIAL: { level: AutomationLevel; label: string; desc: string }[] = [
   { level: "approve_all", label: "Approve all", desc: "You approve every reply before it sends." },
-  { level: "auto_safe", label: "Auto-send safe", desc: "Auto-send OOO & referrals; you approve the rest." },
-  { level: "auto_all", label: "Mostly auto", desc: "AI sends automatically; you're notified." },
+  { level: "auto_safe", label: "Auto-send safe", desc: "Auto-send referrals; auto-snooze OOO; you approve the rest." },
+  { level: "auto_all", label: "Mostly auto", desc: "AI sends confident replies on its own; you're notified. Negatives/unsubscribes always suppressed." },
 ];
+const RANK: Record<AutomationLevel, number> = { approve_all: 0, auto_safe: 1, auto_all: 2 };
 
 const NO_REPLY: ReplyClass[] = ["unsubscribe", "negative", "ooo"];
 
@@ -79,18 +81,31 @@ export function ReplyQueue({
     return drafts[r.id] ?? r.aiDraft ?? "";
   }
 
-  async function run(id: string, fn: () => Promise<unknown>) {
+  async function run(id: string, fn: () => Promise<unknown>, successMsg?: string) {
     setBusyId(id);
-    await fn();
+    const res = (await fn()) as { ok?: boolean; error?: string } | undefined;
     setBusyId(null);
+    if (res && res.ok === false) toast.error(res.error ?? "Something went wrong.");
+    else if (successMsg) toast.success(successMsg);
     startTransition(() => router.refresh());
   }
 
   function changeLevel(level: AutomationLevel) {
+    const current = levelPending ?? automationLevel;
+    if (level === current) return;
+    if (RANK[level] > RANK[current] && typeof window !== "undefined") {
+      const msg =
+        level === "auto_all"
+          ? "Switch to Mostly auto? The AI will start sending confident replies (interested/question/objection) without your review."
+          : "Switch to Auto-send safe? Referrals will be sent automatically; you still approve everything else.";
+      if (!window.confirm(msg)) return;
+    }
     setLevelPending(level);
     startTransition(async () => {
-      await setAutomationAction(level);
+      const res = (await setAutomationAction(level)) as { ok?: boolean } | undefined;
       setLevelPending(null);
+      if (res?.ok === false) toast.error("Couldn't change automation level.");
+      else toast.success(`Automation: ${DIAL.find((d) => d.level === level)?.label}`);
       router.refresh();
     });
   }
@@ -188,7 +203,15 @@ export function ReplyQueue({
                             : "Negative/unsubscribe — auto-suppress + flag Zoho DNC."}
                         </span>
                         {r.status === "pending" && r.classification !== "ooo" && (
-                          <Button size="sm" variant="danger" disabled={busy} onClick={() => run(r.id, () => suppressFromReplyAction(r.id))}>
+                          <Button
+                            size="sm"
+                            variant="danger"
+                            disabled={busy}
+                            onClick={() => {
+                              if (typeof window !== "undefined" && !window.confirm(`Suppress ${r.fromName} and add to Do-Not-Contact? This can't be undone here.`)) return;
+                              run(r.id, () => suppressFromReplyAction(r.id), "Suppressed + added to DNC");
+                            }}
+                          >
                             <Ban className="h-3.5 w-3.5" /> Suppress + DNC
                           </Button>
                         )}
@@ -212,7 +235,7 @@ export function ReplyQueue({
                         />
                         {r.status === "pending" ? (
                           <div className="mt-3 flex flex-wrap gap-2">
-                            <Button size="sm" variant="primary" disabled={busy || !draftFor(r).trim()} onClick={() => run(r.id, () => approveAndSendAction(r.id, draftFor(r)))}>
+                            <Button size="sm" variant="primary" disabled={busy || !draftFor(r).trim()} onClick={() => run(r.id, () => approveAndSendAction(r.id, draftFor(r)), "Reply sent")}>
                               <Send className="h-3.5 w-3.5" /> Approve & send
                             </Button>
                             <Button size="sm" variant="secondary" disabled={busy} onClick={() => run(r.id, async () => { const res = await regenerateDraftAction(r.id); if (res.draft) setDrafts((d) => ({ ...d, [r.id]: res.draft })); })}>

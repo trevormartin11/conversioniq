@@ -35,5 +35,7 @@ export const NAV: NavItem[] = [
   { href: "/settings", label: "Settings", short: "Settings", icon: Settings, phase: 1 },
 ];
 
-/** Destinations shown in the mobile bottom tab bar (the daily-driver set). */
-export const PRIMARY_HREFS = ["/", "/replies", "/leads", "/credits"];
+/** Destinations shown in the mobile bottom tab bar (the daily-driver set).
+ *  Deliverability is "existential" with ~49 inboxes, so it earns a primary slot;
+ *  Credits stays one tap away in the drawer (its alerts still bubble to Command). */
+export const PRIMARY_HREFS = ["/", "/replies", "/leads", "/deliverability"];

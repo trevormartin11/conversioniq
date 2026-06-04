@@ -18,13 +18,14 @@ export function Button({
     ok: "bg-ok/90 hover:bg-ok text-white",
   };
   const sizes: Record<Size, string> = {
-    sm: "h-8 px-3 text-xs",
+    sm: "h-9 px-3.5 text-xs",
     md: "h-10 px-4 text-sm",
   };
   return (
     <button
       className={cn(
         "inline-flex items-center justify-center gap-1.5 rounded-lg font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50",
+        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/50 focus-visible:ring-offset-2 focus-visible:ring-offset-ink-950",
         variants[variant],
         sizes[size],
         className,
