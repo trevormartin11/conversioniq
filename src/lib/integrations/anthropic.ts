@@ -1,0 +1,37 @@
+/** Anthropic Claude client wrapper — reply classification, drafting, copy ideas. */
+import Anthropic from "@anthropic-ai/sdk";
+import { appConfig, integrations } from "@/lib/config";
+import { NotConfiguredError } from "./http";
+
+let client: Anthropic | null = null;
+
+function getClient(): Anthropic {
+  if (!integrations.anthropic) throw new NotConfiguredError("anthropic");
+  if (!client) client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+  return client;
+}
+
+export interface CompleteOpts {
+  system: string;
+  user: string;
+  maxTokens?: number;
+  temperature?: number;
+}
+
+/** Single-turn completion returning plain text. Throws NotConfiguredError if no key. */
+export async function complete({ system, user, maxTokens = 1024, temperature = 0.4 }: CompleteOpts): Promise<string> {
+  const msg = await getClient().messages.create({
+    model: appConfig.model,
+    max_tokens: maxTokens,
+    temperature,
+    system,
+    messages: [{ role: "user", content: user }],
+  });
+  return msg.content
+    .filter((b): b is Anthropic.TextBlock => b.type === "text")
+    .map((b) => b.text)
+    .join("\n")
+    .trim();
+}
+
+export const aiAvailable = () => integrations.anthropic;
