@@ -162,8 +162,9 @@ function MiniStat({ label, value }: { label: string; value: string }) {
 
 function CampaignCard({ card }: { card: CardData }) {
   return (
-    <Card>
-      <CardBody>
+    <Link href="/campaigns" className="block">
+      <Card className="card-link h-full">
+        <CardBody>
         <div className="flex items-start justify-between gap-2">
           <div>
             <p className="text-sm font-semibold text-slate-100">{card.name}</p>
@@ -178,8 +179,9 @@ function CampaignCard({ card }: { card: CardData }) {
           <Metric label="Positive" value={pct(card.positiveRate, 1)} />
           <Metric label="Bounce" value={pct(card.bounceRate, 1)} tone={card.bounceRate > 0.05 ? "bad" : "default"} />
         </div>
-      </CardBody>
-    </Card>
+        </CardBody>
+      </Card>
+    </Link>
   );
 }
 

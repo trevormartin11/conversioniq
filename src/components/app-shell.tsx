@@ -56,6 +56,14 @@ export function AppShell({
           </button>
           <div className="md:hidden"><Brand compact /></div>
           <div className="ml-auto flex items-center gap-3">
+            <form action="/leads" className="hidden lg:block">
+              <input
+                name="q"
+                placeholder="Search leads…"
+                aria-label="Search leads"
+                className="h-8 w-44 rounded-lg border border-ink-700 bg-ink-900 px-3 text-xs text-slate-200 transition-all placeholder:text-slate-500 focus:w-60 focus:border-brand-500 focus:outline-none"
+              />
+            </form>
             <span className="hidden items-center gap-1.5 rounded-full bg-white/5 px-2.5 py-1 text-xs text-slate-300 sm:inline-flex">
               <span className={cn("h-1.5 w-1.5 rounded-full", dataMode === "live" ? "bg-ok" : "bg-warn")} />
               {dataMode === "live" ? "Live" : "Preview"}
