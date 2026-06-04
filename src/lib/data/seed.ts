@@ -12,6 +12,7 @@ import type {
   Alert,
   AuditEvent,
   Campaign,
+  Cost,
   CreditMeter,
   CreditSpendRequest,
   Dataset,
@@ -358,10 +359,19 @@ const alerts: Alert[] = [
   { id: "al_3", level: "green", title: "3 hot replies waiting", detail: "Interested/question replies in the approval queue need a look.", createdAt: minsAgo(18), source: "replies" },
 ];
 
+// --- costs (the operation's P&L inputs) -------------------------------------
+const costs: Cost[] = [
+  { id: "co_instantly", category: "sending", vendor: "Instantly", description: "Sending + warmup plan (~49 inboxes)", amount: 97, cadence: "monthly", status: "active", startedAt: daysAgo(60), nextChargeAt: daysAgo(-12), source: "manual", note: null, createdBy: "Trevor Martin" },
+  { id: "co_apollo", category: "data", vendor: "Apollo", description: "Apollo subscription (search + enrich)", amount: 99, cadence: "monthly", status: "active", startedAt: daysAgo(60), nextChargeAt: daysAgo(-9), source: "manual", note: null, createdBy: "Trevor Martin" },
+  { id: "co_workspace", category: "email", vendor: "Google Workspace", description: "Gmail seats for sending personas", amount: 72, cadence: "monthly", status: "active", startedAt: daysAgo(58), nextChargeAt: daysAgo(-6), source: "manual", note: "~$6/seat", createdBy: "Trevor Martin" },
+  { id: "co_domains", category: "domains", vendor: "Namecheap", description: "15 sending domains — annual registration", amount: 180, cadence: "annual", status: "active", startedAt: daysAgo(58), nextChargeAt: daysAgo(-300), source: "manual", note: "~$12/domain/yr", createdBy: "Trevor Martin" },
+  { id: "co_leads", category: "leads", vendor: "Apollo export", description: "Initial Med Spa lead pull", amount: 120, cadence: "one_time", status: "active", startedAt: daysAgo(20), nextChargeAt: null, source: "manual", note: null, createdBy: "Jon Epstein" },
+];
+
 export function buildSeed(): Dataset {
   return {
     users, personas, domains, inboxes, campaigns, leads, replies,
     suppression, creditMeters, creditRequests, audit, jobs, demos,
-    variants, metrics, alerts,
+    variants, metrics, alerts, costs,
   };
 }

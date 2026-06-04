@@ -74,6 +74,21 @@ export type DemoStatus = (typeof DEMO_STATUSES)[number];
 export const CREDIT_PROVIDERS = ["apollo_personal", "apollo_ciq"] as const;
 export type CreditProvider = (typeof CREDIT_PROVIDERS)[number];
 
+/** Cost / spend tracking — the operation's P&L inputs. */
+export const COST_CATEGORIES = [
+  "sending", // Instantly
+  "data", // Apollo, lead lists
+  "email", // Google Workspace / Gmail
+  "domains", // registrations
+  "leads", // purchased lead lists
+  "software", // warmup tools, misc SaaS
+  "other",
+] as const;
+export type CostCategory = (typeof COST_CATEGORIES)[number];
+
+export const COST_CADENCES = ["monthly", "annual", "one_time"] as const;
+export type CostCadence = (typeof COST_CADENCES)[number];
+
 /** Red / Yellow / Green — the glanceable health signal. */
 export type Health = "green" | "yellow" | "red";
 
@@ -270,6 +285,21 @@ export interface DailyMetric {
   demos: number;
 }
 
+export interface Cost {
+  id: string;
+  category: CostCategory;
+  vendor: string; // "Instantly", "Apollo", "Google Workspace", "Namecheap", ...
+  description: string;
+  amount: number; // USD
+  cadence: CostCadence;
+  status: "active" | "cancelled";
+  startedAt: string;
+  nextChargeAt: string | null;
+  source: "manual" | "auto"; // auto = pulled from an integration later
+  note: string | null;
+  createdBy: string;
+}
+
 export interface Alert {
   id: string;
   level: Health; // green=info, yellow=warn, red=urgent
@@ -297,4 +327,5 @@ export interface Dataset {
   variants: SequenceVariant[];
   metrics: DailyMetric[];
   alerts: Alert[];
+  costs: Cost[];
 }

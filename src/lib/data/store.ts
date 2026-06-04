@@ -12,6 +12,7 @@ import { DATA_MODE } from "@/lib/config";
 import type {
   AutomationLevel,
   Campaign,
+  Cost,
   CreditSpendRequest,
   Dataset,
   Reply,
@@ -51,6 +52,7 @@ export const getDemos = () => db().demos;
 export const getVariants = () => db().variants;
 export const getMetrics = () => db().metrics;
 export const getAlerts = () => db().alerts;
+export const getCosts = () => db().costs;
 
 export const getReply = (id: string) => db().replies.find((r) => r.id === id) ?? null;
 export const getLead = (id: string) => db().leads.find((l) => l.id === id) ?? null;
@@ -228,6 +230,29 @@ export function addCampaign(
   db().campaigns.unshift(campaign);
   pushAudit(actor, "campaign.created", "campaign", campaign.id, { name: campaign.name, vertical: campaign.vertical });
   return campaign;
+}
+
+// --- costs (P&L) ------------------------------------------------------------
+export function addCost(input: Omit<Cost, "id" | "startedAt" | "source" | "createdBy">, actor = "system"): Cost {
+  const cost: Cost = {
+    ...input,
+    id: `co_${Math.random().toString(36).slice(2, 9)}`,
+    startedAt: new Date().toISOString(),
+    source: "manual",
+    createdBy: actor,
+  };
+  db().costs.unshift(cost);
+  pushAudit(actor, "cost.added", "cost", cost.id, { vendor: cost.vendor, amount: cost.amount, cadence: cost.cadence });
+  return cost;
+}
+
+export function deleteCost(id: string, actor = "system"): boolean {
+  const costs = db().costs;
+  const i = costs.findIndex((c) => c.id === id);
+  if (i === -1) return false;
+  costs.splice(i, 1);
+  pushAudit(actor, "cost.removed", "cost", id, {});
+  return true;
 }
 
 // --- deliverability ---------------------------------------------------------

@@ -1,5 +1,6 @@
 import {
   Coins,
+  DollarSign,
   Inbox,
   LayoutDashboard,
   Megaphone,
@@ -29,6 +30,7 @@ export const NAV: NavItem[] = [
   { href: "/campaigns", label: "Campaigns", short: "Campaigns", icon: Megaphone, phase: 2 },
   { href: "/copy", label: "Copy Coach", short: "Copy", icon: PenLine, phase: 2 },
   { href: "/pipeline", label: "Pipeline & Residual", short: "Pipeline", icon: TrendingUp, phase: 3 },
+  { href: "/costs", label: "Costs & P&L", short: "Costs", icon: DollarSign, phase: 1 },
   { href: "/automation", label: "Automation", short: "Jobs", icon: Workflow, phase: 4 },
   { href: "/settings", label: "Settings", short: "Settings", icon: Settings, phase: 1 },
 ];

@@ -8,6 +8,7 @@ import { rate } from "@/lib/format";
 import {
   getAlerts,
   getCampaigns,
+  getCosts,
   getCreditMeters,
   getDemos,
   getInboxes,
@@ -17,6 +18,7 @@ import {
 } from "./store";
 import type {
   Campaign,
+  CostCategory,
   Health,
   LeadStatus,
   ReplyClass,
@@ -211,4 +213,34 @@ export function creditSummary() {
     remaining: m.total - m.used,
     pctUsed: rate(m.used, m.total),
   }));
+}
+
+// --- costs / P&L ------------------------------------------------------------
+/** Normalize any cost to a monthly figure (one-time costs excluded from recurring). */
+function monthlyOf(c: { amount: number; cadence: string }): number {
+  if (c.cadence === "monthly") return c.amount;
+  if (c.cadence === "annual") return c.amount / 12;
+  return 0;
+}
+
+export function costSummary() {
+  const active = getCosts().filter((c) => c.status === "active");
+  const monthly = active.reduce((s, c) => s + monthlyOf(c), 0);
+  const oneTime = active.filter((c) => c.cadence === "one_time").reduce((s, c) => s + c.amount, 0);
+  const byCategory = {} as Record<CostCategory, number>;
+  for (const c of active) byCategory[c.category] = (byCategory[c.category] ?? 0) + monthlyOf(c);
+
+  const r = residual();
+  const netMonthly = r.grossMonthly - monthly;
+  return {
+    monthly,
+    annual: monthly * 12,
+    oneTime,
+    byCategory,
+    activeCount: active.length,
+    grossResidualMonthly: r.grossMonthly,
+    netMonthly,
+    netPerPartnerMonthly: netMonthly / appConfig.residual.splitWays,
+    breakeven: r.grossMonthly >= monthly,
+  };
 }
