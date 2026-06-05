@@ -1,10 +1,13 @@
 import Link from "next/link";
+import { Suspense } from "react";
 import { notFound } from "next/navigation";
-import { ArrowLeft, CheckCircle2, Clock } from "lucide-react";
+import { ArrowLeft, CheckCircle2, Clock, Lightbulb } from "lucide-react";
 import { Card, CardBody, PageHeader, SectionHeader } from "@/components/ui/card";
 import { HealthBadge, Tag } from "@/components/ui/badge";
 import { CampaignActions } from "@/components/campaigns/campaign-actions";
+import { EditableVariant } from "@/components/campaigns/editable-variant";
 import { campaignCards } from "@/lib/data/queries";
+import { suggestCopy } from "@/lib/ai/copy";
 import { ensureData, getCampaign, getInboxes, getPersonas, getVariants } from "@/lib/data/store";
 import { campaignHasLeads, getInstantlyCampaign, type InstantlyCampaignView, type InstantlyStepView } from "@/lib/integrations/instantly";
 import { integrations } from "@/lib/config";
@@ -99,7 +102,7 @@ export default async function CampaignDetail({ params }: { params: Promise<{ id:
       <section>
         <SectionHeader
           title="Sequence"
-          subtitle={hasCadence ? "Full copy and cadence, live from Instantly" : "Full copy (cadence shows once synced from Instantly)"}
+          subtitle={hasCadence ? "Edit copy inline · cadence live from Instantly" : "Edit copy inline · cadence shows once synced"}
         />
         <div className="space-y-3">
           {steps.map((s) => (
@@ -119,8 +122,14 @@ export default async function CampaignDetail({ params }: { params: Promise<{ id:
                     return (
                       <div key={v.variant} className="border-l-2 border-ink-700 pl-3">
                         {s.variants.length > 1 && <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-slate-500">Variant {v.variant}</p>}
-                        <p className="text-sm font-semibold text-slate-100">{v.subject || <span className="text-slate-600">(no subject)</span>}</p>
-                        <p className="mt-1.5 whitespace-pre-line text-sm leading-relaxed text-slate-400">{v.body || "(empty)"}</p>
+                        {stat ? (
+                          <EditableVariant id={stat.id} subject={stat.subject} body={stat.body} />
+                        ) : (
+                          <>
+                            <p className="text-sm font-semibold text-slate-100">{v.subject || <span className="text-slate-600">(no subject)</span>}</p>
+                            <p className="mt-1.5 whitespace-pre-line text-sm leading-relaxed text-slate-400">{v.body || "(empty)"}</p>
+                          </>
+                        )}
                         {stat && stat.sent > 0 && (
                           <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-slate-500">
                             <span>{num(stat.sent)} sent</span>
@@ -142,9 +151,40 @@ export default async function CampaignDetail({ params }: { params: Promise<{ id:
         </div>
       </section>
 
+      {/* AI Coach — recommendations from this campaign's open & positive-reply rates */}
+      <section>
+        <SectionHeader title="AI Coach" subtitle="Subject + first-line suggestions driven by this campaign's open & positive-reply rates" />
+        <Suspense fallback={<Card><CardBody className="text-sm text-slate-500">Analyzing this campaign&apos;s copy…</CardBody></Card>}>
+          <AiCoach variants={synced} />
+        </Suspense>
+      </section>
+
       <p className="flex items-center gap-1.5 text-xs text-slate-600">
-        <CheckCircle2 className="h-3.5 w-3.5" /> Merge tags like {"{{firstName}}"} are filled per-lead at send time.
+        <CheckCircle2 className="h-3.5 w-3.5" /> Edits save to the hub copy; merge tags like {"{{firstName}}"} fill per-lead at send time. Live campaigns also need a push to Instantly to change what&apos;s sending.
       </p>
+    </div>
+  );
+}
+
+async function AiCoach({ variants }: { variants: SequenceVariant[] }) {
+  const suggestions = variants.length ? await suggestCopy(variants) : [];
+  if (!suggestions.length) {
+    return <Card><CardBody className="text-sm text-slate-500">Suggestions appear once this campaign has sent emails.</CardBody></Card>;
+  }
+  return (
+    <div className="space-y-2">
+      {suggestions.map((s, i) => (
+        <Card key={i}>
+          <CardBody className="flex gap-3">
+            <Lightbulb className="mt-0.5 h-4 w-4 shrink-0 text-warn" />
+            <div className="flex-1">
+              <p className="text-sm font-medium text-slate-100">{s.title}</p>
+              <p className="mt-0.5 text-xs text-slate-400">{s.detail}</p>
+            </div>
+            <Tag tone={s.source === "ai" ? "brand" : "slate"}>{s.source}</Tag>
+          </CardBody>
+        </Card>
+      ))}
     </div>
   );
 }

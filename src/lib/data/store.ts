@@ -22,6 +22,7 @@ import type {
   LeadStatus,
   Reply,
   ReplyStatus,
+  SequenceVariant,
   SuppressionEntry,
 } from "./types";
 import { pushDemoDeal } from "@/lib/integrations/zoho-civ";
@@ -442,6 +443,17 @@ export async function markDemoReminded(id: string, actor = "system"): Promise<De
 export function getDemoByCivDealId(civDealId: string): Demo | undefined {
   if (!civDealId) return undefined;
   return db().demos.find((d) => d.civDealId === civDealId);
+}
+
+// --- campaign copy (inline sequence editing) --------------------------------
+export async function updateVariant(id: string, patch: { subject?: string; body?: string }, actor = "system"): Promise<SequenceVariant | null> {
+  const v = db().variants.find((x) => x.id === id);
+  if (!v) return null;
+  if (patch.subject !== undefined) v.subject = patch.subject;
+  if (patch.body !== undefined) v.body = patch.body;
+  await liveUpsert("sequence_variants", { id, subject: v.subject, body: v.body });
+  await pushAudit(actor, "variant.edited", "campaign", v.campaignId, { variantId: id, step: v.step, variant: v.variant });
+  return v;
 }
 
 // --- deliverability ---------------------------------------------------------
