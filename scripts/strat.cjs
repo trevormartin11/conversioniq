@@ -5,22 +5,23 @@ const COOKIES = [
 ];
 (async () => {
   const b = await chromium.launch();
-  const ctx = await b.newContext({ viewport: { width: 900, height: 1200 }, deviceScaleFactor: 2 });
+  const ctx = await b.newContext({ viewport: { width: 900, height: 1300 }, deviceScaleFactor: 2 });
   await ctx.addCookies(COOKIES);
   const p = await ctx.newPage();
   await p.goto("http://localhost:3000/copy", { waitUntil: "networkidle", timeout: 60000 });
+  await p.waitForTimeout(13000); // let streamed next-moves resolve
+  const moves = p.locator("section", { hasText: "Recommended next moves" }).first();
+  await moves.scrollIntoViewIfNeeded();
+  await moves.screenshot({ path: "/tmp/moves.png" });
+  console.log("moves shot");
+
   await p.getByRole("button", { name: /Suggest verticals/i }).click();
   await p.waitForTimeout(15000);
-  const ideasCard = p.locator("div.card", { hasText: "Where to point the fleet" }).first();
-  await ideasCard.scrollIntoViewIfNeeded();
-  await ideasCard.screenshot({ path: "/tmp/strat-ideas.png" });
-  console.log("ideas shot");
-  const draftBtn = p.getByText(/Draft copy for this/i).first();
-  await draftBtn.click();
+  await p.getByText(/Draft copy for this/i).first().click();
   await p.waitForTimeout(16000);
-  const draftCard = p.locator("div.card", { hasText: "Draft the sequence" }).first();
-  await draftCard.scrollIntoViewIfNeeded();
-  await draftCard.screenshot({ path: "/tmp/strat-draft.png" });
-  console.log("draft shot");
+  const launch = p.locator("div.card", { hasText: "Launch setup" }).first();
+  await launch.scrollIntoViewIfNeeded();
+  await launch.screenshot({ path: "/tmp/launch.png" });
+  console.log("launch shot");
   await b.close();
 })();
