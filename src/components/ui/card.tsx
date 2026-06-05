@@ -14,7 +14,7 @@ export function PageHeader({ title, subtitle, action }: { title: string; subtitl
   return (
     <div className="flex items-start justify-between gap-3">
       <div className="min-w-0">
-        <h1 className="text-2xl font-semibold tracking-tight text-slate-100 md:text-[28px]">{title}</h1>
+        <h1 className="text-gradient text-2xl font-semibold tracking-tight md:text-[28px]">{title}</h1>
         {subtitle && <p className="mt-1 text-sm text-slate-400">{subtitle}</p>}
       </div>
       {action && <div className="shrink-0">{action}</div>}
@@ -52,9 +52,9 @@ export function Empty({
   children?: React.ReactNode;
 }) {
   return (
-    <div className="flex flex-col items-center gap-2 rounded-xl border border-dashed border-ink-700 px-4 py-10 text-center">
+    <div className="flex flex-col items-center gap-2 rounded-2xl border border-dashed border-white/10 px-4 py-10 text-center">
       {Icon && (
-        <span className="flex h-10 w-10 items-center justify-center rounded-full bg-ink-800 text-slate-500">
+        <span className="flex h-10 w-10 items-center justify-center rounded-full bg-white/[0.04] text-slate-500">
           <Icon className="h-5 w-5" />
         </span>
       )}
