@@ -1,6 +1,25 @@
 "use server";
 
 import { dedupeAgainstUniverse, ensureData, isSuppressed, searchUniverse } from "@/lib/data/store";
+import { buildPlan, runSourcing } from "@/lib/sourcing/engine";
+import type { SizeBand } from "@/lib/sourcing/types";
+
+interface SourcingInput { vertical: string; geo?: string; sizeBand?: SizeBand; count: number; budgetCap: number }
+const toTarget = (i: SourcingInput) => ({ vertical: i.vertical.trim(), geo: i.geo?.trim() || undefined, sizeBand: i.sizeBand });
+
+/** Route + cost a sourcing run — ZERO spend. Shows the operator the plan first. */
+export async function planSourcingAction(input: SourcingInput) {
+  await ensureData();
+  if (!input.vertical.trim()) return { ok: false as const, error: "Enter a vertical to target." };
+  return { ok: true as const, plan: buildPlan(toTarget(input), input.count, input.budgetCap) };
+}
+
+/** Execute the routed pipeline (search -> enrich -> verify -> dedupe). Gated on keys + budget. */
+export async function runSourcingAction(input: SourcingInput) {
+  await ensureData();
+  if (!input.vertical.trim()) return { ok: false as const, plan: null, leads: [], rejected: [], stats: null, error: "Enter a vertical to target." };
+  return runSourcing(toTarget(input), input.count, input.budgetCap);
+}
 
 /** "Have we ever touched this person or domain?" — instant lookup. */
 export async function checkTouchedAction(value: string) {

@@ -71,7 +71,7 @@ export type CampaignStatus = (typeof CAMPAIGN_STATUSES)[number];
 export const DEMO_STATUSES = ["booked", "showed", "no_show", "closed", "lost"] as const;
 export type DemoStatus = (typeof DEMO_STATUSES)[number];
 
-export const CREDIT_PROVIDERS = ["apollo_personal", "apollo_ciq"] as const;
+export const CREDIT_PROVIDERS = ["apollo_personal", "apollo_ciq", "lusha", "outscraper", "findymail", "millionverifier"] as const;
 export type CreditProvider = (typeof CREDIT_PROVIDERS)[number];
 
 /** Cost / spend tracking — the operation's P&L inputs. */

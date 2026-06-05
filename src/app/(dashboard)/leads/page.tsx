@@ -2,6 +2,7 @@ import { Card, CardBody, PageHeader, SectionHeader } from "@/components/ui/card"
 import { Stat } from "@/components/ui/stat";
 import { Tag } from "@/components/ui/badge";
 import { SuppressionTools } from "@/components/leads/suppression-tools";
+import { SourcingPlanner } from "@/components/leads/sourcing-planner";
 import { ensureData, getLeads, getSuppression } from "@/lib/data/store";
 import { num, titleCase } from "@/lib/format";
 import type { SuppressionReason } from "@/lib/data/types";
@@ -41,6 +42,12 @@ export default async function LeadsPage({ searchParams }: { searchParams: Promis
 
       {/* Tools */}
       <SuppressionTools initialCheck={check} />
+
+      {/* Lead sourcing — the smart router: vertical -> cheapest source with coverage -> verify -> dedupe */}
+      <section>
+        <SectionHeader title="Source new leads" subtitle="The router picks the cheapest source that covers your target (Maps for local, B2B database for enterprise), prices it, then verifies + dedupes before load." />
+        <SourcingPlanner />
+      </section>
 
       {/* Lead table */}
       <section>

@@ -25,6 +25,11 @@ export const integrations = {
   ),
   apolloPersonal: has(process.env.APOLLO_PERSONAL_API_KEY),
   apolloCiq: has(process.env.APOLLO_CIQ_API_KEY),
+  // Lead-sourcing providers — each lights up its lane when its key arrives.
+  lusha: has(process.env.LUSHA_API_KEY),
+  outscraper: has(process.env.OUTSCRAPER_API_KEY),
+  findymail: has(process.env.FINDYMAIL_API_KEY),
+  millionverifier: has(process.env.MILLIONVERIFIER_API_KEY),
   gmail: has(
     process.env.GMAIL_CLIENT_ID,
     process.env.GMAIL_CLIENT_SECRET,
