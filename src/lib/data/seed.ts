@@ -376,10 +376,11 @@ const costs: Cost[] = [
   { id: "co_supabase", category: "software", vendor: "Supabase", description: "Database + auth (Pro)", amount: 25, cadence: "monthly", status: "active", startedAt: daysAgo(25), nextChargeAt: daysAgo(-5), source: "manual", note: "est. Pro tier; Free tier is $0 until you outgrow it", createdBy: "Trevor Martin" },
   { id: "co_vercel", category: "software", vendor: "Vercel", description: "Hosting + cron jobs (Pro)", amount: 20, cadence: "monthly", status: "active", startedAt: daysAgo(25), nextChargeAt: daysAgo(-5), source: "manual", note: "est. Pro enables crons/usage; Hobby is $0 if it fits", createdBy: "Trevor Martin" },
   // Data / AI (usage-based estimates)
-  { id: "co_apollo", category: "data", vendor: "Apollo", description: "Search + enrich subscription", amount: 99, cadence: "monthly", status: "active", startedAt: daysAgo(60), nextChargeAt: daysAgo(-9), source: "manual", note: "est. — confirm your Apollo plan", createdBy: "Trevor Martin" },
+  { id: "co_apollo", category: "data", vendor: "Apollo (personal)", description: "Search + enrich — your personal account", amount: 99, cadence: "monthly", status: "active", startedAt: daysAgo(60), nextChargeAt: daysAgo(-9), source: "manual", note: "est. — confirm your personal Apollo plan; CIQ's Apollo is not billed to you", createdBy: "Trevor Martin" },
   { id: "co_anthropic", category: "software", vendor: "Anthropic (Claude)", description: "AI drafts, reply classification, copy coach", amount: 15, cadence: "monthly", status: "active", startedAt: daysAgo(20), nextChargeAt: daysAgo(-10), source: "manual", note: "est. usage-based; only while the Claude key is active", createdBy: "Trevor Martin" },
-  { id: "co_apicredit", category: "data", vendor: "MillionVerifier / Outscraper", description: "API credit top-up (verification/sourcing)", amount: 10, cadence: "one_time", status: "active", startedAt: daysAgo(1), nextChargeAt: null, source: "manual", note: "the $10 you loaded yesterday — tell me which service and I'll relabel + set cadence", createdBy: "Trevor Martin" },
+  { id: "co_outscraper", category: "data", vendor: "Outscraper", description: "Maps scraping + email credits (pay-as-you-go)", amount: 10, cadence: "one_time", status: "active", startedAt: daysAgo(1), nextChargeAt: null, source: "manual", note: "the $10 you loaded — usage-based; top up as you source", createdBy: "Trevor Martin" },
 ];
+// Zoho CRM: on the free plan ($0). CIQ-side Zoho + Apollo are CIQ's costs, not billed here.
 
 export function buildSeed(): Dataset {
   return {
