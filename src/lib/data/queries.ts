@@ -276,6 +276,37 @@ export function attribution(dim: AttributionDim): AttributionRow[] {
     .sort((a, b) => b.mrr - a.mrr || b.leads - a.leads);
 }
 
+// --- close the loop: realized close data -> where to spend sourcing next ----
+export interface SourcingRec {
+  vertical: string;
+  action: "scale" | "hold" | "cut";
+  reason: string;
+  leads: number;
+  closed: number;
+  mrr: number;
+  closeRate: number;
+}
+
+/** Classify one cell into a sourcing move from its realized conversion. */
+export function classifyCell(r: { leads: number; closed: number; closeRate: number; mrr: number }): { action: SourcingRec["action"]; reason: string } {
+  if (r.leads < 20) return { action: "hold", reason: `Only ${r.leads} leads — keep testing before judging.` };
+  if (r.closed > 0 && r.closeRate >= 0.02) return { action: "scale", reason: `${(r.closeRate * 100).toFixed(1)}% close${r.mrr ? `, $${r.mrr.toLocaleString()}/mo booked` : ""} — source more here.` };
+  if (r.closed === 0) return { action: "cut", reason: `${r.leads} leads, 0 closed — pull budget until the angle improves.` };
+  return { action: "hold", reason: "Converting but thin — hold and watch." };
+}
+
+/** The closed-loop recommendation: feed realized close-rate/MRR per vertical back into sourcing. */
+export function sourcingRecommendations(): SourcingRec[] {
+  const order: Record<SourcingRec["action"], number> = { scale: 0, hold: 1, cut: 2 };
+  return attribution("vertical")
+    .filter((r) => r.key && r.key !== "—")
+    .map((r) => {
+      const c = classifyCell(r);
+      return { vertical: r.key, action: c.action, reason: c.reason, leads: r.leads, closed: r.closed, mrr: r.mrr, closeRate: r.closeRate };
+    })
+    .sort((a, b) => order[a.action] - order[b.action] || b.mrr - a.mrr);
+}
+
 /** Why demos are lost — the structured outcome reasons, aggregated for the learning loop. */
 export function lostReasons(): { reason: DemoLostReason; count: number }[] {
   const counts = new Map<DemoLostReason, number>();

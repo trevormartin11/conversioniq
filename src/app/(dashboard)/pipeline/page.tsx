@@ -1,7 +1,8 @@
 import { Card, CardBody, PageHeader, SectionHeader } from "@/components/ui/card";
 import { Stat } from "@/components/ui/stat";
 import { PhaseBanner } from "@/components/ui/phase-banner";
-import { attribution, lostReasons, pipeline, residual } from "@/lib/data/queries";
+import { Tag } from "@/components/ui/badge";
+import { attribution, lostReasons, sourcingRecommendations, pipeline, residual } from "@/lib/data/queries";
 import { ensureData, getDemos, getLead } from "@/lib/data/store";
 import { DemoTracker, type DemoRow } from "@/components/pipeline/demo-tracker";
 import { AttributionView } from "@/components/pipeline/attribution-view";
@@ -37,6 +38,7 @@ export default async function PipelinePage() {
     sendingDomain: attribution("sendingDomain"),
   };
   const lost = lostReasons();
+  const recs = sourcingRecommendations();
 
   return (
     <div className="space-y-6">
@@ -101,6 +103,24 @@ export default async function PipelinePage() {
                       <div className="h-full rounded bg-rose-500/60" style={{ width: `${Math.max(4, (l.count / lost[0].count) * 100)}%` }} />
                     </div>
                     <span className="w-6 text-right font-mono tabular-nums text-slate-400">{l.count}</span>
+                  </div>
+                ))}
+              </div>
+            </CardBody>
+          </Card>
+        )}
+        {recs.length > 0 && (
+          <Card className="mt-3">
+            <CardBody>
+              <p className="mb-2.5 text-xs font-medium uppercase tracking-wide text-slate-500">Recommended sourcing moves — feed budget into what closes</p>
+              <div className="space-y-2">
+                {recs.map((r) => (
+                  <div key={r.vertical} className="flex items-start gap-2.5 text-sm">
+                    <Tag tone={r.action === "scale" ? "ok" : r.action === "cut" ? "bad" : "warn"}>{r.action}</Tag>
+                    <div className="min-w-0">
+                      <span className="font-medium text-slate-200">{r.vertical}</span>
+                      <span className="ml-1.5 text-xs text-slate-500">{r.reason}</span>
+                    </div>
                   </div>
                 ))}
               </div>
