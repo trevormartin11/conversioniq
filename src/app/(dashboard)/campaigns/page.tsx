@@ -2,7 +2,6 @@ import Link from "next/link";
 import { ChevronRight } from "lucide-react";
 import { Card, CardBody, PageHeader } from "@/components/ui/card";
 import { HealthBadge, Tag } from "@/components/ui/badge";
-import { PhaseBanner } from "@/components/ui/phase-banner";
 import { NewCampaignForm } from "@/components/campaigns/new-campaign-form";
 import { CampaignActions } from "@/components/campaigns/campaign-actions";
 import { campaignCards } from "@/lib/data/queries";
@@ -24,10 +23,6 @@ export default async function CampaignsPage() {
   return (
     <div className="space-y-5">
       <PageHeader title="Campaigns" subtitle="Parallel cells by vertical." action={<NewCampaignForm personas={personas} />} />
-
-      <PhaseBanner phase={2}>
-        Launch, pause, clone, and stage campaigns are live (synced from Instantly). Open a campaign for inline + AI copy editing, the AI Coach, and the capacity planner. Schedule editing and inbox auto-assignment are next.
-      </PhaseBanner>
 
       <div className="space-y-3">
         {campaigns.map((c) => {

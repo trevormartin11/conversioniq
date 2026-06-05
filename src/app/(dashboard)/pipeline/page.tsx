@@ -1,6 +1,5 @@
 import { Card, CardBody, PageHeader, SectionHeader } from "@/components/ui/card";
 import { Stat } from "@/components/ui/stat";
-import { PhaseBanner } from "@/components/ui/phase-banner";
 import { Tag } from "@/components/ui/badge";
 import { attribution, lostReasons, sourcingRecommendations, pipeline, residual } from "@/lib/data/queries";
 import { ensureData, getDemos, getLead } from "@/lib/data/store";
@@ -43,10 +42,6 @@ export default async function PipelinePage() {
   return (
     <div className="space-y-6">
       <PageHeader title="Pipeline & Residual" subtitle="Funnel from contacted → closed, the demo tracker, and your 20%-split-3-ways residual." />
-
-      <PhaseBanner phase={3}>
-        Per-cell attribution, unit economics, lost-reason analysis, and sourcing recommendations are live below. The weekly digest ships to Telegram on Mondays. Two-way Zoho demo-state sync is the next step.
-      </PhaseBanner>
 
       {/* Funnel */}
       <section>

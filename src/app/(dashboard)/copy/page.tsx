@@ -3,7 +3,6 @@ import Link from "next/link";
 import { GraduationCap, Lightbulb, Trophy } from "lucide-react";
 import { Card, CardBody, PageHeader, SectionHeader } from "@/components/ui/card";
 import { Tag } from "@/components/ui/badge";
-import { PhaseBanner } from "@/components/ui/phase-banner";
 import { ensureData, getCampaigns, getInboxes, getReplies, getVariants } from "@/lib/data/store";
 import { suggestCopy } from "@/lib/ai/copy";
 import { deriveLearnings } from "@/lib/ai/learnings";
@@ -37,10 +36,6 @@ export default async function CopyPage({ searchParams }: { searchParams: Promise
   return (
     <div className="space-y-6">
       <PageHeader title="Copy Coach" subtitle={`AI reads your real results and suggests what to test next. ${integrations.anthropic ? "Powered by Claude." : "Rules-based until a Claude key is added."}`} />
-
-      <PhaseBanner phase={2}>
-        This page reads your real send results — learnings, what to test next, and data-driven suggestions. To change copy (tone, length, A/B, AI rewrites), open a campaign: inline + AI editing live on each campaign&apos;s page.
-      </PhaseBanner>
 
       <section>
         <SectionHeader title="Learnings" subtitle="Cross-campaign memory applied to new copy — seeded by your playbook, sharpened by real results" />
