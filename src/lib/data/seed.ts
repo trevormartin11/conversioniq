@@ -58,6 +58,9 @@ const users: User[] = [
   { id: "u_trevor", name: "Trevor Martin", email: "trevor@conversioniq.ai", role: "owner", avatarColor: "#6366f1" },
   { id: "u_jon", name: "Jon Epstein", email: "jon@conversioniq.ai", role: "partner", avatarColor: "#10b981" },
   { id: "u_brian", name: "Brian Peters", email: "brian@conversioniq.ai", role: "partner", avatarColor: "#f59e0b" },
+  { id: "u_jacob", name: "Jacob", email: "jacob@conversioniq.ai", role: "partner", avatarColor: "#ec4899" },
+  { id: "u_travis", name: "Travis", email: "travis@conversioniq.ai", role: "partner", avatarColor: "#06b6d4" },
+  { id: "u_jason", name: "Jason", email: "jason@conversioniq.ai", role: "partner", avatarColor: "#a855f7" },
 ];
 
 // --- personas (sending identities) -----------------------------------------
