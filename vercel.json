@@ -2,24 +2,12 @@
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "crons": [
     {
-      "path": "/api/cron/sync-replies",
-      "schedule": "*/5 * * * *"
-    },
-    {
-      "path": "/api/cron/deliverability",
-      "schedule": "*/30 * * * *"
-    },
-    {
-      "path": "/api/sync",
-      "schedule": "0 * * * *"
-    },
-    {
-      "path": "/api/cron/daily-brief",
+      "path": "/api/cron/daily",
       "schedule": "0 13 * * *"
     },
     {
       "path": "/api/cron/weekly-report",
-      "schedule": "0 13 * * 1"
+      "schedule": "0 14 * * 1"
     }
   ]
 }
