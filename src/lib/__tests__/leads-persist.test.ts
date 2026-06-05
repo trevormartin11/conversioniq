@@ -1,5 +1,14 @@
 import { describe, it, expect } from "vitest";
 import { addDemo, addLeads, ensureData, getLead, getLeads, updateDemo } from "@/lib/data/store";
+import { attribution } from "@/lib/data/queries";
+import type { NewLead } from "@/lib/data/store";
+
+const baseLead = (over: Partial<NewLead>): NewLead => ({
+  email: "x@x.com", domain: "x.com", firstName: "A", lastName: "B", company: "Co", title: "Owner",
+  phone: null, campaignId: "c_medspa", vertical: "Med Spas", persona: "Avery", sendingDomain: "d.com",
+  listVersion: "v1", source: "outscraper", attributionOwner: "Trevor", status: "new", zohoLeadId: null,
+  apolloId: null, lastContactedAt: null, ...over,
+});
 
 describe("addLeads — persist sourced leads with attribution at source", () => {
   it("stamps id + createdAt, preserves attribution, and lands in the universe", async () => {
@@ -70,5 +79,27 @@ describe("demo lifecycle — book -> close -> MRR drives the lead + residual", (
     expect(closed?.status).toBe("closed");
     expect(closed?.mrr).toBe(1500);
     expect(getLead(lead.id)?.status).toBe("closed");
+  });
+});
+
+describe("attribution — per-cell conversion from at-source tags", () => {
+  it("groups by a dimension and rolls up MRR from closed demos", async () => {
+    await ensureData();
+    const vertical = `ZZZ Attr ${Math.random().toString(36).slice(2, 6)}`;
+    const [l1] = await addLeads(
+      [
+        baseLead({ email: "a@attr-test.com", domain: "attr-test.com", vertical, status: "positive" }),
+        baseLead({ email: "b@attr-test.com", domain: "attr-test.com", vertical, status: "new" }),
+      ],
+      "Trevor",
+    );
+    const demo = await addDemo({ leadId: l1.id, scheduledAt: new Date().toISOString(), owner: "Trevor" }, "Trevor");
+    await updateDemo(demo.id, { status: "closed", mrr: 2000 }, "Trevor");
+
+    const row = attribution("vertical").find((r) => r.key === vertical);
+    expect(row).toBeTruthy();
+    expect(row!.leads).toBe(2);
+    expect(row!.closed).toBe(1);
+    expect(row!.mrr).toBe(2000);
   });
 });

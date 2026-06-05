@@ -1,9 +1,10 @@
 import { Card, CardBody, PageHeader, SectionHeader } from "@/components/ui/card";
 import { Stat } from "@/components/ui/stat";
 import { PhaseBanner } from "@/components/ui/phase-banner";
-import { pipeline, residual } from "@/lib/data/queries";
+import { attribution, pipeline, residual } from "@/lib/data/queries";
 import { ensureData, getDemos, getLead } from "@/lib/data/store";
 import { DemoTracker, type DemoRow } from "@/components/pipeline/demo-tracker";
+import { AttributionView } from "@/components/pipeline/attribution-view";
 import { num, pct, titleCase, usd } from "@/lib/format";
 
 export const dynamic = "force-dynamic";
@@ -25,13 +26,19 @@ export default async function PipelinePage() {
       mrr: d.mrr,
     };
   });
+  const attr = {
+    vertical: attribution("vertical"),
+    persona: attribution("persona"),
+    source: attribution("source"),
+    sendingDomain: attribution("sendingDomain"),
+  };
 
   return (
     <div className="space-y-6">
       <PageHeader title="Pipeline & Residual" subtitle="Funnel from contacted → closed, the demo tracker, and your 20%-split-3-ways residual." />
 
       <PhaseBanner phase={3}>
-        Full per-cell breakdowns (which vertical/persona/domain converts) and the weekly report land here. Demo states sync from Zoho.
+        The weekly auto-report and two-way Zoho demo-state sync land here next.
       </PhaseBanner>
 
       {/* Funnel */}
@@ -71,6 +78,12 @@ export default async function PipelinePage() {
             <DemoTracker demos={demoRows} />
           </CardBody>
         </Card>
+      </section>
+
+      {/* Attribution — which cell converts (from the at-source tags) */}
+      <section>
+        <SectionHeader title="Attribution" subtitle="Which vertical / persona / source / sending domain converts to MRR — from the tags set at source" />
+        <AttributionView data={attr} />
       </section>
 
       {/* Residual */}

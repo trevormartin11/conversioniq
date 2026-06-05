@@ -234,6 +234,47 @@ export function residual() {
   };
 }
 
+export type AttributionDim = "vertical" | "persona" | "source" | "sendingDomain";
+export interface AttributionRow {
+  key: string;
+  leads: number;
+  positive: number;
+  demos: number;
+  closed: number;
+  mrr: number;
+  closeRate: number;
+}
+
+/**
+ * Per-cell conversion from the attribution tags baked into each lead at source.
+ * "Which vertical / persona / source / sending domain actually converts to MRR?"
+ */
+export function attribution(dim: AttributionDim): AttributionRow[] {
+  const closedMrr = new Map<string, number>();
+  for (const d of getDemos()) {
+    if (d.status === "closed" && d.mrr) closedMrr.set(d.leadId, (closedMrr.get(d.leadId) ?? 0) + d.mrr);
+  }
+  const order: LeadStatus[] = ["new", ...FUNNEL, "lost"];
+  const idx = (s: LeadStatus) => order.indexOf(s);
+  const positiveIdx = idx("positive");
+  const demoIdx = idx("demo_booked");
+  const groups = new Map<string, AttributionRow>();
+  for (const l of getLeads()) {
+    const key = String(l[dim] || "—");
+    const row = groups.get(key) ?? { key, leads: 0, positive: 0, demos: 0, closed: 0, mrr: 0, closeRate: 0 };
+    row.leads++;
+    const li = idx(l.status);
+    if (l.status !== "lost" && li >= positiveIdx) row.positive++;
+    if (l.status !== "lost" && li >= demoIdx) row.demos++;
+    if (l.status === "closed") row.closed++;
+    row.mrr += closedMrr.get(l.id) ?? 0;
+    groups.set(key, row);
+  }
+  return [...groups.values()]
+    .map((r) => ({ ...r, closeRate: r.leads ? r.closed / r.leads : 0 }))
+    .sort((a, b) => b.mrr - a.mrr || b.leads - a.leads);
+}
+
 export function creditSummary() {
   return getCreditMeters().map((m) => ({
     ...m,
