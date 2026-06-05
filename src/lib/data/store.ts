@@ -17,6 +17,7 @@ import type {
   Dataset,
   Demo,
   DemoLostReason,
+  Domain,
   DemoStatus,
   Lead,
   LeadStatus,
@@ -457,6 +458,18 @@ export async function updateVariant(id: string, patch: { subject?: string; body?
 }
 
 // --- deliverability ---------------------------------------------------------
+/** Write real SPF/DKIM/DMARC status (from the DNS verifier) onto a domain. */
+export async function updateDomainAuth(id: string, patch: { spf?: boolean; dkim?: boolean; dmarc?: boolean }): Promise<Domain | null> {
+  const d = db().domains.find((x) => x.id === id);
+  if (!d) return null;
+  if (patch.spf !== undefined) d.spf = patch.spf;
+  if (patch.dkim !== undefined) d.dkim = patch.dkim;
+  if (patch.dmarc !== undefined) d.dmarc = patch.dmarc;
+  d.reputation = d.spf && d.dkim && d.dmarc ? "green" : !d.spf || !d.dmarc ? "red" : "yellow";
+  await liveUpsert("domains", { id, spf: d.spf, dkim: d.dkim, dmarc: d.dmarc, reputation: d.reputation });
+  return d;
+}
+
 export async function pauseInbox(id: string, actor: string, reason: string) {
   const inbox = getInbox(id);
   if (!inbox) return null;
