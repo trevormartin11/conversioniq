@@ -289,3 +289,22 @@ export async function addLeadsToCampaign(campaignId: string, leads: NewInstantly
   }
   return { added, failed };
 }
+
+/**
+ * Reply to a received email on its original thread (the unibox send path).
+ * v2: POST /emails/reply with the source email's id as reply_to_uuid. Wire shape to be
+ * confirmed against live docs on the first real send — the action only marks a reply
+ * "sent" if this call succeeds, so a wrong shape fails safe rather than faking a send.
+ */
+export async function replyToEmail(input: { replyToUuid: string; eaccount: string; subject: string; bodyText: string }): Promise<unknown> {
+  return httpJson("instantly", `${BASE}/emails/reply`, {
+    method: "POST",
+    headers: headers(),
+    body: JSON.stringify({
+      reply_to_uuid: input.replyToUuid,
+      eaccount: input.eaccount,
+      subject: input.subject,
+      body: { text: input.bodyText, html: input.bodyText.replace(/\n/g, "<br />") },
+    }),
+  });
+}

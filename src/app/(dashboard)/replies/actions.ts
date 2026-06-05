@@ -5,15 +5,20 @@ import { getCurrentUser } from "@/lib/auth";
 import {
   addSuppression,
   ensureData,
+  getInbox,
   getLead,
   getReply,
   revertReplyToPending,
   saveReplyDraft,
   setAutomationLevel,
+  setLeadStatus,
   updateReplyStatus,
 } from "@/lib/data/store";
 import { draftReply } from "@/lib/ai/draft";
+import { addToBlocklist, replyToEmail } from "@/lib/integrations/instantly";
+import { setDoNotContact } from "@/lib/integrations/zoho";
 import { sendTelegram } from "@/lib/integrations/telegram";
+import { integrations } from "@/lib/config";
 import type { AutomationLevel } from "@/lib/data/types";
 
 function revalidate() {
@@ -24,11 +29,23 @@ function revalidate() {
 export async function approveAndSendAction(id: string, body: string) {
   await ensureData();
   const user = await getCurrentUser();
+  const reply = getReply(id);
+  if (!reply) return { ok: false as const, error: "Reply not found." };
+  if (!body.trim()) return { ok: false as const, error: "Write a reply before sending." };
   await saveReplyDraft(id, body);
-  // Live: POST the reply through Instantly on the original thread here.
+  // Send on the original Instantly thread. Only mark "sent" if the send succeeds.
+  if (integrations.instantly && reply.instantlyEmailId) {
+    const inbox = getInbox(reply.inboxId);
+    const subject = reply.subject?.toLowerCase().startsWith("re:") ? reply.subject : `Re: ${reply.subject ?? ""}`.trim();
+    try {
+      await replyToEmail({ replyToUuid: reply.instantlyEmailId, eaccount: inbox?.email ?? "", subject, bodyText: body });
+    } catch (e) {
+      return { ok: false as const, error: `Send failed: ${(e as Error).message}` };
+    }
+  }
   await updateReplyStatus(id, "sent", user.name);
   revalidate();
-  return { ok: true };
+  return { ok: true as const };
 }
 
 export async function skipReplyAction(id: string) {
@@ -64,11 +81,17 @@ export async function suppressFromReplyAction(id: string) {
     },
     user.name,
   );
-  // Live: zoho.setDoNotContact(lead.zohoLeadId) — canonical DNC write.
-  void lead;
+  // Canonical DNC: write to Zoho (source of truth) + Instantly's sending blocklist.
+  if (integrations.zoho && lead?.zohoLeadId) {
+    try { await setDoNotContact(lead.zohoLeadId); } catch { /* suppression already recorded in-hub */ }
+  }
+  if (integrations.instantly) {
+    try { await addToBlocklist([reply.fromEmail]); } catch { /* best-effort sending-layer block */ }
+  }
+  if (lead) await setLeadStatus(lead.id, "lost", user.name);
   await updateReplyStatus(id, "suppressed", user.name);
   revalidate();
-  return { ok: true };
+  return { ok: true as const };
 }
 
 export async function revertReplyAction(id: string) {

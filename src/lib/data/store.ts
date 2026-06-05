@@ -16,6 +16,7 @@ import type {
   CreditSpendRequest,
   Dataset,
   Lead,
+  LeadStatus,
   Reply,
   ReplyStatus,
   SuppressionEntry,
@@ -345,6 +346,16 @@ export async function setLeadZohoId(id: string, zohoLeadId: string) {
   if (!lead) return;
   lead.zohoLeadId = zohoLeadId;
   await liveUpsert("leads", { id, zoho_lead_id: zohoLeadId });
+}
+
+/** Move a lead through its lifecycle (reply DNC -> lost, demo flow -> closed, ...). */
+export async function setLeadStatus(id: string, status: LeadStatus, actor = "system") {
+  const lead = getLead(id);
+  if (!lead) return null;
+  lead.status = status;
+  await liveUpsert("leads", { id, status });
+  await pushAudit(actor, `lead.${status}`, "lead", id, {});
+  return lead;
 }
 
 // --- deliverability ---------------------------------------------------------
