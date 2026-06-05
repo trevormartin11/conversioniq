@@ -1,7 +1,8 @@
-import { CheckCircle2, Circle, ExternalLink } from "lucide-react";
+import { CheckCircle2, Circle, ExternalLink, LogOut } from "lucide-react";
 import { Card, CardBody, PageHeader, SectionHeader } from "@/components/ui/card";
 import { Tag } from "@/components/ui/badge";
 import { UserSwitcher } from "@/components/settings/user-switcher";
+import { logoutAction } from "@/app/login/actions";
 import { getCurrentUser, listPartners } from "@/lib/auth";
 import { ensureData, getAutomationLevel } from "@/lib/data/store";
 import { integrationStatuses } from "@/lib/integrations";
@@ -36,8 +37,13 @@ export default async function SettingsPage() {
 
       {/* Acting user */}
       <section>
-        <SectionHeader title="Acting as" subtitle="All 3 partners have equal powers (Supabase Auth replaces this switcher)" />
+        <SectionHeader title="Acting as" subtitle="All 3 partners have equal powers. Switch identity, or sign out." />
         <UserSwitcher partners={partners} currentId={user.id} />
+        <form action={logoutAction} className="mt-3">
+          <button className="inline-flex items-center gap-1.5 rounded-lg border border-ink-700 bg-ink-850 px-3 py-2 text-sm text-slate-300 transition-colors hover:border-ink-600">
+            <LogOut className="h-4 w-4" /> Sign out
+          </button>
+        </form>
       </section>
 
       {/* Integrations */}
