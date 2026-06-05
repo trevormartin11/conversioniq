@@ -74,6 +74,7 @@ export interface InstantlyCampaign {
   status?: number;
   daily_limit?: number;
   sequences?: unknown;
+  email_list?: string[];
 }
 
 /** GET /campaigns with cursor pagination. */
@@ -198,6 +199,56 @@ export async function getInstantlyCampaign(id: string): Promise<InstantlyCampaig
     id: d.id, name: d.name ?? "", status: d.status ?? 0,
     dailyLimit: d.daily_limit ?? 0, inboxCount: (d.email_list ?? []).length, steps,
   };
+}
+
+/** Plain text (with \n) -> the simple HTML Instantly stores for a step body. */
+function textToHtml(t: string): string {
+  return t
+    .split(/\n{2,}/)
+    .map((p) => `<div>${p.replace(/\n/g, "<br />")}</div>`)
+    .join("<div><br /></div>");
+}
+
+/**
+ * Create a campaign in Instantly from a drafted sequence. Created as a DRAFT
+ * (we never auto-activate) — the operator launches it from the control page.
+ * Schedule mirrors a known-good shape (America/Chicago is accepted; New_York was not).
+ */
+export async function createInstantlyCampaign(input: {
+  name: string;
+  steps: { subject: string; body: string }[];
+  inboxEmails: string[];
+  dailyLimit: number;
+}): Promise<{ id: string }> {
+  const DELAYS = [0, 3, 4, 4, 5, 5]; // days to wait before each step (step 1 sends first)
+  const seqSteps = input.steps.map((s, i) => ({
+    type: "email",
+    delay: DELAYS[i] ?? 4,
+    variants: [{ subject: s.subject, body: textToHtml(s.body) }],
+  }));
+  const payload = {
+    name: input.name,
+    email_list: input.inboxEmails,
+    daily_limit: input.dailyLimit,
+    campaign_schedule: {
+      schedules: [{
+        name: "weekdays",
+        timing: { from: "08:00", to: "17:00" },
+        days: { "1": true, "2": true, "3": true, "4": true, "5": true },
+        timezone: "America/Chicago",
+      }],
+    },
+    sequences: [{ steps: seqSteps }],
+  };
+  const res = await httpJson<{ id?: string }>("instantly", `${BASE}/campaigns`, {
+    method: "POST", headers: headers(), body: JSON.stringify(payload),
+  });
+  return { id: res.id ?? "" };
+}
+
+/** Delete a campaign (cleanup / operator control). */
+export async function deleteInstantlyCampaign(id: string): Promise<unknown> {
+  return httpJson("instantly", `${BASE}/campaigns/${id}`, { method: "DELETE", headers: headers() });
 }
 
 /** Best-effort: are leads loaded into this campaign? (presence, not exact count) */

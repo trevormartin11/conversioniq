@@ -23,6 +23,7 @@ function verticalFor(name: string): string {
 function statusFor(s: number | undefined): string {
   return s === 1 ? "active" : s === 2 ? "paused" : s === 3 ? "completed" : "draft";
 }
+const slug = (s: string) => s.replace(/[^a-z0-9]+/gi, "_").toLowerCase();
 
 interface SeqStep { variants?: { subject?: string; body?: string }[] }
 interface Seq { steps?: SeqStep[] }
@@ -38,7 +39,8 @@ export async function syncCampaigns() {
     campRows.push({
       id: cid, name: c.name ?? "(untitled)", vertical: verticalFor(c.name ?? ""),
       persona_id: personaFor(c.name ?? ""), status: statusFor(c.status),
-      instantly_campaign_id: c.id, list_version: "instantly", inbox_ids: [],
+      instantly_campaign_id: c.id, list_version: "instantly",
+      inbox_ids: (c.email_list ?? []).map((e) => `ib_${slug(e)}`),
       daily_cap: c.daily_limit ?? 80, created_at: new Date().toISOString(),
     });
     const seqs = (c.sequences as Seq[]) ?? [];

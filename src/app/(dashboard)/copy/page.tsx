@@ -4,9 +4,10 @@ import { GraduationCap, Lightbulb, Trophy } from "lucide-react";
 import { Card, CardBody, PageHeader, SectionHeader } from "@/components/ui/card";
 import { Tag } from "@/components/ui/badge";
 import { PhaseBanner } from "@/components/ui/phase-banner";
-import { ensureData, getCampaigns, getReplies, getVariants } from "@/lib/data/store";
+import { ensureData, getCampaigns, getInboxes, getReplies, getVariants } from "@/lib/data/store";
 import { suggestCopy } from "@/lib/ai/copy";
 import { deriveLearnings } from "@/lib/ai/learnings";
+import { nextMoves, type NextMove } from "@/lib/ai/iterate";
 import { StrategyStudio } from "@/components/copy/strategy-studio";
 import { integrations } from "@/lib/config";
 import { cn } from "@/lib/utils";
@@ -21,6 +22,9 @@ export default async function CopyPage({ searchParams }: { searchParams: Promise
   const variants = getVariants();
   const campaigns = getCampaigns();
   const learnings = deriveLearnings(variants, getReplies().map((r) => r.classification));
+  const inboxOpts = getInboxes()
+    .map((i) => ({ email: i.email, warmup: i.warmupScore, status: i.status as string }))
+    .sort((a, b) => (a.status === "active" ? 0 : 1) - (b.status === "active" ? 0 : 1) || b.warmup - a.warmup);
 
   const withCopy = campaigns.filter((c) => variants.some((v) => v.campaignId === c.id));
   const selectedId = (campaign && withCopy.some((c) => c.id === campaign) ? campaign : withCopy[0]?.id) ?? "";
@@ -60,8 +64,15 @@ export default async function CopyPage({ searchParams }: { searchParams: Promise
       </section>
 
       <section>
+        <SectionHeader title="Recommended next moves" subtitle="What to do about the results — scale winners, kill losers, test what's next" />
+        <Suspense fallback={<SuggestionsSkeleton />}>
+          <NextMoves />
+        </Suspense>
+      </section>
+
+      <section>
         <SectionHeader title="New campaign studio" subtitle="AI picks the vertical (and why), then drafts copy grounded in it — sharpened by the learnings above" />
-        <StrategyStudio aiOn={integrations.anthropic} />
+        <StrategyStudio aiOn={integrations.anthropic} inboxes={inboxOpts} />
       </section>
 
       {withCopy.length > 1 && (
@@ -134,6 +145,30 @@ async function AiSuggestions({ variants }: { variants: SequenceVariant[] }) {
               <p className="mt-0.5 text-xs text-slate-400">{s.detail}</p>
             </div>
             <Tag tone={s.source === "ai" ? "brand" : "slate"}>{s.source}</Tag>
+          </CardBody>
+        </Card>
+      ))}
+    </div>
+  );
+}
+
+function moveTone(kind: NextMove["kind"]): "ok" | "bad" | "brand" | "warn" | "slate" {
+  return kind === "scale" ? "ok" : kind === "kill" ? "bad" : kind === "test" ? "brand" : kind === "fix" ? "warn" : "slate";
+}
+
+async function NextMoves() {
+  const moves = await nextMoves(getCampaigns(), getVariants(), getReplies());
+  return (
+    <div className="space-y-2">
+      {moves.map((m, i) => (
+        <Card key={i}>
+          <CardBody className="flex items-start gap-3">
+            <Tag tone={moveTone(m.kind)}>{m.kind}</Tag>
+            <div className="flex-1">
+              <p className="text-sm font-medium text-slate-100">{m.title}</p>
+              <p className="mt-0.5 text-xs text-slate-400">{m.detail}</p>
+            </div>
+            {m.source === "ai" && <Tag tone="brand">ai</Tag>}
           </CardBody>
         </Card>
       ))}

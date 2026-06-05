@@ -5,7 +5,7 @@ import { Card, CardBody, PageHeader, SectionHeader } from "@/components/ui/card"
 import { HealthBadge, Tag } from "@/components/ui/badge";
 import { CampaignActions } from "@/components/campaigns/campaign-actions";
 import { campaignCards } from "@/lib/data/queries";
-import { ensureData, getCampaign, getPersonas, getVariants } from "@/lib/data/store";
+import { ensureData, getCampaign, getInboxes, getPersonas, getVariants } from "@/lib/data/store";
 import { campaignHasLeads, getInstantlyCampaign, type InstantlyCampaignView, type InstantlyStepView } from "@/lib/integrations/instantly";
 import { integrations } from "@/lib/config";
 import { num, pct, rate, titleCase } from "@/lib/format";
@@ -29,6 +29,7 @@ export default async function CampaignDetail({ params }: { params: Promise<{ id:
   if (!c) notFound();
 
   const persona = getPersonas().find((p) => p.id === c.personaId);
+  const inboxes = getInboxes().filter((i) => c.inboxIds.includes(i.id));
   const synced = getVariants().filter((v) => v.campaignId === id);
   const card = campaignCards().find((x) => x.id === id);
 
@@ -75,6 +76,24 @@ export default async function CampaignDetail({ params }: { params: Promise<{ id:
         <Meta label="Sequence" value={`${steps.length} step${steps.length === 1 ? "" : "s"}`} />
         <Meta label="Leads" value={hasLeads === null ? "—" : hasLeads ? "Loaded" : "None yet"} />
       </div>
+
+      {/* Assigned inboxes — per-campaign deliverability + attribution */}
+      {inboxes.length > 0 && (
+        <section>
+          <SectionHeader title="Assigned inboxes" subtitle={`${inboxes.length} sending from this campaign · tracked for deliverability + attribution`} />
+          <div className="grid gap-2 sm:grid-cols-2">
+            {inboxes.map((i) => (
+              <div key={i.id} className="flex items-center justify-between gap-2 rounded-xl border border-white/[0.06] bg-white/[0.02] px-3 py-2">
+                <div className="min-w-0">
+                  <p className="truncate text-sm text-slate-200">{i.email}</p>
+                  <p className="text-[11px] text-slate-500">warmup {i.warmupScore}</p>
+                </div>
+                <Tag tone={i.status === "active" ? "ok" : i.status === "warming" ? "warn" : "slate"}>{i.status}</Tag>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
 
       {/* Sequence + cadence */}
       <section>
