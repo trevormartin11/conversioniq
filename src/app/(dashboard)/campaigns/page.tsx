@@ -4,7 +4,7 @@ import { PhaseBanner } from "@/components/ui/phase-banner";
 import { NewCampaignForm } from "@/components/campaigns/new-campaign-form";
 import { CampaignActions } from "@/components/campaigns/campaign-actions";
 import { campaignCards } from "@/lib/data/queries";
-import { ensureData, getCampaigns, getPersonas } from "@/lib/data/store";
+import { ensureData, getCampaigns, getPersonas, getVariants } from "@/lib/data/store";
 import { num, pct, titleCase } from "@/lib/format";
 
 export const dynamic = "force-dynamic";
@@ -14,8 +14,10 @@ export default async function CampaignsPage() {
   const campaigns = getCampaigns();
   const cards = campaignCards();
   const personas = getPersonas();
+  const variants = getVariants();
   const cardFor = (id: string) => cards.find((c) => c.id === id);
   const personaName = (id: string) => personas.find((p) => p.id === id)?.name ?? "—";
+  const stepsOf = (id: string) => new Set(variants.filter((v) => v.campaignId === id).map((v) => v.step)).size;
 
   return (
     <div className="space-y-5">
@@ -34,7 +36,7 @@ export default async function CampaignsPage() {
                 <div className="flex items-start justify-between gap-3">
                   <div>
                     <p className="text-sm font-semibold text-slate-100">{c.name}</p>
-                    <p className="text-xs text-slate-500">{c.vertical} · {personaName(c.personaId)} · {c.inboxIds.length} inboxes · cap {num(c.dailyCap)}/day</p>
+                    <p className="text-xs text-slate-500">{c.vertical} · {personaName(c.personaId)}{stepsOf(c.id) > 0 ? ` · ${stepsOf(c.id)}-step sequence` : ""} · cap {num(c.dailyCap)}/day</p>
                   </div>
                   <div className="flex items-center gap-2">
                     <Tag tone={c.status === "active" ? "ok" : c.status === "draft" ? "warn" : "slate"}>{titleCase(c.status)}</Tag>
