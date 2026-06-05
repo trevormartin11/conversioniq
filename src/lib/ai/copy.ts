@@ -63,6 +63,30 @@ export async function suggestCopy(variants: SequenceVariant[]): Promise<CopySugg
   }
 }
 
+// --- AI in-place rewrite: edit existing copy by instruction -----------------
+export async function rewriteCopy(input: { subject: string; body: string; instruction: string }): Promise<{ subject: string; body: string; source: "ai" | "rules" }> {
+  // Without a Claude key we can't meaningfully rewrite — return unchanged + signal it.
+  if (!aiAvailable()) return { subject: input.subject, body: input.body, source: "rules" };
+  try {
+    const out = await complete({
+      system: voiceSystemPrompt(),
+      user: [
+        "Rewrite this cold-email step per the instruction, staying true to the voice and the ConversionIQ offer (an AI that instantly answers a business's inbound/after-hours leads and books them into the calendar).",
+        `Instruction: ${input.instruction}`,
+        `Current subject: ${input.subject}`,
+        `Current body:\n${input.body}`,
+        "Keep {{firstName}} / {{companyName}} merge tags. Subjects stay short and lowercase. Return ONLY compact JSON: {\"subject\":\"...\",\"body\":\"...\"}",
+      ].join("\n\n"),
+      maxTokens: 800,
+      temperature: 0.6,
+    });
+    const parsed = JSON.parse(out.match(/\{[\s\S]*\}/)?.[0] ?? out) as { subject?: string; body?: string };
+    return { subject: parsed.subject?.trim() || input.subject, body: parsed.body?.trim() || input.body, source: "ai" };
+  } catch {
+    return { subject: input.subject, body: input.body, source: "rules" };
+  }
+}
+
 // --- sequence generation: the flywheel payoff ------------------------------
 // Draft a fresh sequence for a new campaign, applying what prior campaigns
 // taught us (the learnings). AI when a Claude key is present; templated otherwise.

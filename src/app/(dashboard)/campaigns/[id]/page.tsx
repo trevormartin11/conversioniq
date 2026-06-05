@@ -156,7 +156,7 @@ export default async function CampaignDetail({ params }: { params: Promise<{ id:
                       <div key={v.variant} className="border-l-2 border-ink-700 pl-3">
                         {s.variants.length > 1 && <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-slate-500">Variant {v.variant}</p>}
                         {stat ? (
-                          <EditableVariant id={stat.id} subject={stat.subject} body={stat.body} />
+                          <EditableVariant id={stat.id} subject={stat.subject} body={stat.body} aiOn={integrations.anthropic} />
                         ) : (
                           <>
                             <p className="text-sm font-semibold text-slate-100">{v.subject || <span className="text-slate-600">(no subject)</span>}</p>
