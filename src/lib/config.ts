@@ -58,6 +58,10 @@ export const appConfig = {
     autoPauseBounceRate: 0.05, // 5% bounce -> auto-pause
     autoPauseSpamComplaints: 3,
   },
+  /** Lead-sourcing spend guardrails — a hard ceiling no single run may exceed. */
+  sourcing: {
+    maxRunBudgetUsd: 200,
+  },
   /** Default automation posture — operator can move the dial up over time. */
   defaultAutomationLevel: "approve_all" as const,
   /** Which reply classes are auto-SENT at the "auto_safe" level. (OOO is auto-snoozed

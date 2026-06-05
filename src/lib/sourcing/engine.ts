@@ -4,7 +4,7 @@
  * `runSourcing` is the live pipeline that lights up as provider keys arrive.
  */
 import { dedupeAgainstUniverse } from "@/lib/data/store";
-import { buildPlan } from "./cost";
+import { buildPlan, platformCapUsd, withinPlatformCap } from "./cost";
 import { findymailEnrich, lushaSearch, outscraperSearch, verifyEmail } from "./providers";
 import type { SourcedLead, SourcingPlan, SourcingTarget } from "./types";
 
@@ -60,6 +60,9 @@ export async function runSourcing(target: SourcingTarget, count: number, budgetC
   const plan = buildPlan(target, count, budgetCap);
   if (!plan.ready) {
     return { ok: false, plan, leads: [], rejected: [], stats: EMPTY, error: `Add the ${plan.missing.join(" + ")} key${plan.missing.length > 1 ? "s" : ""} to run this lane.` };
+  }
+  if (!withinPlatformCap(plan.estimate.projectedCost)) {
+    return { ok: false, plan, leads: [], rejected: [], stats: EMPTY, error: `Projected $${plan.estimate.projectedCost} exceeds the $${platformCapUsd()} platform ceiling — split into smaller runs.` };
   }
   if (!plan.estimate.withinBudget) {
     return { ok: false, plan, leads: [], rejected: [], stats: EMPTY, error: `Projected $${plan.estimate.projectedCost} exceeds the $${budgetCap} budget cap.` };

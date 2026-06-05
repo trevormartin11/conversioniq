@@ -1,6 +1,7 @@
 "use server";
 
-import { dedupeAgainstUniverse, ensureData, isSuppressed, searchUniverse } from "@/lib/data/store";
+import { dedupeAgainstUniverse, ensureData, isSuppressed, pushAudit, searchUniverse } from "@/lib/data/store";
+import { getCurrentUser } from "@/lib/auth";
 import { buildPlan, runSourcing } from "@/lib/sourcing/engine";
 import type { SizeBand } from "@/lib/sourcing/types";
 
@@ -18,7 +19,19 @@ export async function planSourcingAction(input: SourcingInput) {
 export async function runSourcingAction(input: SourcingInput) {
   await ensureData();
   if (!input.vertical.trim()) return { ok: false as const, plan: null, leads: [], rejected: [], stats: null, error: "Enter a vertical to target." };
-  return runSourcing(toTarget(input), input.count, input.budgetCap);
+  const user = await getCurrentUser();
+  const res = await runSourcing(toTarget(input), input.count, input.budgetCap);
+  // Audit every real (key-ready) run attempt — the spend record, alongside the platform cap.
+  if (res.plan?.ready) {
+    await pushAudit(user.name, res.ok ? "sourcing.run" : "sourcing.failed", "sourcing", input.vertical.trim(), {
+      provider: res.plan.route.provider,
+      count: input.count,
+      projectedCost: res.plan.estimate.projectedCost,
+      sourced: res.stats?.sourced ?? 0,
+      verified: res.stats?.verified ?? 0,
+    });
+  }
+  return res;
 }
 
 /** "Have we ever touched this person or domain?" — instant lookup. */

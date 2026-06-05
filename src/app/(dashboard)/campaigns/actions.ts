@@ -2,9 +2,9 @@
 
 import { revalidatePath } from "next/cache";
 import { getCurrentUser } from "@/lib/auth";
-import { addCampaign, cloneCampaign, ensureData, getCampaign, setCampaignStatus } from "@/lib/data/store";
+import { addCampaign, cloneCampaign, ensureData, getCampaign, getInboxes, setCampaignStatus } from "@/lib/data/store";
 import { activateCampaign, pauseCampaign } from "@/lib/integrations/instantly";
-import { integrations } from "@/lib/config";
+import { appConfig, integrations } from "@/lib/config";
 
 function revalidate() {
   revalidatePath("/campaigns");
@@ -24,17 +24,26 @@ export async function pauseCampaignAction(id: string) {
   return { ok: true };
 }
 
-export async function launchCampaignAction(id: string) {
+export async function launchCampaignAction(id: string, override = false) {
   await ensureData();
   const user = await getCurrentUser();
   const c = getCampaign(id);
-  if (c?.status === "active") return { ok: true };
+  if (c?.status === "active") return { ok: true as const };
+  // Deliverability gate: never start sending from under-warmed / inactive inboxes — that burns the fleet.
+  if (c && !override) {
+    const gate = appConfig.deliverability.warmupGate;
+    const unfit = getInboxes().filter((i) => c.inboxIds.includes(i.id) && (i.status !== "active" || i.warmupScore < gate));
+    if (unfit.length) {
+      const names = unfit.slice(0, 3).map((i) => i.email).join(", ");
+      return { ok: false as const, blocked: "warmup" as const, error: `${unfit.length} assigned inbox${unfit.length > 1 ? "es are" : " is"} under warmup ${gate} or not active (${names}${unfit.length > 3 ? "…" : ""}). Launching now risks the fleet.` };
+    }
+  }
   if (c?.instantlyCampaignId && integrations.instantly) {
-    try { await activateCampaign(c.instantlyCampaignId); } catch (e) { return { ok: false, error: (e as Error).message }; }
+    try { await activateCampaign(c.instantlyCampaignId); } catch (e) { return { ok: false as const, error: (e as Error).message }; }
   }
   await setCampaignStatus(id, "active", user.name);
   revalidate();
-  return { ok: true };
+  return { ok: true as const };
 }
 
 export async function cloneCampaignAction(id: string) {

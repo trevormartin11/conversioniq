@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { routeTarget } from "@/lib/sourcing/router";
-import { buildPlan, estimate, UNIT_COSTS } from "@/lib/sourcing/cost";
+import { buildPlan, estimate, platformCapUsd, withinPlatformCap, UNIT_COSTS } from "@/lib/sourcing/cost";
 import { processLeads } from "@/lib/sourcing/engine";
 import type { SourcedLead } from "@/lib/sourcing/types";
 
@@ -43,6 +43,11 @@ describe("sourcing cost model + budget guard", () => {
     const route = routeTarget({ vertical: "Logistics firms", revenueMin: 100_000_000 });
     const e = estimate(route, 1000, 20); // db reveal ~0.0606/lead -> ~$60.6 > $20
     expect(e.withinBudget).toBe(false);
+  });
+
+  it("enforces a hard platform spend ceiling independent of the UI cap", () => {
+    expect(withinPlatformCap(platformCapUsd())).toBe(true);
+    expect(withinPlatformCap(platformCapUsd() + 0.01)).toBe(false);
   });
 
   it("buildPlan reports which keys are missing (nothing wired in test env)", () => {

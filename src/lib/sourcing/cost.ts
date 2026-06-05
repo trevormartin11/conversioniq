@@ -3,7 +3,7 @@
  * prices (USD/lead) so a plan never under-promises spend. Nothing here spends a
  * cent — it only projects, so the operator can decide before committing.
  */
-import { integrations } from "@/lib/config";
+import { appConfig, integrations } from "@/lib/config";
 import type { CostLine, RoutedSource, SourcingEstimate, SourcingPlan, SourcingTarget } from "./types";
 import { routeTarget } from "./router";
 
@@ -35,6 +35,10 @@ export function estimate(route: RoutedSource, count: number, budgetCap: number):
   const projectedCost = round(perLead * count);
   return { count, costPerLead: round(perLead), projectedCost, withinBudget: projectedCost <= budgetCap, lines };
 }
+
+/** Hard platform ceiling — no single run may exceed this, regardless of the UI budget cap. */
+export const platformCapUsd = () => appConfig.sourcing.maxRunBudgetUsd;
+export const withinPlatformCap = (projectedCost: number) => projectedCost <= platformCapUsd();
 
 /** Which provider keys a route needs to actually run (vs. just plan). */
 export function requiredProviders(route: RoutedSource): ("lusha" | "outscraper" | "findymail" | "millionverifier")[] {
