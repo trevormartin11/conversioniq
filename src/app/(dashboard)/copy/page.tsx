@@ -7,7 +7,7 @@ import { PhaseBanner } from "@/components/ui/phase-banner";
 import { ensureData, getCampaigns, getReplies, getVariants } from "@/lib/data/store";
 import { suggestCopy } from "@/lib/ai/copy";
 import { deriveLearnings } from "@/lib/ai/learnings";
-import { CopyStudio } from "@/components/copy/copy-studio";
+import { StrategyStudio } from "@/components/copy/strategy-studio";
 import { integrations } from "@/lib/config";
 import { cn } from "@/lib/utils";
 import { num, pct, rate } from "@/lib/format";
@@ -60,8 +60,8 @@ export default async function CopyPage({ searchParams }: { searchParams: Promise
       </section>
 
       <section>
-        <SectionHeader title="Draft a new sequence" subtitle="Generate starter copy for a new vertical, applying the learnings above" />
-        <CopyStudio aiOn={integrations.anthropic} />
+        <SectionHeader title="New campaign studio" subtitle="AI picks the vertical (and why), then drafts copy grounded in it — sharpened by the learnings above" />
+        <StrategyStudio aiOn={integrations.anthropic} />
       </section>
 
       {withCopy.length > 1 && (

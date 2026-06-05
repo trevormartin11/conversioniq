@@ -80,6 +80,7 @@ function rulesSequence(vertical: string): GeneratedStep[] {
 export async function generateSequence(
   vertical: string,
   learnings: Pick<Learning, "theme" | "insight">[],
+  brief?: string,
 ): Promise<{ steps: GeneratedStep[]; source: "ai" | "rules" }> {
   if (!aiAvailable()) return { steps: rulesSequence(vertical), source: "rules" };
   try {
@@ -88,10 +89,11 @@ export async function generateSequence(
       system: voiceSystemPrompt(),
       user: [
         `Draft a 4-step cold-email sequence for a "${vertical}" outbound campaign selling ConversionIQ — an AI that instantly answers a business's inbound/after-hours leads and books them into the calendar.`,
+        brief ? `Why this vertical, and the angle to lead with: ${brief}. Make the copy reflect this specific pain.` : "",
         `Apply these learnings from prior campaigns:\n${learningText || "(no results yet — use the playbook defaults)"}`,
         `Rules: short lowercase subject lines; lead with the prospect's missed revenue, not features; exactly one CTA per email (a 15-minute demo) phrased as a question; every follow-up adds a NEW angle (timing, math, proof, breakup) — never "just bumping"; bodies under 90 words; use {{firstName}} and {{companyName}} merge tags.`,
         `Return ONLY compact JSON: {"steps":[{"step":1,"subject":"...","body":"...","rationale":"why this works"}]}`,
-      ].join("\n\n"),
+      ].filter(Boolean).join("\n\n"),
       maxTokens: 1600,
       temperature: 0.6,
     });
