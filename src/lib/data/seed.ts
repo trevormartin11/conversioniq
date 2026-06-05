@@ -365,12 +365,20 @@ const alerts: Alert[] = [
 ];
 
 // --- costs (the operation's P&L inputs) -------------------------------------
+// Amounts marked "est." are my best estimates from the known stack — edit on the
+// Costs page to match your actual invoices.
 const costs: Cost[] = [
-  { id: "co_instantly", category: "sending", vendor: "Instantly", description: "Sending + warmup plan (~49 inboxes)", amount: 97, cadence: "monthly", status: "active", startedAt: daysAgo(60), nextChargeAt: daysAgo(-12), source: "manual", note: null, createdBy: "Trevor Martin" },
-  { id: "co_apollo", category: "data", vendor: "Apollo", description: "Apollo subscription (search + enrich)", amount: 99, cadence: "monthly", status: "active", startedAt: daysAgo(60), nextChargeAt: daysAgo(-9), source: "manual", note: null, createdBy: "Trevor Martin" },
-  { id: "co_workspace", category: "email", vendor: "Google Workspace", description: "Gmail seats for sending personas", amount: 72, cadence: "monthly", status: "active", startedAt: daysAgo(58), nextChargeAt: daysAgo(-6), source: "manual", note: "~$6/seat", createdBy: "Trevor Martin" },
-  { id: "co_domains", category: "domains", vendor: "Namecheap", description: "15 sending domains — annual registration", amount: 180, cadence: "annual", status: "active", startedAt: daysAgo(58), nextChargeAt: daysAgo(-300), source: "manual", note: "~$12/domain/yr", createdBy: "Trevor Martin" },
-  { id: "co_leads", category: "leads", vendor: "Apollo export", description: "Initial Med Spa lead pull", amount: 120, cadence: "one_time", status: "active", startedAt: daysAgo(20), nextChargeAt: null, source: "manual", note: null, createdBy: "Jon Epstein" },
+  // Sending stack
+  { id: "co_instantly", category: "sending", vendor: "Instantly", description: "Sending + warmup (~49 inboxes)", amount: 97, cadence: "monthly", status: "active", startedAt: daysAgo(60), nextChargeAt: daysAgo(-12), source: "manual", note: "est. — confirm plan tier; extra sending slots cost more", createdBy: "Trevor Martin" },
+  { id: "co_workspace", category: "email", vendor: "Google Workspace", description: "~49 sending inboxes (Business Starter seats)", amount: 294, cadence: "monthly", status: "active", startedAt: daysAgo(58), nextChargeAt: daysAgo(-6), source: "manual", note: "est. 49 × ~$6/seat — adjust to your paid-seat count (aliases are free)", createdBy: "Trevor Martin" },
+  { id: "co_domains", category: "domains", vendor: "Namecheap", description: "Sending domains — annual registration", amount: 180, cadence: "annual", status: "active", startedAt: daysAgo(58), nextChargeAt: daysAgo(-300), source: "manual", note: "est. ~15 × ~$12/yr; year-2 renewals usually run higher than intro", createdBy: "Trevor Martin" },
+  // Infrastructure
+  { id: "co_supabase", category: "software", vendor: "Supabase", description: "Database + auth (Pro)", amount: 25, cadence: "monthly", status: "active", startedAt: daysAgo(25), nextChargeAt: daysAgo(-5), source: "manual", note: "est. Pro tier; Free tier is $0 until you outgrow it", createdBy: "Trevor Martin" },
+  { id: "co_vercel", category: "software", vendor: "Vercel", description: "Hosting + cron jobs (Pro)", amount: 20, cadence: "monthly", status: "active", startedAt: daysAgo(25), nextChargeAt: daysAgo(-5), source: "manual", note: "est. Pro enables crons/usage; Hobby is $0 if it fits", createdBy: "Trevor Martin" },
+  // Data / AI (usage-based estimates)
+  { id: "co_apollo", category: "data", vendor: "Apollo", description: "Search + enrich subscription", amount: 99, cadence: "monthly", status: "active", startedAt: daysAgo(60), nextChargeAt: daysAgo(-9), source: "manual", note: "est. — confirm your Apollo plan", createdBy: "Trevor Martin" },
+  { id: "co_anthropic", category: "software", vendor: "Anthropic (Claude)", description: "AI drafts, reply classification, copy coach", amount: 15, cadence: "monthly", status: "active", startedAt: daysAgo(20), nextChargeAt: daysAgo(-10), source: "manual", note: "est. usage-based; only while the Claude key is active", createdBy: "Trevor Martin" },
+  { id: "co_apicredit", category: "data", vendor: "MillionVerifier / Outscraper", description: "API credit top-up (verification/sourcing)", amount: 10, cadence: "one_time", status: "active", startedAt: daysAgo(1), nextChargeAt: null, source: "manual", note: "the $10 you loaded yesterday — tell me which service and I'll relabel + set cadence", createdBy: "Trevor Martin" },
 ];
 
 export function buildSeed(): Dataset {
