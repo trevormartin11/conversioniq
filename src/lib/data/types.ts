@@ -58,6 +58,7 @@ export const SUPPRESSION_REASONS = [
   "bounced",
   "unsubscribed",
   "complained",
+  "civ_customer", // already in ConversionIQ's funnel — never pitch them
   "manual",
 ] as const;
 export type SuppressionReason = (typeof SUPPRESSION_REASONS)[number];
