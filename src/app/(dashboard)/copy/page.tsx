@@ -1,3 +1,4 @@
+import { Suspense } from "react";
 import Link from "next/link";
 import { GraduationCap, Lightbulb, Trophy } from "lucide-react";
 import { Card, CardBody, PageHeader, SectionHeader } from "@/components/ui/card";
@@ -6,9 +7,11 @@ import { PhaseBanner } from "@/components/ui/phase-banner";
 import { ensureData, getCampaigns, getReplies, getVariants } from "@/lib/data/store";
 import { suggestCopy } from "@/lib/ai/copy";
 import { deriveLearnings } from "@/lib/ai/learnings";
+import { CopyStudio } from "@/components/copy/copy-studio";
 import { integrations } from "@/lib/config";
 import { cn } from "@/lib/utils";
 import { num, pct, rate } from "@/lib/format";
+import type { SequenceVariant } from "@/lib/data/types";
 
 export const dynamic = "force-dynamic";
 
@@ -19,12 +22,10 @@ export default async function CopyPage({ searchParams }: { searchParams: Promise
   const campaigns = getCampaigns();
   const learnings = deriveLearnings(variants, getReplies().map((r) => r.classification));
 
-  // only campaigns that actually have synced copy
   const withCopy = campaigns.filter((c) => variants.some((v) => v.campaignId === c.id));
   const selectedId = (campaign && withCopy.some((c) => c.id === campaign) ? campaign : withCopy[0]?.id) ?? "";
   const selected = campaigns.find((c) => c.id === selectedId);
   const list = variants.filter((v) => v.campaignId === selectedId).sort((a, b) => a.step - b.step || a.variant.localeCompare(b.variant));
-  const suggestions = list.length ? await suggestCopy(list) : [];
   const bestInStep = (step: number) =>
     [...list.filter((v) => v.step === step)].sort((a, b) => rate(b.positives, b.sent) - rate(a.positives, a.sent))[0]?.id;
   const steps = new Set(list.map((v) => v.step)).size;
@@ -58,7 +59,11 @@ export default async function CopyPage({ searchParams }: { searchParams: Promise
         </div>
       </section>
 
-      {/* Campaign picker */}
+      <section>
+        <SectionHeader title="Draft a new sequence" subtitle="Generate starter copy for a new vertical, applying the learnings above" />
+        <CopyStudio aiOn={integrations.anthropic} />
+      </section>
+
       {withCopy.length > 1 && (
         <div className="flex flex-wrap gap-2">
           {withCopy.map((c) => (
@@ -106,21 +111,42 @@ export default async function CopyPage({ searchParams }: { searchParams: Promise
 
       <section>
         <SectionHeader title="Suggestions" subtitle="Data-driven, in the ConversionIQ voice" />
-        <div className="space-y-2">
-          {suggestions.map((s, i) => (
-            <Card key={i}>
-              <CardBody className="flex gap-3">
-                <Lightbulb className="mt-0.5 h-4 w-4 shrink-0 text-warn" />
-                <div className="flex-1">
-                  <p className="text-sm font-medium text-slate-100">{s.title}</p>
-                  <p className="mt-0.5 text-xs text-slate-400">{s.detail}</p>
-                </div>
-                <Tag tone={s.source === "ai" ? "brand" : "slate"}>{s.source}</Tag>
-              </CardBody>
-            </Card>
-          ))}
-        </div>
+        <Suspense fallback={<SuggestionsSkeleton />}>
+          <AiSuggestions variants={list} />
+        </Suspense>
       </section>
+    </div>
+  );
+}
+
+/** Streamed so the page never blocks on the model. */
+async function AiSuggestions({ variants }: { variants: SequenceVariant[] }) {
+  const suggestions = variants.length ? await suggestCopy(variants) : [];
+  if (!suggestions.length) return <p className="text-sm text-slate-500">No variants to analyze yet.</p>;
+  return (
+    <div className="space-y-2">
+      {suggestions.map((s, i) => (
+        <Card key={i}>
+          <CardBody className="flex gap-3">
+            <Lightbulb className="mt-0.5 h-4 w-4 shrink-0 text-warn" />
+            <div className="flex-1">
+              <p className="text-sm font-medium text-slate-100">{s.title}</p>
+              <p className="mt-0.5 text-xs text-slate-400">{s.detail}</p>
+            </div>
+            <Tag tone={s.source === "ai" ? "brand" : "slate"}>{s.source}</Tag>
+          </CardBody>
+        </Card>
+      ))}
+    </div>
+  );
+}
+
+function SuggestionsSkeleton() {
+  return (
+    <div className="space-y-2">
+      {[0, 1, 2].map((i) => (
+        <div key={i} className="h-16 animate-pulse rounded-xl bg-ink-900/60" />
+      ))}
     </div>
   );
 }

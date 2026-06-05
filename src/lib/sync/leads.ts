@@ -8,12 +8,20 @@ const FIELDS = ["Email", "First_Name", "Last_Name", "Company", "Lead_Status", "P
 function mapStatus(s: string | null): LeadStatus {
   if (!s) return "new";
   const v = s.toLowerCase();
-  if (v.includes("not contacted") || v.includes("new")) return "new";
-  if (v.includes("lost") || v.includes("junk") || v.includes("not qualified")) return "lost";
+  // Demo + closed stages first (order matters — "unqualified" must beat "qualified").
+  if (v.includes("closed") || v.includes("won") || v.includes("customer")) return "closed";
+  if (v.includes("demo") || v.includes("meeting booked")) {
+    return v.includes("show") || v.includes("attend") || v.includes("complet") ? "demo_showed" : "demo_booked";
+  }
+  if (v.includes("not contacted") || v === "new") return "new";
+  if (v.includes("unqualified") || v.includes("not qualified") || v.includes("disqualif") || v.includes("lost") || v.includes("junk")) return "lost";
   if (v.includes("qualified") || v.includes("interest")) return "positive";
   if (v.includes("contacted") || v.includes("attempted")) return "contacted";
   return "new";
 }
+
+// Lead lifecycle stage -> demo-scoreboard status.
+const DEMO_STAGE: Record<string, string> = { demo_booked: "booked", demo_showed: "showed", closed: "closed" };
 
 export async function syncLeads() {
   const rows: Record<string, unknown>[] = [];
@@ -47,6 +55,20 @@ export async function syncLeads() {
 
   const leads = await chunkedUpsert("leads", rows);
 
+  // Leads that reached a demo/closed stage feed the demo scoreboard. (No demo
+  // stage exists in the Zoho picklist yet, so this is a no-op until one does.)
+  const demoRows = rows
+    .filter((r) => DEMO_STAGE[r.status as string])
+    .map((r) => ({
+      id: `dm_${r.zoho_lead_id}`,
+      lead_id: r.id,
+      scheduled_at: r.created_at,
+      status: DEMO_STAGE[r.status as string],
+      owner: "zoho",
+      mrr: null,
+    }));
+  const demos = demoRows.length ? await chunkedUpsert("demos", demoRows) : 0;
+
   // Mirror Zoho opt-outs into the global suppression universe (skip already-listed).
   let suppressed = 0;
   if (optOut.length) {
@@ -58,5 +80,5 @@ export async function syncLeads() {
     if (inserts.length) suppressed = await chunkedUpsert("suppression", inserts);
   }
 
-  return { leads, fetched: rows.length, suppressed };
+  return { leads, fetched: rows.length, suppressed, demos };
 }
