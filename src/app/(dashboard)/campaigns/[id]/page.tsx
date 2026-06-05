@@ -6,7 +6,7 @@ import { Card, CardBody, PageHeader, SectionHeader } from "@/components/ui/card"
 import { HealthBadge, Tag } from "@/components/ui/badge";
 import { CampaignActions } from "@/components/campaigns/campaign-actions";
 import { EditableVariant } from "@/components/campaigns/editable-variant";
-import { campaignCards } from "@/lib/data/queries";
+import { campaignCards, campaignCapacity } from "@/lib/data/queries";
 import { suggestCopy } from "@/lib/ai/copy";
 import { ensureData, getCampaign, getInboxes, getPersonas, getVariants } from "@/lib/data/store";
 import { campaignHasLeads, getInstantlyCampaign, type InstantlyCampaignView, type InstantlyStepView } from "@/lib/integrations/instantly";
@@ -35,6 +35,7 @@ export default async function CampaignDetail({ params }: { params: Promise<{ id:
   const inboxes = getInboxes().filter((i) => c.inboxIds.includes(i.id));
   const synced = getVariants().filter((v) => v.campaignId === id);
   const card = campaignCards().find((x) => x.id === id);
+  const cap = campaignCapacity(id);
 
   // Best-effort live fetch: gives true cadence + full copy + sending-inbox count.
   let live: InstantlyCampaignView | null = null;
@@ -79,6 +80,38 @@ export default async function CampaignDetail({ params }: { params: Promise<{ id:
         <Meta label="Sequence" value={`${steps.length} step${steps.length === 1 ? "" : "s"}`} />
         <Meta label="Leads" value={hasLeads === null ? "—" : hasLeads ? "Loaded" : "None yet"} />
       </div>
+
+      {/* Capacity & throughput — how much this campaign can send + how to scale it */}
+      {cap && (
+        <section>
+          <SectionHeader title="Capacity & throughput" subtitle="What this campaign can actually send — and the levers to scale it" />
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+            <Meta label="Daily capacity" value={`${num(cap.dailyCapacity)}/day`} />
+            <Meta label="If warming finishes" value={`${num(cap.potentialDaily)}/day`} />
+            <Meta label="Leads loaded" value={num(cap.leadsLoaded)} />
+            <Meta label="Days to first-touch" value={cap.daysToFirstTouch === null ? "—" : `${cap.daysToFirstTouch}d`} />
+          </div>
+          <Card className="mt-3">
+            <CardBody className="space-y-1.5 text-sm text-slate-400">
+              <p>
+                <span className="text-slate-200">{cap.warmed} warmed inbox{cap.warmed === 1 ? "" : "es"}</span> sending ~{cap.perInboxCap}/day each
+                {cap.warming > 0 ? `, ${cap.warming} still warming` : ""}{cap.paused > 0 ? `, ${cap.paused} paused` : ""}.
+                {cap.warming > 0 && ` Warming those up lifts you to ~${cap.potentialDaily}/day (≈2–4 weeks).`}
+              </p>
+              {cap.capBound && (
+                <p className="text-warn">Your inboxes can send more, but the campaign daily cap ({cap.campaignCap}/day) is the limiter — raise it to use the headroom.</p>
+              )}
+              <p>
+                Each new domain/inbox you provision adds ~{cap.perInboxCap}/day after warmup.{" "}
+                <span className="text-slate-500">More leads = more runway, not more speed: to go faster add warmed inboxes; to extend runway load more leads.</span>
+              </p>
+              {cap.awaitingFirstTouch === 0 && cap.leadsLoaded > 0 && (
+                <p className="text-slate-500">All loaded leads have been first-touched — load more to keep this cell fed.</p>
+              )}
+            </CardBody>
+          </Card>
+        </section>
+      )}
 
       {/* Assigned inboxes — per-campaign deliverability + attribution */}
       {inboxes.length > 0 && (

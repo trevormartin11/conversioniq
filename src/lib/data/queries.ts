@@ -194,6 +194,46 @@ const FUNNEL: LeadStatus[] = [
   "closed",
 ];
 
+export interface CampaignCapacity {
+  warmed: number;
+  warming: number;
+  paused: number;
+  perInboxCap: number;
+  dailyCapacity: number; // effective sends/day now (min of campaign cap and warmed inbox caps)
+  potentialDaily: number; // if the warming inboxes finish
+  campaignCap: number;
+  capBound: boolean; // true when the campaign cap (not inboxes) is the limiter
+  leadsLoaded: number;
+  awaitingFirstTouch: number;
+  daysToFirstTouch: number | null;
+  sentToday: number;
+}
+
+/** What a campaign can actually send today, and the levers to scale it. */
+export function campaignCapacity(campaignId: string): CampaignCapacity | null {
+  const c = getCampaigns().find((x) => x.id === campaignId);
+  if (!c) return null;
+  const assigned = getInboxes().filter((i) => c.inboxIds.includes(i.id));
+  const warmed = assigned.filter((i) => i.status === "active");
+  const warming = assigned.filter((i) => i.status === "warming");
+  const paused = assigned.filter((i) => i.status === "paused");
+  const warmedCap = warmed.reduce((s, i) => s + i.dailyCap, 0);
+  const nonPausedCap = assigned.filter((i) => i.status !== "paused").reduce((s, i) => s + i.dailyCap, 0);
+  const dailyCapacity = Math.min(c.dailyCap, warmedCap);
+  const potentialDaily = Math.min(c.dailyCap, nonPausedCap);
+  const perInboxCap = warmed.length ? Math.round(warmedCap / warmed.length) : assigned[0]?.dailyCap ?? 20;
+  const leads = getLeads().filter((l) => l.campaignId === campaignId);
+  const awaitingFirstTouch = leads.filter((l) => l.status === "new").length;
+  return {
+    warmed: warmed.length, warming: warming.length, paused: paused.length, perInboxCap,
+    dailyCapacity, potentialDaily, campaignCap: c.dailyCap,
+    capBound: warmedCap > c.dailyCap,
+    leadsLoaded: leads.length, awaitingFirstTouch,
+    daysToFirstTouch: dailyCapacity > 0 ? Math.ceil(awaitingFirstTouch / dailyCapacity) : null,
+    sentToday: warmed.reduce((s, i) => s + i.sentToday, 0),
+  };
+}
+
 export function pipeline() {
   const leads = getLeads();
   const counts = {} as Record<LeadStatus, number>;
