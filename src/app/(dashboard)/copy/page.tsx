@@ -1,10 +1,11 @@
 import Link from "next/link";
-import { Lightbulb, Trophy } from "lucide-react";
+import { GraduationCap, Lightbulb, Trophy } from "lucide-react";
 import { Card, CardBody, PageHeader, SectionHeader } from "@/components/ui/card";
 import { Tag } from "@/components/ui/badge";
 import { PhaseBanner } from "@/components/ui/phase-banner";
-import { ensureData, getCampaigns, getVariants } from "@/lib/data/store";
+import { ensureData, getCampaigns, getReplies, getVariants } from "@/lib/data/store";
 import { suggestCopy } from "@/lib/ai/copy";
+import { deriveLearnings } from "@/lib/ai/learnings";
 import { integrations } from "@/lib/config";
 import { cn } from "@/lib/utils";
 import { num, pct, rate } from "@/lib/format";
@@ -16,6 +17,7 @@ export default async function CopyPage({ searchParams }: { searchParams: Promise
   const { campaign } = await searchParams;
   const variants = getVariants();
   const campaigns = getCampaigns();
+  const learnings = deriveLearnings(variants, getReplies().map((r) => r.classification));
 
   // only campaigns that actually have synced copy
   const withCopy = campaigns.filter((c) => variants.some((v) => v.campaignId === c.id));
@@ -34,6 +36,27 @@ export default async function CopyPage({ searchParams }: { searchParams: Promise
       <PhaseBanner phase={2}>
         Approving outgoing copy, launching A/B variants, and pushing winners back to Instantly are wired here next. Pick a campaign to analyze its sequence.
       </PhaseBanner>
+
+      <section>
+        <SectionHeader title="Learnings" subtitle="Cross-campaign memory applied to new copy — seeded by your playbook, sharpened by real results" />
+        <div className="grid gap-2 sm:grid-cols-2">
+          {learnings.map((l, i) => (
+            <Card key={i}>
+              <CardBody className="flex gap-3">
+                <GraduationCap className="mt-0.5 h-4 w-4 shrink-0 text-brand-400" />
+                <div className="flex-1">
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">{l.theme}</p>
+                    <Tag tone={l.tone === "win" ? "ok" : l.tone === "watch" ? "warn" : "slate"}>{l.tone === "seed" ? "playbook" : l.tone}</Tag>
+                  </div>
+                  <p className="mt-1 text-sm text-slate-200">{l.insight}</p>
+                  <p className="mt-0.5 text-[11px] text-slate-500">{l.evidence}</p>
+                </div>
+              </CardBody>
+            </Card>
+          ))}
+        </div>
+      </section>
 
       {/* Campaign picker */}
       {withCopy.length > 1 && (

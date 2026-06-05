@@ -1,3 +1,5 @@
+import Link from "next/link";
+import { ChevronRight } from "lucide-react";
 import { Card, CardBody, PageHeader } from "@/components/ui/card";
 import { HealthBadge, Tag } from "@/components/ui/badge";
 import { PhaseBanner } from "@/components/ui/phase-banner";
@@ -35,7 +37,7 @@ export default async function CampaignsPage() {
               <CardBody>
                 <div className="flex items-start justify-between gap-3">
                   <div>
-                    <p className="text-sm font-semibold text-slate-100">{c.name}</p>
+                    <Link href={`/campaigns/${c.id}`} className="text-sm font-semibold text-slate-100 hover:text-brand-300">{c.name}</Link>
                     <p className="text-xs text-slate-500">{c.vertical} · {personaName(c.personaId)}{stepsOf(c.id) > 0 ? ` · ${stepsOf(c.id)}-step sequence` : ""} · cap {num(c.dailyCap)}/day</p>
                   </div>
                   <div className="flex items-center gap-2">
@@ -52,8 +54,11 @@ export default async function CampaignsPage() {
                     <Mini label="Bounce" value={pct(card.bounceRate, 1)} />
                   </div>
                 )}
-                <div className="mt-3">
+                <div className="mt-3 flex items-center justify-between gap-2">
                   <CampaignActions id={c.id} status={c.status} />
+                  <Link href={`/campaigns/${c.id}`} className="inline-flex shrink-0 items-center gap-1 text-xs font-medium text-brand-400 hover:text-brand-300">
+                    View sequence <ChevronRight className="h-3.5 w-3.5" />
+                  </Link>
                 </div>
               </CardBody>
             </Card>

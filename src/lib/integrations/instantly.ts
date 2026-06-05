@@ -7,6 +7,7 @@
  */
 import { integrations } from "@/lib/config";
 import { httpJson, NotConfiguredError } from "./http";
+import { stripHtml } from "@/lib/utils";
 
 const BASE = "https://api.instantly.ai/api/v2";
 
@@ -148,4 +149,61 @@ export async function pauseCampaign(id: string): Promise<unknown> {
 /** Activate (launch / resume) a campaign. */
 export async function activateCampaign(id: string): Promise<unknown> {
   return httpJson("instantly", `${BASE}/campaigns/${id}/activate`, { method: "POST", headers: headers() });
+}
+
+// --- full campaign detail (sequence + cadence), for the control page --------
+
+interface RawStep { delay?: number; variants?: { subject?: string; body?: string }[] }
+interface RawCampaignDetail {
+  id?: string; name?: string; status?: number; daily_limit?: number;
+  email_list?: string[]; sequences?: { steps?: RawStep[] }[];
+}
+
+export interface InstantlyStepView {
+  step: number;
+  delay: number; // days to wait before this step
+  cumulativeDay: number; // day-of-sequence this step lands on
+  variants: { variant: string; subject: string; body: string }[];
+}
+export interface InstantlyCampaignView {
+  id: string;
+  name: string;
+  status: number;
+  dailyLimit: number;
+  inboxCount: number;
+  steps: InstantlyStepView[];
+}
+
+/** GET /campaigns/{id} — full pre-staged sequence with cadence + sending inboxes. */
+export async function getInstantlyCampaign(id: string): Promise<InstantlyCampaignView | null> {
+  const d = await httpJson<RawCampaignDetail>("instantly", `${BASE}/campaigns/${id}`, { headers: headers() });
+  if (!d?.id) return null;
+  const raw = d.sequences?.[0]?.steps ?? [];
+  let cum = 0;
+  const steps: InstantlyStepView[] = raw.map((s, i) => {
+    const delay = Number(s.delay ?? 0);
+    cum += delay;
+    return {
+      step: i + 1,
+      delay,
+      cumulativeDay: cum,
+      variants: (s.variants ?? []).map((v, vi) => ({
+        variant: String.fromCharCode(65 + vi),
+        subject: v.subject ?? "",
+        body: stripHtml(v.body ?? ""),
+      })),
+    };
+  });
+  return {
+    id: d.id, name: d.name ?? "", status: d.status ?? 0,
+    dailyLimit: d.daily_limit ?? 0, inboxCount: (d.email_list ?? []).length, steps,
+  };
+}
+
+/** Best-effort: are leads loaded into this campaign? (presence, not exact count) */
+export async function campaignHasLeads(id: string): Promise<boolean> {
+  const d = await httpJson<{ items?: unknown[] }>("instantly", `${BASE}/leads/list`, {
+    method: "POST", headers: headers(), body: JSON.stringify({ campaign: id, limit: 1 }),
+  });
+  return (d.items?.length ?? 0) > 0;
 }
