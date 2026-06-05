@@ -1,0 +1,84 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  /* Geist (set via next/font on <html>), with graceful fallbacks */
+  --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-mono: var(--font-geist-mono), ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace;
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  @apply bg-ink-950 text-slate-200 antialiased;
+  font-family: var(--font-sans);
+  font-feature-settings: "cv11", "ss01";
+  letter-spacing: -0.011em;
+  /* respect iOS safe areas for the bottom tab bar */
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
+/* Ambient depth — a faint brand aurora fixed behind everything */
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background:
+    radial-gradient(58rem 38rem at 78% -12%, rgba(124, 108, 255, 0.11), transparent 62%),
+    radial-gradient(46rem 34rem at -8% 4%, rgba(52, 210, 255, 0.06), transparent 56%);
+}
+
+/* Thin, unobtrusive scrollbars */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: #2b3146 transparent;
+}
+*::-webkit-scrollbar {
+  height: 6px;
+  width: 6px;
+}
+*::-webkit-scrollbar-thumb {
+  background: #2b3146;
+  border-radius: 9999px;
+}
+
+@layer components {
+  /* Elevated surface: top inset highlight + subtle vertical gradient + depth */
+  .card {
+    @apply relative rounded-2xl border border-white/[0.07] bg-gradient-to-b from-ink-850 to-ink-900/70 shadow-card;
+  }
+  /* add to clickable cards for an interactive lift */
+  .card-link {
+    @apply transition duration-200 hover:-translate-y-px hover:border-brand-500/30 hover:shadow-[0_1px_0_0_rgba(255,255,255,0.05)_inset,0_20px_44px_-26px_rgba(124,108,255,0.45)];
+  }
+  .chip {
+    @apply inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium;
+  }
+  /* gradient hairline divider */
+  .rule {
+    @apply h-px w-full bg-gradient-to-r from-transparent via-white/10 to-transparent;
+  }
+}
+
+@layer utilities {
+  .text-gradient {
+    @apply bg-gradient-to-br from-white to-slate-400 bg-clip-text text-transparent;
+  }
+}
+
+@layer base {
+  /* Visible keyboard focus everywhere (inputs strip the native outline) */
+  input:focus-visible,
+  textarea:focus-visible,
+  select:focus-visible {
+    @apply outline-none ring-2 ring-brand-500/40 border-brand-500;
+  }
+  ::selection {
+    @apply bg-brand-600/30 text-slate-100;
+  }
+}

@@ -1,0 +1,59 @@
+/**
+ * Apollo client — DATA (search + enrich). Two keys, kept strictly separate:
+ *   - personal: search + enrich (free)
+ *   - CIQ: paid credits — HARD RULE: never spend without explicit, gated approval
+ *
+ * Verified realities (brief):
+ *   - Enrich BY ID returns real email + domain + phone:
+ *       POST https://api.apollo.io/v1/people/match { id }, header X-Api-Key
+ *   - Search returns NO email + NO domain (and /v1/mixed_people/search is
+ *     DEPRECATED -> 422). Use api_search for discovery, then enrich by id.
+ *   - Technographic filters are ~useless for SMB — do not gate targeting on them.
+ */
+import { integrations } from "@/lib/config";
+import { httpJson, IntegrationError, NotConfiguredError } from "./http";
+
+const BASE = "https://api.apollo.io/v1";
+
+function personalKey(): string {
+  if (!integrations.apolloPersonal) throw new NotConfiguredError("apollo (personal)");
+  return process.env.APOLLO_PERSONAL_API_KEY!;
+}
+
+/** Search (discovery only — NO email/domain returned). Uses the personal key. */
+export async function searchPeople(payload: Record<string, unknown>): Promise<unknown> {
+  return httpJson("apollo", `${BASE}/mixed_people/api_search`, {
+    method: "POST",
+    headers: { "X-Api-Key": personalKey(), "content-type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+}
+
+/** Enrich BY ID — returns real email/domain/phone. Personal key by default. */
+export async function enrichById(id: string): Promise<unknown> {
+  return httpJson("apollo", `${BASE}/people/match`, {
+    method: "POST",
+    headers: { "X-Api-Key": personalKey(), "content-type": "application/json" },
+    body: JSON.stringify({ id }),
+  });
+}
+
+/**
+ * Spend CIQ (paid) credits. This is the ONLY function that touches the CIQ key
+ * and it REFUSES to run unless an approved gate is passed in. The credit guard
+ * UI/flow is responsible for obtaining that approval and audit-logging it.
+ */
+export async function enrichWithCiqCredits(
+  id: string,
+  approval: { approvedRequestId: string; approvedBy: string },
+): Promise<unknown> {
+  if (!integrations.apolloCiq) throw new NotConfiguredError("apollo (CIQ)");
+  if (!approval?.approvedRequestId || !approval?.approvedBy) {
+    throw new IntegrationError("apollo (CIQ)", "refused: CIQ credit spend requires an approved, audit-logged request");
+  }
+  return httpJson("apollo", `${BASE}/people/match`, {
+    method: "POST",
+    headers: { "X-Api-Key": process.env.APOLLO_CIQ_API_KEY!, "content-type": "application/json" },
+    body: JSON.stringify({ id }),
+  });
+}
