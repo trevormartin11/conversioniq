@@ -42,6 +42,8 @@ export const integrations = {
     process.env.GMAIL_REFRESH_TOKEN,
   ),
   telegram: has(process.env.TELEGRAM_BOT_TOKEN, process.env.TELEGRAM_CHAT_ID),
+  // DNS provider for the sending domains — powers DMARC/SPF auto-fix.
+  namecheap: has(process.env.NAMECHEAP_API_KEY, process.env.NAMECHEAP_USERNAME),
 } as const;
 
 export type IntegrationKey = keyof typeof integrations;
