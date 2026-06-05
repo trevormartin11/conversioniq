@@ -11,6 +11,19 @@ function personaFor(local: string): string | null {
 }
 const slug = (s: string) => s.replace(/[^a-z0-9]+/gi, "_").toLowerCase();
 
+/**
+ * Map an Instantly account to our inbox status — robust to the API returning `status`
+ * or the warmup score as strings (or omitting them). Defaults toward "warming", never
+ * silently "paused": a paused status must be a definite, non-active numeric code.
+ */
+export function mapInboxStatus(a: { status?: number | string; stat_warmup_score?: number | string; setup_pending?: boolean }): { status: "active" | "warming" | "paused"; score: number } {
+  const statusNum = typeof a.status === "string" ? Number(a.status) : a.status;
+  const score = Number(a.stat_warmup_score) || 0;
+  const paused = statusNum != null && Number.isFinite(statusNum) && statusNum !== 1;
+  const status = paused ? "paused" : a.setup_pending || score < 80 ? "warming" : "active";
+  return { status, score };
+}
+
 export async function syncInboxes() {
   const accounts = await listAllAccounts();
   const domains = new Map<string, Record<string, unknown>>();
@@ -25,8 +38,7 @@ export async function syncInboxes() {
     if (!domains.has(domain)) {
       domains.set(domain, { id: dId, domain, persona_id: personaId, spf: true, dkim: true, dmarc: false, reputation: "green" });
     }
-    const score = typeof a.stat_warmup_score === "number" ? a.stat_warmup_score : 0;
-    const status = a.status !== 1 ? "paused" : a.setup_pending || score < 80 ? "warming" : "active";
+    const { status, score } = mapInboxStatus(a);
     inboxes.push({
       // NB: bounce_rate / spam_complaints / sent_today / daily_cap are intentionally
       // omitted so a resync never clobbers real values (new rows use schema defaults;
