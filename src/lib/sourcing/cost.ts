@@ -9,7 +9,8 @@ import { routeTarget } from "./router";
 
 export const UNIT_COSTS = {
   maps_record: 0.003, // Outscraper Google Maps record
-  email_enrich: 0.02, // Findymail / Prospeo email-find
+  maps_email: 0.01, // Outscraper website-emails enrichment (inline, same call)
+  email_enrich: 0.02, // Findymail / Prospeo email-find (reserved for the enterprise / waterfall path)
   verify: 0.0006, // MillionVerifier
   db_reveal: 0.06, // Lusha / Apollo paid email reveal (blended)
 } as const;
@@ -22,8 +23,8 @@ export function estimate(route: RoutedSource, count: number, budgetCap: number):
 
   if (route.lane === "maps") {
     lines.push({ step: "Maps record", provider: "outscraper", unit: UNIT_COSTS.maps_record, total: round(UNIT_COSTS.maps_record * count) });
-    lines.push({ step: "Email enrichment", provider: "findymail", unit: UNIT_COSTS.email_enrich, total: round(UNIT_COSTS.email_enrich * count) });
-    perLead = UNIT_COSTS.maps_record + UNIT_COSTS.email_enrich;
+    lines.push({ step: "Website emails", provider: "outscraper", unit: UNIT_COSTS.maps_email, total: round(UNIT_COSTS.maps_email * count) });
+    perLead = UNIT_COSTS.maps_record + UNIT_COSTS.maps_email;
   } else {
     lines.push({ step: "Contact reveal", provider: route.provider, unit: UNIT_COSTS.db_reveal, total: round(UNIT_COSTS.db_reveal * count) });
     perLead = UNIT_COSTS.db_reveal;
@@ -43,7 +44,7 @@ export const withinPlatformCap = (projectedCost: number) => projectedCost <= pla
 /** Which provider keys a route needs to actually run (vs. just plan). */
 export function requiredProviders(route: RoutedSource): ("lusha" | "outscraper" | "findymail" | "millionverifier")[] {
   return route.lane === "maps"
-    ? ["outscraper", "findymail", "millionverifier"]
+    ? ["outscraper", "millionverifier"]
     : ["lusha", "millionverifier"];
 }
 

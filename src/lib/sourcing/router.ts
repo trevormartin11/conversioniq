@@ -48,8 +48,8 @@ export function routeTarget(t: SourcingTarget): RoutedSource {
     return {
       lane: "maps",
       provider: "outscraper",
-      reason: `Local, physical, owner-operated — Google Maps has near-complete coverage (every storefront is listed, fresh), where B2B databases capture only a thin slice of owners.`,
-      needsEmailEnrichment: true,
+      reason: `Local, physical, owner-operated — Google Maps has near-complete coverage (every storefront is listed, fresh), where B2B databases capture only a thin slice of owners. Outscraper returns the business's published website email inline (verified before load).`,
+      needsEmailEnrichment: false, // Outscraper pulls website emails in the same call — no separate finder
       paid: true,
     };
   }
@@ -58,8 +58,8 @@ export function routeTarget(t: SourcingTarget): RoutedSource {
   return {
     lane: "maps",
     provider: "outscraper",
-    reason: `No strong corporate signal — start on the cheaper Maps lane and escalate to a B2B database only if coverage proves thin.`,
-    needsEmailEnrichment: true,
+    reason: `No strong corporate signal — start on the cheaper Maps lane (Outscraper returns website emails inline) and escalate to a B2B database only if coverage proves thin.`,
+    needsEmailEnrichment: false,
     paid: true,
   };
 }

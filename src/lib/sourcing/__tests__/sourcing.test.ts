@@ -5,12 +5,12 @@ import { processLeads } from "@/lib/sourcing/engine";
 import type { SourcedLead } from "@/lib/sourcing/types";
 
 describe("sourcing router — picks the cheapest source that covers the target", () => {
-  it("routes hyperlocal verticals to the Maps lane (with enrichment)", () => {
+  it("routes hyperlocal verticals to the Maps lane (Outscraper-native email, no separate finder)", () => {
     for (const v of ["Med Spas", "HVAC contractors", "Dental practices", "Roofing companies"]) {
       const r = routeTarget({ vertical: v });
       expect(r.lane).toBe("maps");
       expect(r.provider).toBe("outscraper");
-      expect(r.needsEmailEnrichment).toBe(true);
+      expect(r.needsEmailEnrichment).toBe(false);
     }
   });
 
@@ -31,11 +31,11 @@ describe("sourcing router — picks the cheapest source that covers the target",
 });
 
 describe("sourcing cost model + budget guard", () => {
-  it("prices the Maps lane as record + enrich + verify", () => {
+  it("prices the Maps lane as record + website emails + verify", () => {
     const route = routeTarget({ vertical: "Med Spas" });
     const e = estimate(route, 500, 50);
-    expect(e.costPerLead).toBeCloseTo(UNIT_COSTS.maps_record + UNIT_COSTS.email_enrich + UNIT_COSTS.verify, 2);
-    expect(e.projectedCost).toBeCloseTo(11.8, 1);
+    expect(e.costPerLead).toBeCloseTo(UNIT_COSTS.maps_record + UNIT_COSTS.maps_email + UNIT_COSTS.verify, 3);
+    expect(e.projectedCost).toBeCloseTo(6.8, 1); // (0.003 + 0.01 + 0.0006) * 500
     expect(e.withinBudget).toBe(true);
   });
 
@@ -53,7 +53,8 @@ describe("sourcing cost model + budget guard", () => {
   it("buildPlan reports which keys are missing (nothing wired in test env)", () => {
     const plan = buildPlan({ vertical: "Med Spas" }, 500, 50);
     expect(plan.ready).toBe(false);
-    expect(plan.missing).toEqual(expect.arrayContaining(["outscraper", "findymail", "millionverifier"]));
+    expect(plan.missing).toEqual(expect.arrayContaining(["outscraper", "millionverifier"]));
+    expect(plan.missing).not.toContain("findymail"); // local lane no longer depends on it
   });
 });
 

@@ -12,23 +12,44 @@ import type { SourcedLead, SourcingTarget } from "./types";
 
 const DEFAULT_TITLES = ["owner", "founder", "president", "general manager", "practice manager"];
 
-/** Outscraper — Google Maps business records (no personal email; that's the enrich step). */
+/**
+ * Outscraper — Google Maps business records. `enrichment=domains_service` appends the
+ * business's published website emails (email_1..email_3) + phone INLINE in the same call,
+ * so the local lane needs no separate email-finder. Whatever comes back is still run
+ * through MillionVerifier before load.
+ */
 export async function outscraperSearch(t: SourcingTarget, limit: number): Promise<SourcedLead[]> {
   if (!integrations.outscraper) throw new NotConfiguredError("outscraper");
   const query = [t.vertical, t.geo ?? "United States"].filter(Boolean).join(", ");
-  const url = `https://api.app.outscraper.com/maps/search-v3?query=${encodeURIComponent(query)}&limit=${limit}&async=false`;
+  const url = `https://api.app.outscraper.com/maps/search-v3?query=${encodeURIComponent(query)}&limit=${limit}&enrichment=domains_service&async=false`;
   const res = await httpJson<{ data?: Array<Array<Record<string, unknown>>> }>("outscraper", url, {
     headers: { "X-API-KEY": process.env.OUTSCRAPER_API_KEY! },
-    timeoutMs: 120000,
+    timeoutMs: 180000, // enrichment crawls each site — give it room
   });
   const rows = (res.data?.[0] ?? []) as Array<Record<string, unknown>>;
   return rows.map((r) => ({
     company: String(r.name ?? r.title ?? "(unknown)"),
     domain: hostOf(r.site as string | undefined),
+    email: firstEmail(r),
+    phone: (r.phone as string | undefined) ?? (r.phone_1 as string | undefined),
     city: r.city as string | undefined,
     state: r.state as string | undefined,
     source: "outscraper" as const,
   }));
+}
+
+/** Pick the first published email Outscraper returns (email_1..email_3 / emails[] / email). */
+function firstEmail(r: Record<string, unknown>): string | undefined {
+  for (const k of ["email_1", "email_2", "email_3", "email"]) {
+    const v = r[k];
+    if (typeof v === "string" && v.includes("@")) return v.trim().toLowerCase();
+  }
+  const arr = r.emails;
+  if (Array.isArray(arr)) {
+    const hit = arr.find((e) => typeof e === "string" && e.includes("@"));
+    if (typeof hit === "string") return hit.trim().toLowerCase();
+  }
+  return undefined;
 }
 
 /** Findymail — find a deliverable email for a business/owner from name + domain. */
