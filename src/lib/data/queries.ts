@@ -303,6 +303,40 @@ function monthlyOf(c: { amount: number; cadence: string }): number {
   return 0;
 }
 
+/**
+ * Unit economics — the number that says whether the machine is profitable.
+ * "Blended to date": recurring spend prorated over each cost's months active, plus
+ * one-time spend, divided by demos booked / accounts closed. Payback compares CAC to
+ * the gross residual a closed account throws off per month.
+ */
+export function unitEconomics() {
+  const active = getCosts().filter((c) => c.status === "active");
+  const now = Date.now();
+  const MONTH_MS = 30.44 * 86_400_000;
+  let investedToDate = 0;
+  for (const c of active) {
+    if (c.cadence === "one_time") { investedToDate += c.amount; continue; }
+    const monthsActive = Math.max(0, (now - new Date(c.startedAt).getTime()) / MONTH_MS);
+    investedToDate += monthlyOf(c) * monthsActive;
+  }
+  const demos = getDemos();
+  const demosBooked = demos.length;
+  const closed = demos.filter((d) => d.status === "closed").length;
+  const r = residual();
+  const monthlyBurn = active.reduce((s, c) => s + monthlyOf(c), 0);
+
+  const costPerDemo = demosBooked ? investedToDate / demosBooked : null;
+  const cac = closed ? investedToDate / closed : null;
+  const grossPerAccountMonthly = closed ? r.grossMonthly / closed : null;
+  const paybackMonths = cac != null && grossPerAccountMonthly ? cac / grossPerAccountMonthly : null;
+
+  return {
+    investedToDate, monthlyBurn, demosBooked, closed,
+    closeRate: demosBooked ? closed / demosBooked : 0,
+    costPerDemo, cac, grossPerAccountMonthly, paybackMonths,
+  };
+}
+
 export function costSummary() {
   const active = getCosts().filter((c) => c.status === "active");
   const monthly = active.reduce((s, c) => s + monthlyOf(c), 0);

@@ -5,10 +5,10 @@ import { Card, CardBody, SectionHeader } from "@/components/ui/card";
 import { Stat } from "@/components/ui/stat";
 import { HealthBadge } from "@/components/ui/badge";
 import { LabeledBar, Sparkline } from "@/components/ui/charts";
-import { commandSummary, deliverabilitySummary } from "@/lib/data/queries";
+import { commandSummary, deliverabilitySummary, unitEconomics } from "@/lib/data/queries";
 import { ensureData } from "@/lib/data/store";
 import { getCurrentUser } from "@/lib/auth";
-import { num, pct, titleCase } from "@/lib/format";
+import { num, pct, titleCase, usd } from "@/lib/format";
 import type { CampaignCard as CardData } from "@/lib/data/queries";
 
 export const dynamic = "force-dynamic";
@@ -17,6 +17,7 @@ export default async function CommandCenter() {
   await ensureData();
   const s = commandSummary();
   const deliver = deliverabilitySummary();
+  const econ = unitEconomics();
   const user = await getCurrentUser();
   const hour = new Date().getHours();
   const greeting = hour < 12 ? "Good morning" : hour < 18 ? "Good afternoon" : "Good evening";
@@ -76,6 +77,23 @@ export default async function CommandCenter() {
           <Stat label="Positive" value={num(s.today.positives)} tone="ok" />
           <Stat label="Demos booked" value={num(s.demosBooked)} tone="ok" />
           <Stat label="Queue" value={num(s.queueDepth)} sub="awaiting approval" tone={s.queueDepth > 0 ? "warn" : "default"} />
+        </div>
+      </section>
+
+      {/* Unit economics — is the machine profitable? */}
+      <section>
+        <SectionHeader title="Unit economics" subtitle="What a demo and a customer actually cost — blended to date" />
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+          <Stat label="Cost / demo" value={econ.costPerDemo != null ? usd(econ.costPerDemo) : "—"} tone="brand" />
+          <Stat label="CAC / close" value={econ.cac != null ? usd(econ.cac) : "—"} sub={`${pct(econ.closeRate)} close rate`} />
+          <Stat
+            label="Payback"
+            value={econ.paybackMonths != null ? `${econ.paybackMonths.toFixed(1)} mo` : "—"}
+            sub="CAC ÷ residual/mo"
+            tone={econ.paybackMonths == null ? "default" : econ.paybackMonths <= 12 ? "ok" : econ.paybackMonths <= 24 ? "warn" : "bad"}
+          />
+          <Stat label="Monthly burn" value={usd(econ.monthlyBurn)} />
+          <Stat label="Invested to date" value={usd(econ.investedToDate)} sub={`${num(econ.demosBooked)} demos · ${num(econ.closed)} closed`} />
         </div>
       </section>
 
