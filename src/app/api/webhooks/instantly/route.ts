@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { classifyReply } from "@/lib/ai/classify";
-import { appConfig } from "@/lib/config";
+import { appConfig, integrations } from "@/lib/config";
+import { addSuppression, ensureData, isSuppressed, recordInboxBounce } from "@/lib/data/store";
+import { addToBlocklist } from "@/lib/integrations/instantly";
 import { sendTelegram } from "@/lib/integrations/telegram";
 
 /**
@@ -38,8 +40,20 @@ export async function POST(req: NextRequest) {
     }
     case "email_bounced":
     case "bounce": {
-      // TODO(live): add to suppression (bounced) + Instantly blocklist.
-      return NextResponse.json({ ok: true, handled: "bounce" });
+      const email = String(payload.lead_email ?? payload.email ?? payload.from ?? "").trim().toLowerCase();
+      const eaccount = String(payload.eaccount ?? payload.account ?? payload.sending_account ?? "").trim();
+      if (!email.includes("@")) return NextResponse.json({ ok: true, handled: "bounce", note: "no email in payload" });
+      await ensureData();
+      // 1) Never email a bounced address again — suppression universe + sending-layer blocklist.
+      if (!isSuppressed(email).suppressed) {
+        await addSuppression({ email, domain: null, reason: "bounced", source: "instantly:webhook", leadId: null, note: "Hard bounce (webhook)" }, "system");
+      }
+      if (integrations.instantly) {
+        try { await addToBlocklist([email]); } catch { /* best-effort sending-layer block */ }
+      }
+      // 2) Feed the sending inbox's bounce rate so the inbox-level guardrail can trip.
+      if (eaccount) await recordInboxBounce(eaccount);
+      return NextResponse.json({ ok: true, handled: "bounce", suppressed: email });
     }
     default:
       return NextResponse.json({ ok: true, ignored: event });

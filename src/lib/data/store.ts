@@ -409,3 +409,18 @@ export async function resumeInbox(id: string, actor: string) {
   await pushAudit(actor, "inbox.resumed", "inbox", id, {});
   return inbox;
 }
+
+/**
+ * Feed a real bounce (from the Instantly webhook) into the sending inbox's rate, so the
+ * inbox-level auto-pause guardrail can actually trip. Approximate — the model has no clean
+ * per-inbox sent denominator, so we nudge against sentToday (floored); the precise rate is
+ * reconciled from analytics on sync. Looks up the inbox by its sending address (eaccount).
+ */
+export async function recordInboxBounce(eaccount: string) {
+  const inbox = db().inboxes.find((i) => i.email.toLowerCase() === eaccount.toLowerCase());
+  if (!inbox) return null;
+  const denom = Math.max(inbox.sentToday, 20);
+  inbox.bounceRate = Math.min(1, inbox.bounceRate + 1 / denom);
+  await liveUpsert("inboxes", { id: inbox.id, bounce_rate: inbox.bounceRate });
+  return inbox;
+}
