@@ -15,6 +15,8 @@ import type {
   Cost,
   CreditSpendRequest,
   Dataset,
+  Demo,
+  DemoStatus,
   Lead,
   LeadStatus,
   Reply,
@@ -356,6 +358,37 @@ export async function setLeadStatus(id: string, status: LeadStatus, actor = "sys
   await liveUpsert("leads", { id, status });
   await pushAudit(actor, `lead.${status}`, "lead", id, {});
   return lead;
+}
+
+// --- demos / pipeline (demo -> close -> MRR) --------------------------------
+export async function addDemo(input: { leadId: string; scheduledAt: string; owner: string; mrr?: number | null }, actor = "system"): Promise<Demo> {
+  const demo: Demo = {
+    id: `d_${Math.random().toString(36).slice(2, 9)}`,
+    leadId: input.leadId, scheduledAt: input.scheduledAt, status: "booked",
+    owner: input.owner, mrr: input.mrr ?? null,
+  };
+  db().demos.unshift(demo);
+  await liveUpsert("demos", { id: demo.id, lead_id: demo.leadId, scheduled_at: demo.scheduledAt, status: demo.status, owner: demo.owner, mrr: demo.mrr });
+  await setLeadStatus(demo.leadId, "demo_booked", actor);
+  await pushAudit(actor, "demo.booked", "demo", demo.id, { leadId: demo.leadId });
+  return demo;
+}
+
+// Demo status drives the lead lifecycle (no_show leaves the lead where it is).
+const DEMO_TO_LEAD: Partial<Record<DemoStatus, LeadStatus>> = {
+  booked: "demo_booked", showed: "demo_showed", closed: "closed", lost: "lost",
+};
+
+export async function updateDemo(id: string, patch: { status?: DemoStatus; mrr?: number | null }, actor = "system"): Promise<Demo | null> {
+  const demo = db().demos.find((d) => d.id === id);
+  if (!demo) return null;
+  if (patch.status) demo.status = patch.status;
+  if (patch.mrr !== undefined) demo.mrr = patch.mrr;
+  await liveUpsert("demos", { id, status: demo.status, mrr: demo.mrr });
+  const leadStatus = patch.status ? DEMO_TO_LEAD[patch.status] : undefined;
+  if (leadStatus) await setLeadStatus(demo.leadId, leadStatus, actor);
+  await pushAudit(actor, `demo.${demo.status}`, "demo", id, { mrr: demo.mrr });
+  return demo;
 }
 
 // --- deliverability ---------------------------------------------------------

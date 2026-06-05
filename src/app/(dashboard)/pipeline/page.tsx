@@ -2,7 +2,8 @@ import { Card, CardBody, PageHeader, SectionHeader } from "@/components/ui/card"
 import { Stat } from "@/components/ui/stat";
 import { PhaseBanner } from "@/components/ui/phase-banner";
 import { pipeline, residual } from "@/lib/data/queries";
-import { ensureData } from "@/lib/data/store";
+import { ensureData, getDemos, getLead } from "@/lib/data/store";
+import { DemoTracker, type DemoRow } from "@/components/pipeline/demo-tracker";
 import { num, pct, titleCase, usd } from "@/lib/format";
 
 export const dynamic = "force-dynamic";
@@ -12,6 +13,18 @@ export default async function PipelinePage() {
   const p = pipeline();
   const r = residual();
   const top = p.funnel[0]?.count || 1;
+  const demoRows: DemoRow[] = getDemos().map((d) => {
+    const lead = getLead(d.leadId);
+    return {
+      id: d.id,
+      leadName: lead ? `${lead.firstName} ${lead.lastName}`.trim() || lead.company : "(unknown)",
+      company: lead?.company ?? "",
+      scheduledAt: d.scheduledAt,
+      status: d.status,
+      owner: d.owner,
+      mrr: d.mrr,
+    };
+  });
 
   return (
     <div className="space-y-6">
@@ -46,13 +59,18 @@ export default async function PipelinePage() {
 
       {/* Demo tracker */}
       <section>
-        <SectionHeader title="Demo tracker" subtitle="From Zoho" />
+        <SectionHeader title="Demo tracker" subtitle="Advance demos → close with MRR (updates the lead + residual)" />
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
           <Stat label="Booked" value={num(p.demos.booked)} tone="brand" />
           <Stat label="Showed" value={num(p.demos.showed)} tone="ok" />
           <Stat label="No-show" value={num(p.demos.noShow)} tone="warn" />
           <Stat label="Closed" value={num(p.demos.closed)} tone="ok" />
         </div>
+        <Card className="mt-3">
+          <CardBody className="p-0">
+            <DemoTracker demos={demoRows} />
+          </CardBody>
+        </Card>
       </section>
 
       {/* Residual */}

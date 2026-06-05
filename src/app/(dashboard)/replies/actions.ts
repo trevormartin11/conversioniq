@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { getCurrentUser } from "@/lib/auth";
 import {
+  addDemo,
   addSuppression,
   ensureData,
   getInbox,
@@ -90,6 +91,19 @@ export async function suppressFromReplyAction(id: string) {
   }
   if (lead) await setLeadStatus(lead.id, "lost", user.name);
   await updateReplyStatus(id, "suppressed", user.name);
+  revalidate();
+  return { ok: true as const };
+}
+
+export async function bookDemoFromReplyAction(id: string) {
+  await ensureData();
+  const user = await getCurrentUser();
+  const reply = getReply(id);
+  if (!reply) return { ok: false as const, error: "Reply not found." };
+  await addDemo(
+    { leadId: reply.leadId, scheduledAt: new Date(Date.now() + 3 * 864e5).toISOString(), owner: user.name },
+    user.name,
+  );
   revalidate();
   return { ok: true as const };
 }

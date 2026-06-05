@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Ban, ChevronDown, Clock, Flame, Inbox, RefreshCw, Send, X } from "lucide-react";
+import { Ban, CalendarPlus, ChevronDown, Clock, Flame, Inbox, RefreshCw, Send, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ClassBadge, StatusBadge } from "@/components/ui/badge";
 import { Empty } from "@/components/ui/card";
@@ -12,6 +12,7 @@ import { ago } from "@/lib/format";
 import type { AutomationLevel, ReplyClass, ReplyStatus } from "@/lib/data/types";
 import {
   approveAndSendAction,
+  bookDemoFromReplyAction,
   regenerateDraftAction,
   revertReplyAction,
   setAutomationAction,
@@ -324,6 +325,9 @@ export function ReplyQueue({
                             </Button>
                             <Button size="sm" variant="secondary" disabled={busy} onClick={() => run(r.id, async () => { const res = await regenerateDraftAction(r.id); if (res.draft) setDraft(r.id, res.draft); return res; })}>
                               <RefreshCw className={cn("h-3.5 w-3.5", busy && "animate-spin")} /> Regenerate
+                            </Button>
+                            <Button size="sm" variant="ghost" disabled={busy} onClick={() => run(r.id, () => bookDemoFromReplyAction(r.id), { successMsg: "Demo booked — track it on Pipeline" })}>
+                              <CalendarPlus className="h-3.5 w-3.5" /> Book demo
                             </Button>
                             <Button size="sm" variant="ghost" disabled={busy} onClick={() => run(r.id, () => snoozeReplyAction(r.id), { successMsg: "Snoozed", advance: true, undo: true })}>
                               <Clock className="h-3.5 w-3.5" /> Snooze

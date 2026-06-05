@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { addLeads, ensureData, getLeads } from "@/lib/data/store";
+import { addDemo, addLeads, ensureData, getLead, getLeads, updateDemo } from "@/lib/data/store";
 
 describe("addLeads — persist sourced leads with attribution at source", () => {
   it("stamps id + createdAt, preserves attribution, and lands in the universe", async () => {
@@ -44,5 +44,31 @@ describe("addLeads — persist sourced leads with attribution at source", () => 
     const before = getLeads().length;
     expect(await addLeads([])).toEqual([]);
     expect(getLeads().length).toBe(before);
+  });
+});
+
+describe("demo lifecycle — book -> close -> MRR drives the lead + residual", () => {
+  it("books (lead -> demo_booked) then closes with MRR (lead -> closed)", async () => {
+    await ensureData();
+    const [lead] = await addLeads(
+      [
+        {
+          email: "owner@closetest-xyz.com", domain: "closetest-xyz.com", firstName: "Sam", lastName: "Rivera",
+          company: "Close Test Spa", title: "Owner", phone: null, campaignId: "c_medspa", vertical: "Med Spas",
+          persona: "Avery", sendingDomain: "outreach-x.com", listVersion: "med_spas_v1", source: "outscraper",
+          attributionOwner: "Trevor", status: "positive", zohoLeadId: null, apolloId: null, lastContactedAt: null,
+        },
+      ],
+      "Trevor",
+    );
+
+    const demo = await addDemo({ leadId: lead.id, scheduledAt: new Date().toISOString(), owner: "Trevor" }, "Trevor");
+    expect(demo.status).toBe("booked");
+    expect(getLead(lead.id)?.status).toBe("demo_booked");
+
+    const closed = await updateDemo(demo.id, { status: "closed", mrr: 1500 }, "Trevor");
+    expect(closed?.status).toBe("closed");
+    expect(closed?.mrr).toBe(1500);
+    expect(getLead(lead.id)?.status).toBe("closed");
   });
 });
