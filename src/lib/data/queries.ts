@@ -20,6 +20,7 @@ import type {
   Alert,
   Campaign,
   CostCategory,
+  DemoLostReason,
   Health,
   LeadStatus,
   ReplyClass,
@@ -273,6 +274,17 @@ export function attribution(dim: AttributionDim): AttributionRow[] {
   return [...groups.values()]
     .map((r) => ({ ...r, closeRate: r.leads ? r.closed / r.leads : 0 }))
     .sort((a, b) => b.mrr - a.mrr || b.leads - a.leads);
+}
+
+/** Why demos are lost — the structured outcome reasons, aggregated for the learning loop. */
+export function lostReasons(): { reason: DemoLostReason; count: number }[] {
+  const counts = new Map<DemoLostReason, number>();
+  for (const d of getDemos()) {
+    if (d.status === "lost" && d.outcomeReason) counts.set(d.outcomeReason, (counts.get(d.outcomeReason) ?? 0) + 1);
+  }
+  return [...counts.entries()]
+    .map(([reason, count]) => ({ reason, count }))
+    .sort((a, b) => b.count - a.count);
 }
 
 export function creditSummary() {

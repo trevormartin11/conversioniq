@@ -1,10 +1,11 @@
 import { Card, CardBody, PageHeader, SectionHeader } from "@/components/ui/card";
 import { Stat } from "@/components/ui/stat";
 import { PhaseBanner } from "@/components/ui/phase-banner";
-import { attribution, pipeline, residual } from "@/lib/data/queries";
+import { attribution, lostReasons, pipeline, residual } from "@/lib/data/queries";
 import { ensureData, getDemos, getLead } from "@/lib/data/store";
 import { DemoTracker, type DemoRow } from "@/components/pipeline/demo-tracker";
 import { AttributionView } from "@/components/pipeline/attribution-view";
+import { DEMO_LOST_REASON_LABELS } from "@/lib/data/types";
 import { num, pct, titleCase, usd } from "@/lib/format";
 
 export const dynamic = "force-dynamic";
@@ -35,6 +36,7 @@ export default async function PipelinePage() {
     source: attribution("source"),
     sendingDomain: attribution("sendingDomain"),
   };
+  const lost = lostReasons();
 
   return (
     <div className="space-y-6">
@@ -87,6 +89,24 @@ export default async function PipelinePage() {
       <section>
         <SectionHeader title="Attribution" subtitle="Which vertical / persona / source / sending domain converts to MRR — from the tags set at source" />
         <AttributionView data={attr} />
+        {lost.length > 0 && (
+          <Card className="mt-3">
+            <CardBody>
+              <p className="mb-2.5 text-xs font-medium uppercase tracking-wide text-slate-500">Why demos are lost — the training signal back from each demo</p>
+              <div className="space-y-1.5">
+                {lost.map((l) => (
+                  <div key={l.reason} className="flex items-center gap-2.5 text-sm">
+                    <span className="w-32 shrink-0 text-slate-300">{DEMO_LOST_REASON_LABELS[l.reason]}</span>
+                    <div className="h-2 flex-1 overflow-hidden rounded bg-white/5">
+                      <div className="h-full rounded bg-rose-500/60" style={{ width: `${Math.max(4, (l.count / lost[0].count) * 100)}%` }} />
+                    </div>
+                    <span className="w-6 text-right font-mono tabular-nums text-slate-400">{l.count}</span>
+                  </div>
+                ))}
+              </div>
+            </CardBody>
+          </Card>
+        )}
       </section>
 
       {/* Residual */}

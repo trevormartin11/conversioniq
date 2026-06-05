@@ -74,6 +74,10 @@ export type DemoStatus = (typeof DEMO_STATUSES)[number];
 // Why a demo didn't convert — structured so the learning loop can aggregate it per cell.
 export const DEMO_LOST_REASONS = ["not_icp", "no_budget", "no_show", "bad_timing", "competitor", "not_interested", "no_decision", "other"] as const;
 export type DemoLostReason = (typeof DEMO_LOST_REASONS)[number];
+export const DEMO_LOST_REASON_LABELS: Record<DemoLostReason, string> = {
+  not_icp: "Not ICP", no_budget: "No budget", no_show: "No-show", bad_timing: "Bad timing",
+  competitor: "Chose competitor", not_interested: "Not interested", no_decision: "No decision", other: "Other",
+};
 
 export const CREDIT_PROVIDERS = ["apollo_personal", "apollo_ciq", "lusha", "outscraper", "findymail", "millionverifier"] as const;
 export type CreditProvider = (typeof CREDIT_PROVIDERS)[number];

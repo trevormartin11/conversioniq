@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Tag } from "@/components/ui/badge";
 import { toast } from "@/components/ui/toast";
 import { recordDemoOutcomeAction, sendDemoReminderAction, updateDemoAction } from "@/app/(dashboard)/pipeline/actions";
-import { DEMO_LOST_REASONS, type DemoLostReason, type DemoStatus } from "@/lib/data/types";
+import { DEMO_LOST_REASONS, DEMO_LOST_REASON_LABELS as REASON_LABEL, type DemoLostReason, type DemoStatus } from "@/lib/data/types";
 
 export interface DemoRow {
   id: string;
@@ -22,11 +22,6 @@ export interface DemoRow {
 
 const TONE: Record<DemoStatus, "brand" | "ok" | "warn" | "bad" | "slate"> = {
   booked: "brand", showed: "ok", no_show: "warn", closed: "ok", lost: "bad",
-};
-
-const REASON_LABEL: Record<DemoLostReason, string> = {
-  not_icp: "Not ICP", no_budget: "No budget", no_show: "No-show", bad_timing: "Bad timing",
-  competitor: "Chose competitor", not_interested: "Not interested", no_decision: "No decision", other: "Other",
 };
 
 export function DemoTracker({ demos }: { demos: DemoRow[] }) {
