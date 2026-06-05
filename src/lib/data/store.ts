@@ -438,6 +438,12 @@ export async function markDemoReminded(id: string, actor = "system"): Promise<De
   return demo;
 }
 
+/** Reconcile a CIQ Zoho deal back to our demo (used by the outcome webhook). */
+export function getDemoByCivDealId(civDealId: string): Demo | undefined {
+  if (!civDealId) return undefined;
+  return db().demos.find((d) => d.civDealId === civDealId);
+}
+
 // --- deliverability ---------------------------------------------------------
 export async function pauseInbox(id: string, actor: string, reason: string) {
   const inbox = getInbox(id);
