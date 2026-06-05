@@ -45,7 +45,7 @@ export default async function PipelinePage() {
       <PageHeader title="Pipeline & Residual" subtitle="Funnel from contacted → closed, the demo tracker, and your 20%-split-3-ways residual." />
 
       <PhaseBanner phase={3}>
-        The weekly auto-report and two-way Zoho demo-state sync land here next.
+        Per-cell attribution, unit economics, lost-reason analysis, and sourcing recommendations are live below. The weekly digest ships to Telegram on Mondays. Two-way Zoho demo-state sync is the next step.
       </PhaseBanner>
 
       {/* Funnel */}

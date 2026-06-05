@@ -39,7 +39,7 @@ export default async function CopyPage({ searchParams }: { searchParams: Promise
       <PageHeader title="Copy Coach" subtitle={`AI reads your real results and suggests what to test next. ${integrations.anthropic ? "Powered by Claude." : "Rules-based until a Claude key is added."}`} />
 
       <PhaseBanner phase={2}>
-        Approving outgoing copy, launching A/B variants, and pushing winners back to Instantly are wired here next. Pick a campaign to analyze its sequence.
+        This page reads your real send results — learnings, what to test next, and data-driven suggestions. To change copy (tone, length, A/B, AI rewrites), open a campaign: inline + AI editing live on each campaign&apos;s page.
       </PhaseBanner>
 
       <section>
@@ -93,7 +93,14 @@ export default async function CopyPage({ searchParams }: { searchParams: Promise
       )}
 
       <section>
-        <SectionHeader title={selected?.name ?? "Sequence"} subtitle={`${list.length} variant${list.length === 1 ? "" : "s"} · ${steps} step${steps === 1 ? "" : "s"}`} />
+        <SectionHeader
+          title={selected?.name ?? "Sequence"}
+          subtitle={`${list.length} variant${list.length === 1 ? "" : "s"} · ${steps} step${steps === 1 ? "" : "s"}`}
+          action={selected ? <Link href={`/campaigns/${selected.id}`} className="text-xs font-medium text-brand-400 hover:text-brand-300">Edit copy on campaign →</Link> : undefined}
+        />
+        {list.length === 0 ? (
+          <p className="text-sm text-slate-500">No synced campaign copy yet — draft a sequence in the studio above, or open a campaign to edit its copy.</p>
+        ) : (
         <div className="grid gap-3 sm:grid-cols-2">
           {list.map((v) => {
             const inStep = list.filter((x) => x.step === v.step).length;
@@ -118,6 +125,7 @@ export default async function CopyPage({ searchParams }: { searchParams: Promise
             );
           })}
         </div>
+        )}
       </section>
 
       <section>

@@ -26,7 +26,7 @@ export default async function CampaignsPage() {
       <PageHeader title="Campaigns" subtitle="Parallel cells by vertical." action={<NewCampaignForm personas={personas} />} />
 
       <PhaseBanner phase={2}>
-        Launch, pause, clone, and stage campaigns are live (synced from Instantly). Inbox/persona assignment, schedule editing, and inline sequence editing are next.
+        Launch, pause, clone, and stage campaigns are live (synced from Instantly). Open a campaign for inline + AI copy editing, the AI Coach, and the capacity planner. Schedule editing and inbox auto-assignment are next.
       </PhaseBanner>
 
       <div className="space-y-3">
