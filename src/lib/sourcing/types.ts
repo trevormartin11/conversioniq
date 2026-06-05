@@ -36,6 +36,7 @@ export interface SourcedLead {
   title?: string;
   city?: string;
   state?: string;
+  phone?: string; // Maps records carry a phone even before email enrichment
   source: SourceProvider;
 }
 

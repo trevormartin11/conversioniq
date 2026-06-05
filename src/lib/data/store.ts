@@ -15,6 +15,7 @@ import type {
   Cost,
   CreditSpendRequest,
   Dataset,
+  Lead,
   Reply,
   ReplyStatus,
   SuppressionEntry,
@@ -311,6 +312,39 @@ export async function cloneCampaign(id: string, actor: string): Promise<Campaign
   }
   await pushAudit(actor, "campaign.cloned", "campaign", newId, { from: id, name: clone.name });
   return clone;
+}
+
+// --- leads (sourced -> persisted with attribution at source) ----------------
+export type NewLead = Omit<Lead, "id" | "createdAt">;
+
+/** Bulk-insert sourced leads. Attribution (campaign/vertical/persona/domain/source) is
+ *  baked into each record by the caller — it can't be reconstructed later. */
+export async function addLeads(inputs: NewLead[], actor = "system"): Promise<Lead[]> {
+  if (!inputs.length) return [];
+  const now = new Date().toISOString();
+  const created: Lead[] = inputs.map((i) => ({ ...i, id: `l_${Math.random().toString(36).slice(2, 9)}`, createdAt: now }));
+  for (const lead of created) db().leads.unshift(lead);
+  if (LIVE) {
+    const rows = created.map((l) => ({
+      id: l.id, email: l.email, domain: l.domain, first_name: l.firstName, last_name: l.lastName,
+      company: l.company, title: l.title, phone: l.phone, campaign_id: l.campaignId, vertical: l.vertical,
+      persona: l.persona, sending_domain: l.sendingDomain, list_version: l.listVersion, source: l.source,
+      attribution_owner: l.attributionOwner, status: l.status, zoho_lead_id: l.zohoLeadId, apollo_id: l.apolloId,
+      created_at: l.createdAt, last_contacted_at: l.lastContactedAt,
+    }));
+    const { error } = await supabaseAdmin().from("leads").upsert(rows, { onConflict: "id" });
+    if (error) throw new Error(`leads write failed: ${error.message}`);
+  }
+  await pushAudit(actor, "leads.loaded", "lead", created[0]?.campaignId ?? null, { count: created.length, source: created[0]?.source });
+  return created;
+}
+
+/** Stamp the canonical Zoho id onto a persisted lead (after Zoho create). */
+export async function setLeadZohoId(id: string, zohoLeadId: string) {
+  const lead = getLead(id);
+  if (!lead) return;
+  lead.zohoLeadId = zohoLeadId;
+  await liveUpsert("leads", { id, zoho_lead_id: zohoLeadId });
 }
 
 // --- deliverability ---------------------------------------------------------

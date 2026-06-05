@@ -258,3 +258,34 @@ export async function campaignHasLeads(id: string): Promise<boolean> {
   });
   return (d.items?.length ?? 0) > 0;
 }
+
+export interface NewInstantlyLead {
+  email: string;
+  first_name?: string;
+  last_name?: string;
+  company_name?: string;
+  phone?: string;
+}
+
+/**
+ * Load leads into a campaign. Instantly v2 creates one lead per POST /leads with the
+ * target `campaign` id; we go sequentially (tolerant of per-lead failures) and report
+ * how many landed. NB: for large batches this should move to a background job.
+ */
+export async function addLeadsToCampaign(campaignId: string, leads: NewInstantlyLead[]): Promise<{ added: number; failed: number }> {
+  let added = 0;
+  let failed = 0;
+  for (const lead of leads) {
+    try {
+      await httpJson("instantly", `${BASE}/leads`, {
+        method: "POST",
+        headers: headers(),
+        body: JSON.stringify({ campaign: campaignId, ...lead }),
+      });
+      added++;
+    } catch {
+      failed++;
+    }
+  }
+  return { added, failed };
+}

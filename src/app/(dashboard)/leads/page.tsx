@@ -3,7 +3,7 @@ import { Stat } from "@/components/ui/stat";
 import { Tag } from "@/components/ui/badge";
 import { SuppressionTools } from "@/components/leads/suppression-tools";
 import { SourcingPlanner } from "@/components/leads/sourcing-planner";
-import { ensureData, getLeads, getSuppression } from "@/lib/data/store";
+import { ensureData, getCampaigns, getLeads, getSuppression } from "@/lib/data/store";
 import { num, titleCase } from "@/lib/format";
 import type { SuppressionReason } from "@/lib/data/types";
 
@@ -15,6 +15,7 @@ export default async function LeadsPage({ searchParams }: { searchParams: Promis
   const query = (q ?? "").toLowerCase().trim();
   const leads = getLeads();
   const suppression = getSuppression();
+  const campaignOptions = getCampaigns().map((c) => ({ id: c.id, name: c.name, status: c.status, hasInstantly: !!c.instantlyCampaignId }));
 
   const byReason = {} as Record<SuppressionReason, number>;
   for (const s of suppression) byReason[s.reason] = (byReason[s.reason] ?? 0) + 1;
@@ -46,7 +47,7 @@ export default async function LeadsPage({ searchParams }: { searchParams: Promis
       {/* Lead sourcing — the smart router: vertical -> cheapest source with coverage -> verify -> dedupe */}
       <section>
         <SectionHeader title="Source new leads" subtitle="The router picks the cheapest source that covers your target (Maps for local, B2B database for enterprise), prices it, then verifies + dedupes before load." />
-        <SourcingPlanner />
+        <SourcingPlanner campaigns={campaignOptions} />
       </section>
 
       {/* Lead table */}

@@ -1,13 +1,15 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { Compass, MapPin, Database, Wallet, Search } from "lucide-react";
+import { Compass, MapPin, Database, Wallet, Search, Upload } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardBody } from "@/components/ui/card";
 import { Tag } from "@/components/ui/badge";
 import { toast } from "@/components/ui/toast";
-import { planSourcingAction, runSourcingAction } from "@/app/(dashboard)/leads/actions";
+import { loadLeadsIntoCampaignAction, planSourcingAction, runSourcingAction } from "@/app/(dashboard)/leads/actions";
 import type { SizeBand, SourcingPlan } from "@/lib/sourcing/types";
+
+export interface PlannerCampaign { id: string; name: string; status: string; hasInstantly: boolean }
 
 const BANDS: { v: "" | SizeBand; label: string }[] = [
   { v: "", label: "Auto-detect" },
@@ -16,7 +18,7 @@ const BANDS: { v: "" | SizeBand; label: string }[] = [
   { v: "enterprise", label: "Enterprise $100M+" },
 ];
 
-export function SourcingPlanner() {
+export function SourcingPlanner({ campaigns }: { campaigns: PlannerCampaign[] }) {
   const [vertical, setVertical] = useState("");
   const [geo, setGeo] = useState("");
   const [band, setBand] = useState<"" | SizeBand>("");
@@ -26,6 +28,9 @@ export function SourcingPlanner() {
   const [planning, startPlan] = useTransition();
   const [result, setResult] = useState<Awaited<ReturnType<typeof runSourcingAction>> | null>(null);
   const [running, startRun] = useTransition();
+  const [loadCampaignId, setLoadCampaignId] = useState("");
+  const [loadResult, setLoadResult] = useState<Awaited<ReturnType<typeof loadLeadsIntoCampaignAction>> | null>(null);
+  const [loading, startLoad] = useTransition();
 
   const input = () => ({ vertical, geo, sizeBand: band || undefined, count: Number(count) || 100, budgetCap: Number(budget) || 50 });
 
@@ -38,11 +43,22 @@ export function SourcingPlanner() {
     });
   }
   function doRun() {
+    setLoadResult(null);
     startRun(async () => {
       const r = await runSourcingAction(input());
       setResult(r);
       if (!r.ok) toast.error(r.error ?? "Could not run sourcing.");
       else toast.success(`Sourced ${r.stats?.verified ?? 0} verified leads.`);
+    });
+  }
+  function doLoad() {
+    if (!result?.ok || !result.leads?.length || !loadCampaignId) return;
+    const leads = result.leads;
+    startLoad(async () => {
+      const r = await loadLeadsIntoCampaignAction({ campaignId: loadCampaignId, leads });
+      setLoadResult(r);
+      if (!r.ok) toast.error(r.error ?? "Could not load leads.");
+      else toast.success(`Loaded ${r.persisted} lead${r.persisted === 1 ? "" : "s"}${r.instantlyAdded ? ` · ${r.instantlyAdded} into Instantly` : ""}.`);
     });
   }
 
@@ -143,6 +159,36 @@ export function SourcingPlanner() {
                 </div>
               ))}
             </div>
+          </div>
+        )}
+
+        {/* load into campaign — the spine: persist + attribute -> Zoho -> Instantly */}
+        {result?.ok && (result.leads?.length ?? 0) > 0 && (
+          <div className="space-y-2 rounded-xl border border-brand-500/20 bg-brand-500/[0.04] p-3">
+            <p className="text-xs font-medium text-slate-300">
+              Load {result.leads.length} deliverable lead{result.leads.length === 1 ? "" : "s"} → Zoho (canonical) + campaign
+            </p>
+            <div className="flex flex-wrap items-center gap-2">
+              <select
+                value={loadCampaignId}
+                onChange={(e) => setLoadCampaignId(e.target.value)}
+                className="h-9 min-w-[12rem] flex-1 rounded-lg border border-white/10 bg-ink-950 px-3 text-sm text-slate-200 focus:border-brand-500 focus:outline-none"
+              >
+                <option value="">Select a campaign…</option>
+                {campaigns.map((c) => (
+                  <option key={c.id} value={c.id}>{c.name}{c.hasInstantly ? "" : " · draft (Zoho only)"}</option>
+                ))}
+              </select>
+              <Button variant="primary" onClick={doLoad} disabled={loading || !loadCampaignId}>
+                <Upload className="h-4 w-4" /> {loading ? "Loading…" : "Load"}
+              </Button>
+            </div>
+            {loadResult?.ok && (
+              <p className="text-xs text-ok">
+                ✓ Persisted {loadResult.persisted} · Zoho {loadResult.zohoCreated} · Instantly {loadResult.instantlyAdded}
+                {loadResult.note ? ` — ${loadResult.note}` : ""}
+              </p>
+            )}
           </div>
         )}
       </CardBody>

@@ -1,9 +1,14 @@
 "use server";
 
-import { dedupeAgainstUniverse, ensureData, isSuppressed, pushAudit, searchUniverse } from "@/lib/data/store";
+import { revalidatePath } from "next/cache";
+import { addLeads, dedupeAgainstUniverse, ensureData, getCampaign, getDomains, getInboxes, getPersonas, isSuppressed, pushAudit, searchUniverse } from "@/lib/data/store";
+import type { NewLead } from "@/lib/data/store";
 import { getCurrentUser } from "@/lib/auth";
 import { buildPlan, runSourcing } from "@/lib/sourcing/engine";
-import type { SizeBand } from "@/lib/sourcing/types";
+import { addLeadsToCampaign } from "@/lib/integrations/instantly";
+import { createLead as zohoCreateLead } from "@/lib/integrations/zoho";
+import { integrations } from "@/lib/config";
+import type { SizeBand, SourcedLead } from "@/lib/sourcing/types";
 
 interface SourcingInput { vertical: string; geo?: string; sizeBand?: SizeBand; count: number; budgetCap: number }
 const toTarget = (i: SourcingInput) => ({ vertical: i.vertical.trim(), geo: i.geo?.trim() || undefined, sizeBand: i.sizeBand });
@@ -68,4 +73,96 @@ export async function dedupeListAction(text: string) {
     cleanCount: clean.length,
     rejected: rejected.slice(0, 50),
   };
+}
+
+/**
+ * The spine: persist sourced leads with attribution-at-source, create them in Zoho
+ * (canonical), then load them into the campaign's Instantly campaign. Suppression /
+ * dedupe is re-applied at load time (it may have changed since the run).
+ */
+export async function loadLeadsIntoCampaignAction(input: { campaignId: string; leads: SourcedLead[] }) {
+  await ensureData();
+  const user = await getCurrentUser();
+  const campaign = getCampaign(input.campaignId);
+  if (!campaign) return { ok: false as const, error: "Pick a campaign to load into." };
+  if (!input.leads?.length) return { ok: false as const, error: "No leads to load." };
+
+  // Defense-in-depth: re-apply the load-time suppression gate (keeps our typed leads).
+  const candidates = input.leads.filter((l) => l.email).map((l) => ({ ...l, email: l.email as string }));
+  const byEmail = new Map(candidates.map((c) => [c.email, c]));
+  const { clean: cleanRaw } = dedupeAgainstUniverse(candidates);
+  const clean = cleanRaw.map((c) => byEmail.get(c.email)).filter((c): c is (typeof candidates)[number] => !!c);
+  if (!clean.length) return { ok: false as const, error: "Every lead was already suppressed or a duplicate." };
+
+  // Attribution at source — resolved from the campaign.
+  const persona = getPersonas().find((p) => p.id === campaign.personaId)?.name ?? campaign.personaId;
+  const firstInbox = getInboxes().find((i) => campaign.inboxIds.includes(i.id));
+  const sendingDomain = (firstInbox && getDomains().find((d) => d.id === firstInbox.domainId)?.domain) || "";
+
+  // 1) Create each in Zoho (canonical) — best-effort; capture the canonical id.
+  let zohoCreated = 0;
+  const prepared: NewLead[] = [];
+  for (const l of clean) {
+    let zohoLeadId: string | null = null;
+    if (integrations.zoho) {
+      try {
+        const res = (await zohoCreateLead({
+          Email: l.email,
+          First_Name: l.firstName ?? "",
+          Last_Name: l.lastName || l.company, // Zoho requires Last_Name — fall back to company
+          Company: l.company,
+          Phone: l.phone ?? null,
+          Lead_Source: `ConversionIQ / ${l.source}`,
+          Lead_Status: "New",
+        })) as { data?: { details?: { id?: string } }[] };
+        zohoLeadId = res?.data?.[0]?.details?.id ?? null;
+        if (zohoLeadId) zohoCreated++;
+      } catch { /* still persist in-hub; Zoho can be reconciled later */ }
+    }
+    prepared.push({
+      email: l.email,
+      domain: l.domain || l.email.split("@")[1] || "",
+      firstName: l.firstName ?? "",
+      lastName: l.lastName ?? "",
+      company: l.company,
+      title: l.title ?? "",
+      phone: l.phone ?? null,
+      campaignId: campaign.id,
+      vertical: campaign.vertical,
+      persona,
+      sendingDomain,
+      listVersion: campaign.listVersion,
+      source: l.source,
+      attributionOwner: user.name,
+      status: "new",
+      zohoLeadId,
+      apolloId: null,
+      lastContactedAt: null,
+    });
+  }
+
+  // 2) Persist in the hub (the universe + attribution backbone).
+  const persisted = await addLeads(prepared, user.name);
+
+  // 3) Load into Instantly — only if the campaign is live there.
+  let instantlyAdded = 0;
+  let instantlyFailed = 0;
+  let note = "";
+  if (campaign.instantlyCampaignId && integrations.instantly) {
+    const res = await addLeadsToCampaign(
+      campaign.instantlyCampaignId,
+      clean.map((l) => ({ email: l.email, first_name: l.firstName, last_name: l.lastName, company_name: l.company, phone: l.phone })),
+    );
+    instantlyAdded = res.added;
+    instantlyFailed = res.failed;
+  } else {
+    note = "Persisted + created in Zoho. Push this campaign to Instantly to load these into sending.";
+  }
+
+  await pushAudit(user.name, "leads.loaded_into_campaign", "campaign", campaign.id, {
+    persisted: persisted.length, zohoCreated, instantlyAdded, instantlyFailed,
+  });
+  revalidatePath("/leads");
+  revalidatePath("/campaigns");
+  return { ok: true as const, persisted: persisted.length, zohoCreated, instantlyAdded, instantlyFailed, note };
 }
