@@ -2,8 +2,8 @@
 
 import { revalidatePath } from "next/cache";
 import { getCurrentUser } from "@/lib/auth";
-import { addDemo, ensureData, getLead, updateDemo } from "@/lib/data/store";
-import type { DemoStatus } from "@/lib/data/types";
+import { addDemo, ensureData, getLead, recordDemoOutcome, updateDemo } from "@/lib/data/store";
+import type { DemoLostReason, DemoStatus } from "@/lib/data/types";
 
 function revalidate() {
   revalidatePath("/pipeline");
@@ -30,6 +30,15 @@ export async function updateDemoAction(id: string, status: DemoStatus, mrr?: num
     { status, mrr: status === "closed" ? Math.max(0, Math.round(mrr ?? 0)) : undefined },
     user.name,
   );
+  if (!demo) return { ok: false as const, error: "Demo not found." };
+  revalidate();
+  return { ok: true as const };
+}
+
+export async function recordDemoOutcomeAction(id: string, result: "won" | "lost", reason?: DemoLostReason, mrr?: number, note?: string) {
+  await ensureData();
+  const user = await getCurrentUser();
+  const demo = await recordDemoOutcome(id, { result, reason: reason ?? null, mrr, note: note ?? null }, user.name);
   if (!demo) return { ok: false as const, error: "Demo not found." };
   revalidate();
   return { ok: true as const };

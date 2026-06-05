@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { addDemo, addLeads, ensureData, getLead, getLeads, updateDemo } from "@/lib/data/store";
+import { addDemo, addLeads, ensureData, getLead, getLeads, recordDemoOutcome, updateDemo } from "@/lib/data/store";
 import { attribution } from "@/lib/data/queries";
 import type { NewLead } from "@/lib/data/store";
 
@@ -101,5 +101,33 @@ describe("attribution — per-cell conversion from at-source tags", () => {
     expect(row!.leads).toBe(2);
     expect(row!.closed).toBe(1);
     expect(row!.mrr).toBe(2000);
+  });
+});
+
+describe("demo outcome — the training signal back from whoever ran the demo", () => {
+  it("books (auto-hands off to CIQ) then records won + lost outcomes", async () => {
+    await ensureData();
+    const [a, b] = await addLeads(
+      [
+        baseLead({ email: "won@outcome-test.com", domain: "outcome-test.com", status: "demo_showed" }),
+        baseLead({ email: "lost@outcome-test.com", domain: "outcome-test.com", status: "demo_showed" }),
+      ],
+      "Trevor",
+    );
+    const da = await addDemo({ leadId: a.id, scheduledAt: new Date().toISOString(), owner: "Jon Epstein" }, "Trevor");
+    const dbDemo = await addDemo({ leadId: b.id, scheduledAt: new Date().toISOString(), owner: "Jon Epstein" }, "Trevor");
+    // Booking hands off to CIQ's pipeline — synthetic id in mock mode.
+    expect(da.civDealId).toBeTruthy();
+
+    const won = await recordDemoOutcome(da.id, { result: "won", mrr: 800 }, "Jon Epstein");
+    expect(won?.status).toBe("closed");
+    expect(won?.mrr).toBe(800);
+    expect(getLead(a.id)?.status).toBe("closed");
+
+    const lost = await recordDemoOutcome(dbDemo.id, { result: "lost", reason: "no_budget", note: "Revisit Q3" }, "Jon Epstein");
+    expect(lost?.status).toBe("lost");
+    expect(lost?.outcomeReason).toBe("no_budget");
+    expect(lost?.outcomeNote).toBe("Revisit Q3");
+    expect(getLead(b.id)?.status).toBe("lost");
   });
 });

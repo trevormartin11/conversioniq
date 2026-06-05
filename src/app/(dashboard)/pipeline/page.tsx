@@ -24,6 +24,8 @@ export default async function PipelinePage() {
       status: d.status,
       owner: d.owner,
       mrr: d.mrr,
+      outcomeReason: d.outcomeReason,
+      civDealId: d.civDealId,
     };
   });
   const attr = {

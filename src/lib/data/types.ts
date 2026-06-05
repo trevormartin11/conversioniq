@@ -71,6 +71,10 @@ export type CampaignStatus = (typeof CAMPAIGN_STATUSES)[number];
 export const DEMO_STATUSES = ["booked", "showed", "no_show", "closed", "lost"] as const;
 export type DemoStatus = (typeof DEMO_STATUSES)[number];
 
+// Why a demo didn't convert — structured so the learning loop can aggregate it per cell.
+export const DEMO_LOST_REASONS = ["not_icp", "no_budget", "no_show", "bad_timing", "competitor", "not_interested", "no_decision", "other"] as const;
+export type DemoLostReason = (typeof DEMO_LOST_REASONS)[number];
+
 export const CREDIT_PROVIDERS = ["apollo_personal", "apollo_ciq", "lusha", "outscraper", "findymail", "millionverifier"] as const;
 export type CreditProvider = (typeof CREDIT_PROVIDERS)[number];
 
@@ -257,7 +261,12 @@ export interface Demo {
   scheduledAt: string;
   status: DemoStatus;
   owner: string;
-  mrr: number | null; // monthly recurring revenue once closed
+  mrr: number | null; // monthly recurring revenue once won
+  outcomeReason: DemoLostReason | null; // why a demo was lost — the training signal
+  outcomeNote: string | null; // free-text context from whoever ran the demo (Jon)
+  outcomeAt: string | null;
+  civDealId: string | null; // the Deal id in ConversionIQ's Zoho pipeline (handoff)
+  reminderSentAt: string | null; // no-show defense — last reminder timestamp
 }
 
 export interface SequenceVariant {

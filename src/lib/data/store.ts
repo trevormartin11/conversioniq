@@ -16,6 +16,7 @@ import type {
   CreditSpendRequest,
   Dataset,
   Demo,
+  DemoLostReason,
   DemoStatus,
   Lead,
   LeadStatus,
@@ -23,6 +24,7 @@ import type {
   ReplyStatus,
   SuppressionEntry,
 } from "./types";
+import { pushDemoDeal } from "@/lib/integrations/zoho-civ";
 import { buildSeed } from "./seed";
 import { loadAutomationLevel, loadDatasetLive } from "./live";
 import { supabaseAdmin } from "./supabase";
@@ -360,17 +362,24 @@ export async function setLeadStatus(id: string, status: LeadStatus, actor = "sys
   return lead;
 }
 
-// --- demos / pipeline (demo -> close -> MRR) --------------------------------
+// --- demos / pipeline (book -> CIQ deal -> outcome -> MRR) ------------------
 export async function addDemo(input: { leadId: string; scheduledAt: string; owner: string; mrr?: number | null }, actor = "system"): Promise<Demo> {
   const demo: Demo = {
     id: `d_${Math.random().toString(36).slice(2, 9)}`,
     leadId: input.leadId, scheduledAt: input.scheduledAt, status: "booked",
     owner: input.owner, mrr: input.mrr ?? null,
+    outcomeReason: null, outcomeNote: null, outcomeAt: null, civDealId: null, reminderSentAt: null,
   };
   db().demos.unshift(demo);
-  await liveUpsert("demos", { id: demo.id, lead_id: demo.leadId, scheduled_at: demo.scheduledAt, status: demo.status, owner: demo.owner, mrr: demo.mrr });
+  // Hand the booked demo straight into ConversionIQ's pipeline (fail-safe).
+  const lead = getLead(input.leadId);
+  if (lead) {
+    const { dealId } = await pushDemoDeal(lead, demo);
+    demo.civDealId = dealId;
+  }
+  await liveUpsert("demos", { id: demo.id, lead_id: demo.leadId, scheduled_at: demo.scheduledAt, status: demo.status, owner: demo.owner, mrr: demo.mrr, civ_deal_id: demo.civDealId });
   await setLeadStatus(demo.leadId, "demo_booked", actor);
-  await pushAudit(actor, "demo.booked", "demo", demo.id, { leadId: demo.leadId });
+  await pushAudit(actor, "demo.booked", "demo", demo.id, { leadId: demo.leadId, civDealId: demo.civDealId });
   return demo;
 }
 
@@ -388,6 +397,44 @@ export async function updateDemo(id: string, patch: { status?: DemoStatus; mrr?:
   const leadStatus = patch.status ? DEMO_TO_LEAD[patch.status] : undefined;
   if (leadStatus) await setLeadStatus(demo.leadId, leadStatus, actor);
   await pushAudit(actor, `demo.${demo.status}`, "demo", id, { mrr: demo.mrr });
+  return demo;
+}
+
+/**
+ * The post-demo outcome from whoever ran it (Jon) — the training signal for the loop.
+ * won -> closed + MRR (feeds residual); lost -> lost + a structured reason. Both keep
+ * the lead lifecycle in lockstep. Callable from the in-hub control or the CIQ webhook.
+ */
+export async function recordDemoOutcome(
+  id: string,
+  input: { result: "won" | "lost"; reason?: DemoLostReason | null; note?: string | null; mrr?: number | null },
+  actor = "system",
+): Promise<Demo | null> {
+  const demo = db().demos.find((d) => d.id === id);
+  if (!demo) return null;
+  demo.outcomeAt = new Date().toISOString();
+  if (input.note != null) demo.outcomeNote = input.note;
+  if (input.result === "won") {
+    demo.status = "closed";
+    if (input.mrr != null) demo.mrr = Math.max(0, Math.round(input.mrr));
+    demo.outcomeReason = null;
+  } else {
+    demo.status = "lost";
+    demo.outcomeReason = input.reason ?? "other";
+  }
+  await liveUpsert("demos", { id, status: demo.status, mrr: demo.mrr, outcome_reason: demo.outcomeReason, outcome_note: demo.outcomeNote, outcome_at: demo.outcomeAt });
+  await setLeadStatus(demo.leadId, demo.status === "closed" ? "closed" : "lost", actor);
+  await pushAudit(actor, `demo.${input.result}`, "demo", id, { reason: demo.outcomeReason, mrr: demo.mrr });
+  return demo;
+}
+
+/** No-show defense: stamp when a reminder went out (used by the reminders job). */
+export async function markDemoReminded(id: string, actor = "system"): Promise<Demo | null> {
+  const demo = db().demos.find((d) => d.id === id);
+  if (!demo) return null;
+  demo.reminderSentAt = new Date().toISOString();
+  await liveUpsert("demos", { id, reminder_sent_at: demo.reminderSentAt });
+  await pushAudit(actor, "demo.reminded", "demo", id, {});
   return demo;
 }
 

@@ -327,12 +327,14 @@ const jobs: JobRun[] = [
 ];
 
 // --- demos ------------------------------------------------------------------
+const demoBase = { outcomeReason: null, outcomeNote: null, outcomeAt: null, civDealId: null, reminderSentAt: null };
 const demos: Demo[] = [
-  { id: "dm_1", leadId: leads[3].id, scheduledAt: daysAgo(-2), status: "booked", owner: "Trevor Martin", mrr: null },
-  { id: "dm_2", leadId: leads[8].id, scheduledAt: daysAgo(1), status: "showed", owner: "Trevor Martin", mrr: null },
-  { id: "dm_3", leadId: leads[12].id, scheduledAt: daysAgo(4), status: "no_show", owner: "Trevor Martin", mrr: null },
-  { id: "dm_4", leadId: leads[15].id, scheduledAt: daysAgo(9), status: "closed", owner: "Trevor Martin", mrr: 1200 },
-  { id: "dm_5", leadId: leads[22].id, scheduledAt: daysAgo(14), status: "closed", owner: "Trevor Martin", mrr: 900 },
+  { id: "dm_1", leadId: leads[3].id, scheduledAt: daysAgo(-2), status: "booked", owner: "Jon Epstein", mrr: null, ...demoBase, civDealId: "civseed_1" },
+  { id: "dm_2", leadId: leads[8].id, scheduledAt: daysAgo(1), status: "showed", owner: "Jon Epstein", mrr: null, ...demoBase, civDealId: "civseed_2" },
+  { id: "dm_3", leadId: leads[12].id, scheduledAt: daysAgo(4), status: "no_show", owner: "Jon Epstein", mrr: null, ...demoBase, civDealId: "civseed_3", reminderSentAt: daysAgo(5) },
+  { id: "dm_4", leadId: leads[15].id, scheduledAt: daysAgo(9), status: "closed", owner: "Jon Epstein", mrr: 1200, ...demoBase, civDealId: "civseed_4", outcomeAt: daysAgo(7) },
+  { id: "dm_5", leadId: leads[22].id, scheduledAt: daysAgo(14), status: "closed", owner: "Jon Epstein", mrr: 900, ...demoBase, civDealId: "civseed_5", outcomeAt: daysAgo(12) },
+  { id: "dm_6", leadId: leads[18].id, scheduledAt: daysAgo(6), status: "lost", owner: "Jon Epstein", mrr: null, ...demoBase, civDealId: "civseed_6", outcomeReason: "no_budget", outcomeAt: daysAgo(5), outcomeNote: "Liked it, revisiting next quarter." },
 ];
 
 // --- sequence variants (Med Spa step 1 A/B) ---------------------------------

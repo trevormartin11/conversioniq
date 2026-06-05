@@ -23,6 +23,12 @@ export const integrations = {
     process.env.ZOHO_CLIENT_SECRET,
     process.env.ZOHO_REFRESH_TOKEN,
   ),
+  // ConversionIQ's Zoho org (the partner side) — its own OAuth app so the two stay separate.
+  zohoCiq: has(
+    process.env.ZOHO_CIQ_CLIENT_ID,
+    process.env.ZOHO_CIQ_CLIENT_SECRET,
+    process.env.ZOHO_CIQ_REFRESH_TOKEN,
+  ),
   apolloPersonal: has(process.env.APOLLO_PERSONAL_API_KEY),
   apolloCiq: has(process.env.APOLLO_CIQ_API_KEY),
   // Lead-sourcing providers — each lights up its lane when its key arrives.
