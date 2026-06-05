@@ -39,6 +39,27 @@ export async function listRecentMessages(query = "newer_than:2d", userId = "me")
   return data.messages ?? [];
 }
 
+/** Send a plain-text email from the connected Gmail account (e.g. demo reminders). */
+export async function sendEmail(input: { to: string; subject: string; bodyText: string; fromName?: string; fromEmail?: string }): Promise<{ id: string }> {
+  const token = await accessToken();
+  const from = input.fromEmail ? (input.fromName ? `${input.fromName} <${input.fromEmail}>` : input.fromEmail) : null;
+  const headers = [
+    `To: ${input.to}`,
+    from ? `From: ${from}` : null,
+    `Subject: ${input.subject}`,
+    "MIME-Version: 1.0",
+    'Content-Type: text/plain; charset="UTF-8"',
+  ].filter(Boolean).join("\r\n");
+  const mime = `${headers}\r\n\r\n${input.bodyText}`;
+  const raw = Buffer.from(mime, "utf-8").toString("base64").replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+  const data = await httpJson<{ id: string }>(
+    "gmail",
+    "https://gmail.googleapis.com/gmail/v1/users/me/messages/send",
+    { method: "POST", headers: { Authorization: `Bearer ${token}`, "content-type": "application/json" }, body: JSON.stringify({ raw }) },
+  );
+  return { id: data.id };
+}
+
 export function assertGmail() {
   if (!integrations.gmail) throw new NotConfiguredError("gmail");
 }

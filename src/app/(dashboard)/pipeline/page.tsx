@@ -26,6 +26,7 @@ export default async function PipelinePage() {
       mrr: d.mrr,
       outcomeReason: d.outcomeReason,
       civDealId: d.civDealId,
+      reminderSentAt: d.reminderSentAt,
     };
   });
   const attr = {

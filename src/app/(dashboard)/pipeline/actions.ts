@@ -2,7 +2,10 @@
 
 import { revalidatePath } from "next/cache";
 import { getCurrentUser } from "@/lib/auth";
-import { addDemo, ensureData, getLead, recordDemoOutcome, updateDemo } from "@/lib/data/store";
+import { integrations } from "@/lib/config";
+import { addDemo, ensureData, getDemos, getLead, markDemoReminded, recordDemoOutcome, updateDemo } from "@/lib/data/store";
+import { sendEmail } from "@/lib/integrations/gmail";
+import { buildDemoReminder } from "@/lib/reminders";
 import type { DemoLostReason, DemoStatus } from "@/lib/data/types";
 
 function revalidate() {
@@ -42,4 +45,28 @@ export async function recordDemoOutcomeAction(id: string, result: "won" | "lost"
   if (!demo) return { ok: false as const, error: "Demo not found." };
   revalidate();
   return { ok: true as const };
+}
+
+export async function sendDemoReminderAction(id: string) {
+  await ensureData();
+  const user = await getCurrentUser();
+  const demo = getDemos().find((d) => d.id === id);
+  if (!demo) return { ok: false as const, error: "Demo not found." };
+  const lead = getLead(demo.leadId);
+  if (!lead) return { ok: false as const, error: "Lead not found." };
+
+  const { subject, body } = buildDemoReminder({
+    firstName: lead.firstName, company: lead.company, scheduledAt: demo.scheduledAt,
+    demoOwner: demo.owner, senderName: user.name,
+  });
+  if (integrations.gmail) {
+    try {
+      await sendEmail({ to: lead.email, subject, bodyText: body });
+    } catch (e) {
+      return { ok: false as const, error: `Send failed: ${(e as Error).message}` };
+    }
+  }
+  await markDemoReminded(id, user.name);
+  revalidate();
+  return { ok: true as const, sentTo: lead.email, live: integrations.gmail };
 }

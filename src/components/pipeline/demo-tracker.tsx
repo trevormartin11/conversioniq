@@ -4,7 +4,7 @@ import { useState, useTransition } from "react";
 import { Button } from "@/components/ui/button";
 import { Tag } from "@/components/ui/badge";
 import { toast } from "@/components/ui/toast";
-import { recordDemoOutcomeAction, updateDemoAction } from "@/app/(dashboard)/pipeline/actions";
+import { recordDemoOutcomeAction, sendDemoReminderAction, updateDemoAction } from "@/app/(dashboard)/pipeline/actions";
 import { DEMO_LOST_REASONS, type DemoLostReason, type DemoStatus } from "@/lib/data/types";
 
 export interface DemoRow {
@@ -17,6 +17,7 @@ export interface DemoRow {
   mrr: number | null;
   outcomeReason: DemoLostReason | null;
   civDealId: string | null;
+  reminderSentAt: string | null;
 }
 
 const TONE: Record<DemoStatus, "brand" | "ok" | "warn" | "bad" | "slate"> = {
@@ -40,6 +41,8 @@ function Row({ demo }: { demo: DemoRow }) {
   const [mrr, setMrr] = useState("");
   const [reason, setReason] = useState<DemoLostReason>("not_interested");
   const terminal = demo.status === "closed" || demo.status === "lost";
+  const hoursUntil = (new Date(demo.scheduledAt).getTime() - Date.now()) / 3.6e6;
+  const dueSoon = demo.status === "booked" && !demo.reminderSentAt && hoursUntil > -2 && hoursUntil < 36;
 
   function run(fn: () => Promise<{ ok: boolean; error?: string }>, msg: string) {
     start(async () => {
@@ -64,10 +67,14 @@ function Row({ demo }: { demo: DemoRow }) {
       </div>
       <div className="flex shrink-0 flex-wrap items-center gap-1.5">
         <Tag tone={TONE[demo.status]}>{demo.status.replace("_", " ")}</Tag>
+        {dueSoon && <span className="text-[11px] font-medium text-warn">soon</span>}
         {!terminal && (
           <>
             {demo.status === "booked" && (
               <>
+                {demo.reminderSentAt
+                  ? <span className="text-[11px] text-slate-500">reminded ✓</span>
+                  : <Button size="sm" variant={dueSoon ? "primary" : "secondary"} disabled={busy} onClick={() => run(() => sendDemoReminderAction(demo.id), "Reminder sent")}>Remind</Button>}
                 <Button size="sm" variant="ghost" disabled={busy} onClick={() => run(() => updateDemoAction(demo.id, "showed"), "Marked showed")}>Showed</Button>
                 <Button size="sm" variant="ghost" disabled={busy} onClick={() => run(() => updateDemoAction(demo.id, "no_show"), "Marked no-show")}>No-show</Button>
               </>
