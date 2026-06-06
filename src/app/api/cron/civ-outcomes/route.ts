@@ -8,6 +8,7 @@ import { ensureData } from "@/lib/data/store";
  * into the lead lifecycle + residual. Secret-gated like the other cron/ops routes.
  */
 export const dynamic = "force-dynamic";
+export const maxDuration = 60;
 
 function authorized(req: NextRequest) {
   const auth = req.headers.get("authorization");

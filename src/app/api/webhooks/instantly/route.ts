@@ -6,6 +6,8 @@ import { addToBlocklist } from "@/lib/integrations/instantly";
 import { sendTelegram } from "@/lib/integrations/telegram";
 import { syncReplies } from "@/lib/sync/replies";
 
+export const maxDuration = 60;
+
 /**
  * Inbound Instantly webhook (preferred over polling for replies/bounces).
  * Configure this URL in Instantly and set INSTANTLY_WEBHOOK_SECRET to the shared

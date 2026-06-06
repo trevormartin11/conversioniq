@@ -3,6 +3,7 @@ import { syncCivCustomers } from "@/lib/jobs/civ-suppression";
 import { integrations } from "@/lib/config";
 
 export const dynamic = "force-dynamic";
+export const maxDuration = 60;
 
 function authorized(req: NextRequest) {
   const auth = req.headers.get("authorization");
