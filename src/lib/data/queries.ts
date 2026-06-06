@@ -3,7 +3,7 @@
  * store — this is where the cross-tool JOIN and analytics live.
  */
 
-import { appConfig } from "@/lib/config";
+import { appConfig, DATA_MODE } from "@/lib/config";
 import { rate } from "@/lib/format";
 import {
   getCampaigns,
@@ -108,6 +108,7 @@ export function commandSummary(): CommandSummary {
   if (paused.length) alerts.push({ id: "al_paused", level: "red", title: `${paused.length} inbox${paused.length > 1 ? "es" : ""} paused`, detail: "Paused to protect domain reputation. Review in Deliverability.", createdAt: now, source: "deliverability" });
   if (pendingCredits.length) alerts.push({ id: "al_credits", level: "yellow", title: "CIQ credit spend awaiting approval", detail: `${pendingCredits.length} request(s) need a decision.`, createdAt: now, source: "credits" });
   if (hotPending.length) alerts.push({ id: "al_hot", level: "green", title: `${hotPending.length} hot repl${hotPending.length > 1 ? "ies" : "y"} waiting`, detail: "Interested / question replies need a look.", createdAt: now, source: "replies" });
+  if (DATA_MODE === "mock") alerts.push({ id: "al_preview", level: "yellow", title: "Preview mode — running on seed data", detail: "Connect Supabase to go live; verify each key in Settings → Test live connections.", createdAt: now, source: "system" });
 
   return {
     today: {
