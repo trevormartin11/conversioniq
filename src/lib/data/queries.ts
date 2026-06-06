@@ -429,3 +429,28 @@ export function costSummary() {
     breakeven: r.grossMonthly >= monthly,
   };
 }
+
+/**
+ * The north star: booked-demo pace vs the goal (2/day), plus the monthly budget
+ * burn-down. This is the number the whole operation is run to blow past.
+ */
+export function northStar() {
+  const metrics = getMetrics();
+  const t = today();
+  const weekCutoff = new Date(Date.now() - 6 * 86_400_000).toISOString().slice(0, 10);
+  const todayDemos = metrics.filter((m) => m.date === t).reduce((s, m) => s + m.demos, 0);
+  const weekDemos = metrics.filter((m) => m.date >= weekCutoff).reduce((s, m) => s + m.demos, 0);
+  const dailyGoal = appConfig.goals.demosPerDay;
+  const costs = costSummary();
+  return {
+    todayDemos,
+    dailyGoal,
+    weekDemos,
+    weeklyGoal: dailyGoal * 7,
+    monthlySpend: costs.monthly,
+    budget: appConfig.goals.monthlyBudgetUsd,
+    grossResidualMonthly: costs.grossResidualMonthly,
+    netPerPartnerMonthly: costs.netPerPartnerMonthly,
+    breakeven: costs.breakeven,
+  };
+}
