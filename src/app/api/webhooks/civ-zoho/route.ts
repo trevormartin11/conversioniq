@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { ensureData, getDemoByCivDealId, recordDemoOutcome } from "@/lib/data/store";
-import { mapLostReason } from "@/lib/outcome";
+import { classifyStage, mapLostReason } from "@/lib/outcome";
 
 /**
  * Inbound webhook from ConversionIQ's Zoho org. A workflow there fires this when a
@@ -26,12 +26,9 @@ export async function POST(req: NextRequest) {
   const stage = String(payload.stage ?? payload.Stage ?? "").trim();
   if (!dealId) return NextResponse.json({ ok: true, ignored: "no deal id" });
 
-  const lower = stage.toLowerCase();
-  const wonStage = (process.env.ZOHO_CIQ_WON_STAGE || "Closed Won").toLowerCase();
-  const lostStage = (process.env.ZOHO_CIQ_LOST_STAGE || "Closed Lost").toLowerCase();
-  const isWon = lower === wonStage || /\bwon\b|signed/.test(lower);
-  const isLost = lower === lostStage || /\blost\b|disqualif|dead/.test(lower);
-  if (!isWon && !isLost) return NextResponse.json({ ok: true, ignored: stage || "non-terminal stage" });
+  const cls = classifyStage(stage);
+  if (!cls) return NextResponse.json({ ok: true, ignored: stage || "non-terminal stage" });
+  const isWon = cls === "won";
 
   await ensureData();
   const demo = getDemoByCivDealId(dealId);
