@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { ensureData, getDemoByCivDealId, recordDemoOutcome } from "@/lib/data/store";
+import { ensureData, getDemoByCivDealId, getOpenDemoByEmail, recordDemoOutcome } from "@/lib/data/store";
 import { classifyStage, mapLostReason } from "@/lib/outcome";
 
 /**
@@ -23,16 +23,19 @@ export async function POST(req: NextRequest) {
   }
 
   const dealId = String(payload.deal_id ?? payload.id ?? payload.Deal_Id ?? payload.dealId ?? "").trim();
+  const email = String(payload.email ?? payload.Email ?? payload.contact_email ?? payload.Contact_Email ?? payload.lead_email ?? "").trim();
   const stage = String(payload.stage ?? payload.Stage ?? "").trim();
-  if (!dealId) return NextResponse.json({ ok: true, ignored: "no deal id" });
+  if (!dealId && !email) return NextResponse.json({ ok: true, ignored: "no deal id or email" });
 
   const cls = classifyStage(stage);
   if (!cls) return NextResponse.json({ ok: true, ignored: stage || "non-terminal stage" });
   const isWon = cls === "won";
 
   await ensureData();
-  const demo = getDemoByCivDealId(dealId);
-  if (!demo) return NextResponse.json({ ok: true, ignored: "no matching demo", dealId });
+  // Primary match is the deal id we stored on handoff; fall back to the contact email so a
+  // workflow that only sends the email still closes the loop.
+  const demo = (dealId ? getDemoByCivDealId(dealId) : undefined) ?? (email ? getOpenDemoByEmail(email) : undefined);
+  if (!demo) return NextResponse.json({ ok: true, ignored: "no matching demo", dealId, email });
 
   if (isWon) {
     const amount = payload.amount ?? payload.Amount ?? payload.mrr ?? payload.MRR;
