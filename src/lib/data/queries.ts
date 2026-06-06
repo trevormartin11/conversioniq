@@ -258,6 +258,20 @@ export function pipeline() {
   };
 }
 
+/**
+ * Health of the CIQ feedback loop: of the demos handed to CIQ (have a Deal id), how many
+ * have a resolved outcome (won/lost) vs are still awaiting one — the "is the learning loop
+ * actually returning signal?" view. `awaiting` matches the reconcile job's open-demo filter.
+ */
+export function outcomeLoop() {
+  const handed = getDemos().filter((d) => d.civDealId);
+  const awaiting = handed.filter((d) => d.status !== "closed" && d.status !== "lost");
+  const won = handed.filter((d) => d.status === "closed").length;
+  const lost = handed.filter((d) => d.status === "lost").length;
+  const resolved = won + lost;
+  return { handed: handed.length, awaiting: awaiting.length, won, lost, resolved, winRate: resolved > 0 ? won / resolved : 0 };
+}
+
 export function residual() {
   const closed = getDemos().filter((d) => d.status === "closed" && d.mrr);
   const totalMrr = closed.reduce((s, d) => s + (d.mrr ?? 0), 0);
