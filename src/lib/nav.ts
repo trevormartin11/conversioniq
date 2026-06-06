@@ -6,6 +6,7 @@ import {
   Megaphone,
   PenLine,
   Radar,
+  Rocket,
   Settings,
   ShieldCheck,
   Target,
@@ -25,11 +26,12 @@ export interface NavItem {
 
 /**
  * Ordered to mirror the operating workflow so the nav reads like the process:
- * Command (measure) → Strategy → Source → Leads → Copy → Send → Deliverability
- * → Replies → Pipeline → Costs → Credits → Automation → Settings.
+ * Command (measure) → Launch (guided) → Strategy → Source → Leads → Copy → Send
+ * → Deliverability → Replies → Pipeline → Costs → Credits → Automation → Settings.
  */
 export const NAV: NavItem[] = [
   { href: "/", label: "Command Center", short: "Command", icon: LayoutDashboard, phase: 1 },
+  { href: "/launch", label: "Launch Campaign", short: "Launch", icon: Rocket, phase: 1 },
   { href: "/strategy", label: "Strategy", short: "Strategy", icon: Target, phase: 1 },
   { href: "/source", label: "Source", short: "Source", icon: Radar, phase: 1 },
   { href: "/leads", label: "Leads & Suppression", short: "Leads", icon: Users, phase: 1 },

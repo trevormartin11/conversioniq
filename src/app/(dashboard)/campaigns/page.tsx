@@ -26,7 +26,7 @@ export default async function CampaignsPage() {
         subtitle="Parallel cells by vertical."
         action={
           <Link
-            href="/copy"
+            href="/launch"
             className="inline-flex h-10 items-center justify-center gap-1.5 rounded-lg bg-brand-gradient px-4 text-sm font-medium text-white shadow-[0_1px_0_rgba(255,255,255,0.18)_inset,0_8px_20px_-8px_rgba(124,108,255,0.65)] transition-all hover:brightness-110"
           >
             <Plus className="h-4 w-4" /> New campaign
