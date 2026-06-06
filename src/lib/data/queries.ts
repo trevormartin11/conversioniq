@@ -6,6 +6,7 @@
 import { appConfig, DATA_MODE } from "@/lib/config";
 import { rate } from "@/lib/format";
 import {
+  getAssumptions,
   getCampaigns,
   getCosts,
   getCreditMeters,
@@ -280,7 +281,7 @@ export function outcomeLoop() {
  */
 export function projection() {
   const { demosPerDay } = appConfig.goals;
-  const { assumedCloseRate, assumedMonthlyMrr } = appConfig.projection;
+  const { closeRate: assumedCloseRate, monthlyMrr: assumedMonthlyMrr } = getAssumptions();
   const { grossRate, personalRate } = appConfig.residual;
   const monthlyDemos = demosPerDay * 30;
   const monthlyCloses = monthlyDemos * assumedCloseRate;

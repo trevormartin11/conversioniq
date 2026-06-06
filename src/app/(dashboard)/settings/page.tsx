@@ -2,9 +2,10 @@ import { CheckCircle2, Circle, ExternalLink, LogOut } from "lucide-react";
 import { Card, CardBody, PageHeader, SectionHeader } from "@/components/ui/card";
 import { Tag } from "@/components/ui/badge";
 import { logoutAction } from "@/app/login/actions";
-import { ensureData, getAutomationLevel } from "@/lib/data/store";
+import { ensureData, getAutomationLevel, getAssumptions } from "@/lib/data/store";
 import { integrationStatuses } from "@/lib/integrations";
 import { ConnectionTester } from "@/components/settings/connection-tester";
+import { AssumptionsForm } from "@/components/settings/assumptions-form";
 import { appConfig, DATA_MODE } from "@/lib/config";
 import { pct, titleCase } from "@/lib/format";
 
@@ -28,6 +29,7 @@ export default async function SettingsPage() {
   await ensureData();
   const statuses = integrationStatuses();
   const connectedMap = Object.fromEntries(statuses.map((s) => [s.key, s.connected]));
+  const assumptions = getAssumptions();
 
   return (
     <div className="space-y-6">
@@ -95,6 +97,16 @@ export default async function SettingsPage() {
             <p className="mt-1 text-sm text-slate-200">Hard-gated. Never auto-spent — request → approve → execute, all logged.</p>
           </CardBody></Card>
         </div>
+      </section>
+
+      {/* Forward-projection assumptions — operator-set */}
+      <section>
+        <SectionHeader title="Forward-projection assumptions" subtitle="Operator-set inputs for the Pipeline projection — never inferred from CIQ. Real residual still comes from actual closed deals." />
+        <Card>
+          <CardBody>
+            <AssumptionsForm closeRate={assumptions.closeRate} monthlyMrr={assumptions.monthlyMrr} />
+          </CardBody>
+        </Card>
       </section>
 
       <a href="https://code.claude.com/docs/en/claude-code-on-the-web" target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-xs text-brand-400 hover:underline">
