@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { Card, CardBody, PageHeader, SectionHeader } from "@/components/ui/card";
 import { Tag } from "@/components/ui/badge";
 import { ensureData, getLeads, getSuppression } from "@/lib/data/store";
@@ -97,6 +98,10 @@ export default async function SourcePage() {
             ))}
         </div>
       </section>
+
+      <Link href="/copy" className="inline-flex items-center gap-1.5 text-xs font-medium text-brand-400 hover:text-brand-300">
+        Next: write the sequence &amp; cadence →
+      </Link>
     </div>
   );
 }

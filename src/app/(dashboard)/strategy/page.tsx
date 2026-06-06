@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { Sparkles } from "lucide-react";
 import { Card, CardBody, PageHeader, SectionHeader } from "@/components/ui/card";
 import { Tag } from "@/components/ui/badge";
@@ -65,9 +66,9 @@ export default async function StrategyPage() {
             </Card>
           ))}
         </div>
-        <p className="mt-3 flex items-center gap-1.5 text-xs text-slate-500">
-          <Sparkles className="h-3.5 w-3.5" /> Launching a target from here wires into the campaign flow (next).
-        </p>
+        <Link href="/source" className="mt-3 inline-flex items-center gap-1.5 text-xs font-medium text-brand-400 hover:text-brand-300">
+          <Sparkles className="h-3.5 w-3.5" /> Next: find the people in Source →
+        </Link>
       </section>
     </div>
   );

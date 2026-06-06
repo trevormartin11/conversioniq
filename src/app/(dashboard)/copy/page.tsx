@@ -35,7 +35,7 @@ export default async function CopyPage({ searchParams }: { searchParams: Promise
 
   return (
     <div className="space-y-6">
-      <PageHeader title="Copy Coach" subtitle={`AI reads your real results and suggests what to test next. ${integrations.anthropic ? "Powered by Claude." : "Rules-based until a Claude key is added."}`} />
+      <PageHeader title="Copy & Sequence" subtitle={`Step 3 — draft the sequence in our voice, then let the coach read real results. ${integrations.anthropic ? "Powered by Claude." : "Rules-based until a Claude key is added."}`} />
 
       <section>
         <SectionHeader title="Learnings" subtitle="Cross-campaign memory applied to new copy — seeded by your playbook, sharpened by real results" />
