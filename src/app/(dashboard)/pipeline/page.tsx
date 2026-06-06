@@ -1,7 +1,7 @@
 import { Card, CardBody, PageHeader, SectionHeader } from "@/components/ui/card";
 import { Stat } from "@/components/ui/stat";
 import { Tag } from "@/components/ui/badge";
-import { attribution, lostReasons, sourcingRecommendations, pipeline, residual, outcomeLoop } from "@/lib/data/queries";
+import { attribution, lostReasons, sourcingRecommendations, pipeline, residual, outcomeLoop, projection } from "@/lib/data/queries";
 import { ensureData, getDemos, getLead } from "@/lib/data/store";
 import { DemoTracker, type DemoRow } from "@/components/pipeline/demo-tracker";
 import { AttributionView } from "@/components/pipeline/attribution-view";
@@ -15,6 +15,7 @@ export default async function PipelinePage() {
   const p = pipeline();
   const r = residual();
   const loop = outcomeLoop();
+  const proj = projection();
   const top = p.funnel[0]?.count || 1;
   const demoRows: DemoRow[] = getDemos().map((d) => {
     const lead = getLead(d.leadId);
@@ -151,6 +152,17 @@ export default async function PipelinePage() {
             <span className="text-slate-200">Gross <span className="font-semibold text-brand-400">{usd(r.grossAnnual)}</span> · Your share <span className="font-semibold text-ok">{usd(r.personalAnnual)}</span></span>
           </CardBody>
         </Card>
+      </section>
+
+      {/* Forward projection — operator-set assumptions, never inferred from CIQ */}
+      <section>
+        <SectionHeader title="Forward projection" subtitle="Your assumptions — set these; never inferred from CIQ. The residual above is from real closed deals." />
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+          <Stat label="Assumed close rate" value={pct(proj.assumedCloseRate)} />
+          <Stat label="Assumed MRR / close" value={usd(proj.assumedMonthlyMrr)} />
+          <Stat label="New MRR / mo" value={usd(proj.newMrrPerMonth)} sub={`${num(proj.monthlyCloses)} closes/mo @ ${proj.demosPerDay}/day`} tone="brand" />
+          <Stat label="Residual added / mo" value={usd(proj.grossResidualAddedMonthly)} sub={`${usd(proj.personalResidualAddedMonthly)}/mo your share`} tone="ok" />
+        </div>
       </section>
     </div>
   );

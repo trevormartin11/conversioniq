@@ -273,6 +273,30 @@ export function outcomeLoop() {
   return { handed: handed.length, awaiting: awaiting.length, won, lost, resolved, winRate: resolved > 0 ? won / resolved : 0 };
 }
 
+/**
+ * Illustrative forward projection from OPERATOR-SET assumptions (never CIQ data): at the
+ * daily demo goal, an assumed close rate and an assumed average MRR, how much new residual
+ * does the machine add per month? Planning view only — actuals drive residual().
+ */
+export function projection() {
+  const { demosPerDay } = appConfig.goals;
+  const { assumedCloseRate, assumedMonthlyMrr } = appConfig.projection;
+  const { grossRate, personalRate } = appConfig.residual;
+  const monthlyDemos = demosPerDay * 30;
+  const monthlyCloses = monthlyDemos * assumedCloseRate;
+  const newMrrPerMonth = monthlyCloses * assumedMonthlyMrr;
+  return {
+    demosPerDay,
+    assumedCloseRate,
+    assumedMonthlyMrr,
+    monthlyDemos,
+    monthlyCloses,
+    newMrrPerMonth,
+    grossResidualAddedMonthly: newMrrPerMonth * grossRate,
+    personalResidualAddedMonthly: newMrrPerMonth * personalRate,
+  };
+}
+
 export function residual() {
   const closed = getDemos().filter((d) => d.status === "closed" && d.mrr);
   const totalMrr = closed.reduce((s, d) => s + (d.mrr ?? 0), 0);
