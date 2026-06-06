@@ -22,8 +22,8 @@ function bodyText(body: unknown): string {
 
 interface LeadLite { id: string; first_name?: string; company?: string; vertical?: string; title?: string }
 
-export async function syncReplies() {
-  const emails = await listAllEmails(1000);
+export async function syncReplies(limit = 1000) {
+  const emails = await listAllEmails(limit);
   // Inbound replies only: from someone other than our own sending inbox.
   const replies = emails.filter(
     (e) => e.from_address_email && e.eaccount && e.from_address_email.toLowerCase() !== e.eaccount.toLowerCase(),
