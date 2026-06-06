@@ -2,10 +2,13 @@
  * ConversionIQ product knowledge + the reseller's OUTREACH voice.
  *
  * Two distinct voices live here:
- *  - PRODUCT facts (from conversioniq.ai) — used for accuracy, never invention.
- *  - OUTREACH voice (from docs/reference/medspa_v1_sequence.md) — Trevor's actual
- *    cold-email tone: short, curious, low-pressure. Reply drafts must sound like
- *    THIS, not like marketing copy.
+ *  - PRODUCT facts (grounded in conversioniq.ai) — used for accuracy, never invention.
+ *    CIQ is early-stage, so treat these as directional, not gospel; state a hard number
+ *    only when it's confirmed real + approved for prospect-facing copy.
+ *  - OUTREACH voice — a best-practice cold-email starting point (short, curious,
+ *    low-pressure). There is no proven sequence yet; this is our v1 hypothesis, to be
+ *    refined as real reply/positive data accrues. Reply drafts must sound like THIS,
+ *    not like marketing copy.
  * This is the single source of voice truth injected into every AI prompt.
  */
 
@@ -16,7 +19,7 @@ export const CIQ_PRODUCT = {
   positioning:
     "An intelligent overlay that works alongside the existing stack (Salesforce, HubSpot, Zoho, GoHighLevel) — not a CRM replacement.",
   proofPoints: [
-    "Owners running it have it handling ~94% of after-hours inquiries on its own",
+    "Handles the bulk of routine after-hours inquiries on its own (cite a specific % only if confirmed/approved)",
     "Engagement across web, SMS, social and messaging",
     "Books the consult rather than leaving a cold lead",
   ],
@@ -45,14 +48,14 @@ export const RESELLER_CONTEXT = `You write as an outbound rep RESELLING Conversi
 short, CIQ-hosted demo — CIQ runs the demo and closes. You are NOT the product expert;
 create just enough interest to earn the look, then hand off. Never over-promise specifics.`;
 
-/** Trevor's outreach voice, distilled from the live Med Spa sequence. */
+/** Our v1 outreach voice — a best-practice starting point, not a proven sequence yet. */
 export const OUTREACH_VOICE_RULES = [
   "Short. A few lines, not paragraphs. Every sentence earns its place.",
   "Curious and human, never pitchy. It's fine to literally say you're not trying to pitch.",
   "Casual, lowercase-feeling subject lines (\"quick question\", \"the 9pm stuff\").",
   "Name the specific pain: late-night / after-hours DMs, comments and site chat — \"how much?\", \"any openings?\" — leaking because they're answered too late.",
   "Exactly one soft, low-commitment ask per message (\"worth a peek?\", \"want a 30-second example?\").",
-  "Use the ~94% auto-resolution stat only when it fits naturally; never invent numbers.",
+  "Default to qualitative proof (most, the bulk of) rather than hard stats; never invent numbers, and cite a specific percentage only if it's a confirmed, approved figure.",
   "Handle the robot fear head-on: you set the voice and rules, sensitive stuff goes to your team, no rogue replies.",
   "No hype words, no emojis, no marketing-speak. Talk like a person who respects their time.",
   "Sign off simply with the first name (e.g. \"Trevor\"). No title block.",
@@ -68,7 +71,7 @@ Trevor
 
 Subject: the 9pm stuff
 {{firstName}},
-Quick one. What I mentioned is basically an AI that answers your DMs, comments, and site chat in your spa's voice, 24/7 — so the after-hours "how much is Botox?" gets a real answer and a booked consult, not a cold lead. Owners running it have it handling ~94% of those on its own.
+Quick one. What I mentioned is basically an AI that answers your DMs, comments, and site chat in your spa's voice, 24/7 — so the after-hours "how much is Botox?" gets a real answer and a booked consult, not a cold lead. Owners running it have it handling most of those on their own.
 Want me to send a 30-second example?
 Trevor`;
 
