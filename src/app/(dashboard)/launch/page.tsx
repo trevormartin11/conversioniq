@@ -20,7 +20,7 @@ export default async function LaunchPage() {
     <div className="space-y-6">
       <PageHeader
         title="Launch a campaign"
-        subtitle="Walk it end to end: Strategy → Source → Copy → Send."
+        subtitle="End to end: vertical & problem → the people → sequence & cadence → send."
         action={<Tag tone="brand">Goal: {appConfig.goals.demosPerDay} demos/day</Tag>}
       />
       <LaunchWizard
