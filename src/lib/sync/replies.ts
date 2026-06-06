@@ -2,10 +2,9 @@
 import { listAllEmails } from "@/lib/integrations/instantly";
 import { chunkedUpsert, supabaseAdmin } from "@/lib/data/supabase";
 import { classifyReply } from "@/lib/ai/classify";
-import { draftReply } from "@/lib/ai/draft";
 import { sendTelegram } from "@/lib/integrations/telegram";
 import { loadAutomationLevel } from "@/lib/data/live";
-import { appConfig } from "@/lib/config";
+import { decideReply } from "@/lib/replies/decide";
 import { stripHtml } from "@/lib/utils";
 import type { ReplyClass } from "@/lib/data/types";
 
@@ -63,31 +62,14 @@ export async function syncReplies(limit = 1000) {
     const lead = leadByEmail.get(from);
     const fromName = (lead?.first_name ?? "").trim() || from;
 
-    const suppress = cls === "unsubscribe" || cls === "negative";
-    const isOoo = cls === "ooo";
-    const autoSafe = (appConfig.autoSafeClasses as readonly string[]).includes(cls);
-    const confident = confidence >= 0.85;
-
-    let aiDraft: string | null = null;
-    let draftSource: string | null = null;
-    if (!suppress && !isOoo) {
-      const d = await draftReply(
-        { classification: cls, body: text, fromName },
-        lead ? { firstName: lead.first_name, company: lead.company, vertical: lead.vertical, title: lead.title } : null,
-      );
-      aiDraft = d.draft;
-      draftSource = d.source;
-    }
-
-    let status = "pending";
-    if (suppress) status = "suppressed";
-    else if (isOoo) status = "snoozed";
-    else if ((level === "auto_all" || (level === "auto_safe" && autoSafe)) && confident && (aiDraft?.trim()?.length ?? 0) > 0) {
-      // Only auto-send when confident AND we actually have a non-empty draft.
-      status = "auto_sent";
-    }
-
-    const hot = appConfig.hotClasses.includes(cls as (typeof appConfig.hotClasses)[number]);
+    const { aiDraft, draftSource, status, suppress, hot } = await decideReply({
+      classification: cls,
+      confidence,
+      text,
+      fromName,
+      lead: lead ? { firstName: lead.first_name, company: lead.company, vertical: lead.vertical, title: lead.title } : null,
+      level,
+    });
     const handled = status !== "pending";
     const now = new Date().toISOString();
     rows.push({
