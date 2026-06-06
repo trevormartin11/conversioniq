@@ -12,13 +12,9 @@ Living list of what's decided, what I need from you, and what's parked. Updated 
 - **Hosting:** Vercel + dedicated Supabase. **AI:** Claude.
 
 ## 📥 What I need from you
-1. **Three reference docs** so AI copy/replies match CIQ's real voice and the proven sequence:
-   - `reference_ciq_product_playbook.md`
-   - `medspa_v1_sequence.md` (the actual Med Spa copy)
-   - `project_ciq_outbound.md` (context + prior-strategy post-mortem)
-   Paste them in chat or drop them in `docs/reference/`. Until then, AI is grounded in the **conversioniq.ai** site copy (already encoded in `src/lib/ai/voice.ts`).
-2. **A dedicated Supabase project** + the API keys in `docs/SETUP.md` (Instantly, Zoho, Apollo ×2, Gmail, Telegram, Anthropic).
-3. **A Telegram bot** (3 steps in SETUP.md) so alerts reach your phone.
+1. ~~Three reference docs~~ — **not happening**: those were artifacts of an archived session and don't exist. The AI voice is therefore our **own young-brand voice, grounded in the conversioniq.ai site copy** (encoded in `src/lib/ai/voice.ts`) — no external docs required. If you ever want to correct a product fact or paste real site copy, I'll fold it in.
+2. **API keys** — set them in Vercel (Production). Verify any key actually works with **Settings → Test live connections**.
+3. *(optional)* **A Telegram bot** (3 steps in SETUP.md) so alerts reach your phone.
 
 ## ❓ Open questions (will ask when you're back — not blocking the build)
 - Exact reply-handling tone per class — confirm once I have the playbook.
