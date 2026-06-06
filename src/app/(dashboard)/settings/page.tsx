@@ -4,6 +4,7 @@ import { Tag } from "@/components/ui/badge";
 import { logoutAction } from "@/app/login/actions";
 import { ensureData, getAutomationLevel } from "@/lib/data/store";
 import { integrationStatuses } from "@/lib/integrations";
+import { ConnectionTester } from "@/components/settings/connection-tester";
 import { appConfig, DATA_MODE } from "@/lib/config";
 import { pct, titleCase } from "@/lib/format";
 
@@ -48,19 +49,10 @@ export default async function SettingsPage() {
 
       {/* Integrations */}
       <section>
-        <SectionHeader title="Integrations" />
-        <div className="grid gap-2 sm:grid-cols-2">
-          {statuses.map((s) => (
-            <div key={s.key} className="card flex items-start justify-between gap-2 p-3">
-              <div>
-                <p className="text-sm text-slate-200">{s.label}</p>
-                <p className="text-xs text-slate-500">{s.role}</p>
-                {s.note && <p className="mt-0.5 text-[11px] text-warn">{s.note}</p>}
-              </div>
-              <Tag tone={s.connected ? "ok" : "slate"}>{s.connected ? "On" : "Off"}</Tag>
-            </div>
-          ))}
-        </div>
+        <SectionHeader title="Integrations" subtitle="On/Off is key presence from your env. “Test live connections” pings each provider read-only (zero-cost) to prove the keys actually work." />
+        <ConnectionTester
+          items={statuses.map((s) => ({ key: String(s.key), label: s.label, role: s.role, note: s.note, connected: s.connected }))}
+        />
       </section>
 
       {/* Setup checklist */}
