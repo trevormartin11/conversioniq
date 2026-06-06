@@ -63,3 +63,82 @@ export async function proposeVerticals(
     return fromCurated();
   }
 }
+
+/** Given a vertical, propose the specific problems CIQ solves for it — each a felt, cold-open-ready sentence. */
+export async function suggestProblems(vertical: string): Promise<{ problems: string[]; source: "ai" | "rules" }> {
+  const v = vertical.trim();
+  const curated = () => {
+    const hit = CURATED.find((c) => c.vertical.toLowerCase() === v.toLowerCase() || (v && c.vertical.toLowerCase().includes(v.toLowerCase().split(" ")[0])));
+    return [
+      ...(hit ? [hit.angle] : []),
+      `After-hours DMs, comments and site chats for ${v || "them"} go unanswered, so booking-ready buyers leak to whoever replies first.`,
+      `Most of ${v || "their"} site and ad traffic stays anonymous — people look, leave, and are never identified or followed up with.`,
+    ].slice(0, 3);
+  };
+  if (!v || !aiAvailable()) return { problems: curated(), source: "rules" };
+  try {
+    const out = await complete({
+      system: voiceSystemPrompt(),
+      user: [
+        ICP_FIT,
+        `For the vertical "${v}", give the 3 most acute problems ConversionIQ solves — each one specific, felt sentence we could open a cold email with (the leak they actually feel). Concrete over generic; no preamble.`,
+        `Return ONLY JSON: ["problem one","problem two","problem three"]`,
+      ].join("\n\n"),
+      maxTokens: 500,
+    });
+    const parsed = JSON.parse(out.match(/\[[\s\S]*\]/)?.[0] ?? out) as string[];
+    const problems = parsed.filter((p) => typeof p === "string" && p.trim()).slice(0, 3);
+    return problems.length ? { problems, source: "ai" } : { problems: curated(), source: "rules" };
+  } catch {
+    return { problems: curated(), source: "rules" };
+  }
+}
+
+/** Given a problem statement, propose verticals that feel it most acutely (+ fit + angle). */
+export async function suggestVerticalsForProblem(problem: string, exclude: string[] = []): Promise<VerticalIdea[]> {
+  const ex = new Set(exclude.map((s) => s.toLowerCase().trim()));
+  const curated = () => CURATED.filter((c) => !ex.has(c.vertical.toLowerCase())).slice(0, 5).map((c) => ({ ...c, source: "rules" as const }));
+  if (!problem.trim() || !aiAvailable()) return curated();
+  try {
+    const out = await complete({
+      system: voiceSystemPrompt(),
+      user: [
+        ICP_FIT,
+        `We want to sell ConversionIQ by leading with this problem:\n"${problem.trim()}"`,
+        `Propose 5 specific verticals that feel THIS problem most acutely and are a strong ICP fit${exclude.length ? ` (exclude: ${exclude.join(", ")})` : ""}.`,
+        `For each: vertical, fit (1-10), why (one sentence), angle (one-line cold-open hook for that vertical, tied to the problem).`,
+        `Return ONLY JSON: [{"vertical":"...","fit":8,"why":"...","angle":"..."}]`,
+      ].join("\n\n"),
+      maxTokens: 1100,
+    });
+    const parsed = JSON.parse(out.match(/\[[\s\S]*\]/)?.[0] ?? out) as Omit<VerticalIdea, "source">[];
+    const ideas = parsed.filter((i) => i.vertical && !ex.has(i.vertical.toLowerCase())).map((i) => ({ ...i, fit: Number(i.fit) || 7, source: "ai" as const }));
+    return ideas.length ? ideas : curated();
+  } catch {
+    return curated();
+  }
+}
+
+/** Suggest the buyer titles/roles in a vertical that own the problem and can buy the fix. */
+export async function suggestTitles(vertical: string, problem?: string): Promise<{ titles: string[]; source: "ai" | "rules" }> {
+  const v = vertical.trim();
+  const curated = () => ["Owner / Founder", "CEO", "Marketing Manager", "Director of Marketing", "Operations Manager", "General Manager"];
+  if (!v || !aiAvailable()) return { titles: curated(), source: "rules" };
+  try {
+    const out = await complete({
+      system: voiceSystemPrompt(),
+      user: [
+        `For a "${v}" business, list the 4-6 job titles most likely to OWN this problem and be able to buy a fix.`,
+        problem?.trim() ? `Problem: "${problem.trim()}"` : "",
+        `Favor the reachable decision-maker (often the owner/operator in SMB). Real titles only, no descriptions.`,
+        `Return ONLY JSON: ["Title one","Title two"]`,
+      ].filter(Boolean).join("\n\n"),
+      maxTokens: 300,
+    });
+    const parsed = JSON.parse(out.match(/\[[\s\S]*\]/)?.[0] ?? out) as string[];
+    const titles = parsed.filter((t) => typeof t === "string" && t.trim()).slice(0, 6);
+    return titles.length ? { titles, source: "ai" } : { titles: curated(), source: "rules" };
+  } catch {
+    return { titles: curated(), source: "rules" };
+  }
+}
