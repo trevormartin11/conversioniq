@@ -1,12 +1,8 @@
 "use server";
 
-import { cookies } from "next/headers";
-import { revalidatePath } from "next/cache";
+import { checkConnections } from "@/lib/integrations/healthcheck";
 
-/** Dev/demo convenience — switch the acting partner. Replaced by Supabase Auth. */
-export async function switchUserAction(id: string) {
-  const jar = await cookies();
-  jar.set("ciq_user", id, { path: "/", sameSite: "lax" });
-  revalidatePath("/", "layout");
-  return { ok: true };
+/** Operator-initiated live connection test. Gated by the app login (page route). */
+export async function testConnectionsAction() {
+  return checkConnections();
 }

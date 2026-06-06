@@ -3,7 +3,7 @@
  * store — this is where the cross-tool JOIN and analytics live.
  */
 
-import { appConfig } from "@/lib/config";
+import { appConfig, DATA_MODE } from "@/lib/config";
 import { rate } from "@/lib/format";
 import {
   getCampaigns,
@@ -108,6 +108,7 @@ export function commandSummary(): CommandSummary {
   if (paused.length) alerts.push({ id: "al_paused", level: "red", title: `${paused.length} inbox${paused.length > 1 ? "es" : ""} paused`, detail: "Paused to protect domain reputation. Review in Deliverability.", createdAt: now, source: "deliverability" });
   if (pendingCredits.length) alerts.push({ id: "al_credits", level: "yellow", title: "CIQ credit spend awaiting approval", detail: `${pendingCredits.length} request(s) need a decision.`, createdAt: now, source: "credits" });
   if (hotPending.length) alerts.push({ id: "al_hot", level: "green", title: `${hotPending.length} hot repl${hotPending.length > 1 ? "ies" : "y"} waiting`, detail: "Interested / question replies need a look.", createdAt: now, source: "replies" });
+  if (DATA_MODE === "mock") alerts.push({ id: "al_preview", level: "yellow", title: "Preview mode — running on seed data", detail: "Connect Supabase to go live; verify each key in Settings → Test live connections.", createdAt: now, source: "system" });
 
   return {
     today: {
@@ -256,6 +257,20 @@ export function pipeline() {
       closed: demos.filter((d) => d.status === "closed").length,
     },
   };
+}
+
+/**
+ * Health of the CIQ feedback loop: of the demos handed to CIQ (have a Deal id), how many
+ * have a resolved outcome (won/lost) vs are still awaiting one — the "is the learning loop
+ * actually returning signal?" view. `awaiting` matches the reconcile job's open-demo filter.
+ */
+export function outcomeLoop() {
+  const handed = getDemos().filter((d) => d.civDealId);
+  const awaiting = handed.filter((d) => d.status !== "closed" && d.status !== "lost");
+  const won = handed.filter((d) => d.status === "closed").length;
+  const lost = handed.filter((d) => d.status === "lost").length;
+  const resolved = won + lost;
+  return { handed: handed.length, awaiting: awaiting.length, won, lost, resolved, winRate: resolved > 0 ? won / resolved : 0 };
 }
 
 export function residual() {
@@ -427,5 +442,30 @@ export function costSummary() {
     netMonthly,
     netPerPartnerMonthly: netMonthly / appConfig.residual.splitWays,
     breakeven: r.grossMonthly >= monthly,
+  };
+}
+
+/**
+ * The north star: booked-demo pace vs the goal (2/day), plus the monthly budget
+ * burn-down. This is the number the whole operation is run to blow past.
+ */
+export function northStar() {
+  const metrics = getMetrics();
+  const t = today();
+  const weekCutoff = new Date(Date.now() - 6 * 86_400_000).toISOString().slice(0, 10);
+  const todayDemos = metrics.filter((m) => m.date === t).reduce((s, m) => s + m.demos, 0);
+  const weekDemos = metrics.filter((m) => m.date >= weekCutoff).reduce((s, m) => s + m.demos, 0);
+  const dailyGoal = appConfig.goals.demosPerDay;
+  const costs = costSummary();
+  return {
+    todayDemos,
+    dailyGoal,
+    weekDemos,
+    weeklyGoal: dailyGoal * 7,
+    monthlySpend: costs.monthly,
+    budget: appConfig.goals.monthlyBudgetUsd,
+    grossResidualMonthly: costs.grossResidualMonthly,
+    netPerPartnerMonthly: costs.netPerPartnerMonthly,
+    breakeven: costs.breakeven,
   };
 }

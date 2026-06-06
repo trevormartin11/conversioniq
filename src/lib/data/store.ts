@@ -446,6 +446,21 @@ export function getDemoByCivDealId(civDealId: string): Demo | undefined {
   return db().demos.find((d) => d.civDealId === civDealId);
 }
 
+/**
+ * Reconcile a CIQ outcome to a demo by the contact's email when no deal id matches — e.g.
+ * CIQ's workflow posts the contact email instead of our deal id. Picks the most recent
+ * still-open demo (booked/showed/no_show) for the lead with that email.
+ */
+export function getOpenDemoByEmail(email: string): Demo | undefined {
+  const norm = email.trim().toLowerCase();
+  if (!norm) return undefined;
+  const lead = db().leads.find((l) => l.email?.toLowerCase() === norm);
+  if (!lead) return undefined;
+  return db()
+    .demos.filter((d) => d.leadId === lead.id && d.status !== "closed" && d.status !== "lost")
+    .sort((a, b) => (b.scheduledAt > a.scheduledAt ? 1 : -1))[0];
+}
+
 // --- campaign copy (inline sequence editing) --------------------------------
 export async function updateVariant(id: string, patch: { subject?: string; body?: string }, actor = "system"): Promise<SequenceVariant | null> {
   const v = db().variants.find((x) => x.id === id);

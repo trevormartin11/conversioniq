@@ -83,3 +83,37 @@ export async function listCivAccounts(fields = ["Account_Name", "Website", "Emai
   const data = await httpJson<{ data?: unknown[] }>("zohoCiq", `${apiBase()}/Accounts?${qs}`, { headers: await authHeaders() });
   return data.data ?? [];
 }
+
+export interface CivDealOutcome {
+  stage: string | null;
+  amount: number | null;
+  lostReason: string | null;
+}
+
+/**
+ * Read a CIQ Deal's current stage + amount (won MRR) by id — the poll-side complement to
+ * the outcome webhook, so a missed webhook still closes the loop. Reads only standard Deal
+ * fields (Stage/Amount/Closing_Date) to stay safe across CIQ's custom layout. Returns null
+ * when not configured or the deal can't be read.
+ */
+export async function getCivDealOutcome(dealId: string): Promise<CivDealOutcome | null> {
+  if (!integrations.zohoCiq || !dealId) return null;
+  const fields = ["Deal_Name", "Stage", "Amount", "Closing_Date"].join(",");
+  try {
+    const data = await httpJson<{ data?: Record<string, unknown>[] }>(
+      "zohoCiq",
+      `${apiBase()}/Deals/${encodeURIComponent(dealId)}?fields=${fields}`,
+      { headers: await authHeaders() },
+    );
+    const rec = data.data?.[0];
+    if (!rec) return null;
+    const amount = rec.Amount == null ? null : Number(rec.Amount);
+    return {
+      stage: (rec.Stage as string) ?? null,
+      amount: Number.isFinite(amount) ? (amount as number) : null,
+      lostReason: null, // structured loss reason arrives via the webhook payload, not the record read
+    };
+  } catch {
+    return null;
+  }
+}

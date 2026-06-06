@@ -1,7 +1,7 @@
 import { Card, CardBody, PageHeader, SectionHeader } from "@/components/ui/card";
 import { Stat } from "@/components/ui/stat";
 import { Tag } from "@/components/ui/badge";
-import { attribution, lostReasons, sourcingRecommendations, pipeline, residual } from "@/lib/data/queries";
+import { attribution, lostReasons, sourcingRecommendations, pipeline, residual, outcomeLoop } from "@/lib/data/queries";
 import { ensureData, getDemos, getLead } from "@/lib/data/store";
 import { DemoTracker, type DemoRow } from "@/components/pipeline/demo-tracker";
 import { AttributionView } from "@/components/pipeline/attribution-view";
@@ -14,6 +14,7 @@ export default async function PipelinePage() {
   await ensureData();
   const p = pipeline();
   const r = residual();
+  const loop = outcomeLoop();
   const top = p.funnel[0]?.count || 1;
   const demoRows: DemoRow[] = getDemos().map((d) => {
     const lead = getLead(d.leadId);
@@ -80,6 +81,17 @@ export default async function PipelinePage() {
             <DemoTracker demos={demoRows} />
           </CardBody>
         </Card>
+      </section>
+
+      {/* CIQ feedback loop — is the outcome signal actually coming back? */}
+      <section>
+        <SectionHeader title="CIQ feedback loop" subtitle="Demos handed to ConversionIQ's pipeline and whether their outcome has returned (via webhook + the 6-hourly reconcile)" />
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+          <Stat label="Handed to CIQ" value={num(loop.handed)} tone="brand" />
+          <Stat label="Awaiting outcome" value={num(loop.awaiting)} tone={loop.awaiting > 0 ? "warn" : "default"} />
+          <Stat label="Won / Lost" value={`${loop.won} / ${loop.lost}`} tone="ok" />
+          <Stat label="Win rate" value={loop.resolved ? pct(loop.winRate) : "—"} sub={`${loop.resolved} resolved`} />
+        </div>
       </section>
 
       {/* Attribution — which cell converts (from the at-source tags) */}

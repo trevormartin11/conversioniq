@@ -42,7 +42,7 @@ Merge fields: `{{firstName}}`, `{{companyName}}`.
 
 > {{firstName}},
 >
-> Quick one. What I mentioned is basically an AI that answers your DMs, comments, and site chat in your spa's voice, 24/7 — so the after-hours "how much is Botox?" gets a real answer and a booked consult, not a cold lead. Owners running it have it handling ~94% of those on its own.
+> Quick one. What I mentioned is basically an AI that answers your DMs, comments, and site chat in your spa's voice, 24/7 — so the after-hours "how much is Botox?" gets a real answer and a booked consult, not a cold lead. Owners running it have it handling the bulk of those on its own.
 >
 > Want me to send a 30-second example?
 >

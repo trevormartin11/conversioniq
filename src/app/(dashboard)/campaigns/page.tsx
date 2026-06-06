@@ -1,8 +1,7 @@
 import Link from "next/link";
-import { ChevronRight } from "lucide-react";
+import { ChevronRight, Plus } from "lucide-react";
 import { Card, CardBody, PageHeader } from "@/components/ui/card";
 import { HealthBadge, Tag } from "@/components/ui/badge";
-import { NewCampaignForm } from "@/components/campaigns/new-campaign-form";
 import { CampaignActions } from "@/components/campaigns/campaign-actions";
 import { campaignCards } from "@/lib/data/queries";
 import { ensureData, getCampaigns, getPersonas, getVariants } from "@/lib/data/store";
@@ -22,7 +21,18 @@ export default async function CampaignsPage() {
 
   return (
     <div className="space-y-5">
-      <PageHeader title="Campaigns" subtitle="Parallel cells by vertical." action={<NewCampaignForm personas={personas} />} />
+      <PageHeader
+        title="Campaigns"
+        subtitle="Parallel cells by vertical."
+        action={
+          <Link
+            href="/launch"
+            className="inline-flex h-10 items-center justify-center gap-1.5 rounded-lg bg-brand-gradient px-4 text-sm font-medium text-white shadow-[0_1px_0_rgba(255,255,255,0.18)_inset,0_8px_20px_-8px_rgba(124,108,255,0.65)] transition-all hover:brightness-110"
+          >
+            <Plus className="h-4 w-4" /> New campaign
+          </Link>
+        }
+      />
 
       <div className="space-y-3">
         {campaigns.map((c) => {

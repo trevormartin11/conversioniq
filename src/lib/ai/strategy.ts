@@ -17,21 +17,23 @@ export interface VerticalIdea {
   source: "ai" | "rules";
 }
 
-/** What makes a vertical a strong fit for an instant-lead-response product. */
+/** What makes a vertical a strong fit for ConversionIQ's omnichannel, anonymous-visitor-capturing sales agents. */
 export const ICP_FIT =
-  "ConversionIQ is an AI that instantly answers a business's inbound + after-hours leads (calls, forms, DMs) and books them into the calendar. Best-fit verticals share: high value per lead, high inbound/after-hours volume, speed-to-lead decides who wins the deal, a reachable owner/operator who feels the pain, and an appointment/consult-driven model.";
+  "ConversionIQ gives a business AI sales agents across every channel — social comments and DMs, website chat, SMS, WhatsApp — that answer instantly in the brand's voice, remember every conversation, identify otherwise-anonymous visitors without a form or login, recommend the offer that's right for the buyer AND profitable for the business, and book the sale with no human in the loop. Best-fit verticals share several of: meaningful inbound traffic and social engagement that today goes anonymous or unanswered; high value per customer or per order; an offer/catalog with enough margin variation to be worth steering; heavy after-hours or overflow demand; and a reachable owner/operator who feels the leak.";
 
 const CURATED: Omit<VerticalIdea, "source">[] = [
-  { vertical: "Med Spas", fit: 9, why: "High-ticket treatments, heavy after-hours DM/form volume, owner-operated.", angle: "the booking-ready leads that message you at 9pm and book with whoever answers first." },
-  { vertical: "Dental & Ortho", fit: 9, why: "Implant/ortho cases are worth thousands; missed new-patient calls are lost revenue.", angle: "new-patient calls that hit voicemail after the front desk goes home." },
-  { vertical: "Home Services (HVAC/Plumbing)", fit: 9, why: "Emergency-driven, first-to-answer wins, high job value.", angle: "the 'my AC just died' lead that's calling three companies right now." },
-  { vertical: "Roofing & Restoration", fit: 8, why: "Large project values, storm-driven inbound spikes, speed-to-lead decisive.", angle: "storm-damage leads that go cold before you call back." },
-  { vertical: "Auto Dealers & Repair", fit: 8, why: "High-value sales, internet leads decay within minutes.", angle: "web leads that ghost if you don't reply in 5 minutes." },
-  { vertical: "Personal-Injury Law", fit: 8, why: "Each signed case is worth thousands; claimants sign with the first callback.", angle: "the injury lead that retains whoever calls back first." },
-  { vertical: "Cosmetic & Plastic Surgery", fit: 8, why: "Very high ticket, consult-driven, after-hours research behavior.", angle: "consult requests that land after the office closes." },
-  { vertical: "Real Estate Brokerages", fit: 7, why: "High commission per deal, portal leads reward instant response.", angle: "Zillow leads that ghost when you're slow to respond." },
-  { vertical: "Insurance Agencies", fit: 7, why: "Quote shoppers hit several agents; speed wins the bind.", angle: "quote requests that are shopping four agents at once." },
-  { vertical: "Veterinary Clinics", fit: 7, why: "Appointment-driven with anxious, after-hours pet owners.", angle: "the worried pet owner messaging you at midnight." },
+  { vertical: "Med Spas", fit: 9, why: "High-ticket treatments, heavy after-hours DM/comment volume, owner-operated.", angle: "the 9pm 'how much is Botox?' DM that books with whoever answers first — plus the site visitors who never say who they are." },
+  { vertical: "Dental & Ortho", fit: 9, why: "Implant/ortho cases worth thousands; new-patient inquiries leak after the front desk leaves.", angle: "new-patient questions that hit voicemail (or an unread DM) after hours." },
+  { vertical: "Home Services (HVAC/Plumbing)", fit: 9, why: "Emergency-driven, first-to-answer wins, high job value.", angle: "the 'my AC just died' lead messaging three companies at once." },
+  { vertical: "E-commerce / DTC", fit: 8, why: "High anonymous traffic, a catalog with real margin spread, conversations across chat/DM/SMS.", angle: "the ~98% who browse, leave, and never get steered to the right (and profitable) product." },
+  { vertical: "Travel, Cruise & Hospitality", fit: 8, why: "High-consideration, multi-channel, package/upsell catalog with margin to optimize.", angle: "the ad-comment 'is this available in March?' that becomes a five-figure booking — or vanishes." },
+  { vertical: "Cosmetic & Plastic Surgery", fit: 8, why: "Very high ticket, consult-driven, late-night research behavior.", angle: "consult requests that land after the office closes." },
+  { vertical: "Auto Dealers & Repair", fit: 8, why: "High-value sales, internet leads decay within minutes.", angle: "web leads that ghost if you don't reply in five minutes." },
+  { vertical: "Personal-Injury Law", fit: 8, why: "Each signed case is worth thousands; claimants sign with the first callback.", angle: "the injury lead that retains whoever responds first." },
+  { vertical: "Multi-location Retail & Franchises", fit: 7, why: "Inbound scattered across locations and social with no single owner of the conversation.", angle: "DMs and comments across every location that no front desk actually owns." },
+  { vertical: "Real Estate Brokerages", fit: 7, why: "High commission per deal; portal leads reward instant, always-on response.", angle: "portal leads that ghost the moment you're slow to respond." },
+  { vertical: "Insurance Agencies", fit: 7, why: "Quote shoppers hit several agents; speed and follow-through win the bind.", angle: "quote requests shopping four agents at once." },
+  { vertical: "Veterinary Clinics", fit: 7, why: "Appointment-driven with anxious, after-hours pet owners.", angle: "the worried pet owner messaging at midnight." },
 ];
 
 export async function proposeVerticals(

@@ -19,3 +19,18 @@ export function mapLostReason(raw?: string | null): { reason: DemoLostReason; no
     : "other";
   return { reason, note: raw ?? null };
 }
+
+/**
+ * Map a CIQ Deal stage name onto a terminal outcome, or null if the deal is still in
+ * flight. Uses the configured won/lost stage names (ZOHO_CIQ_WON_STAGE / _LOST_STAGE)
+ * plus resilient keyword fallbacks. Shared by the outcome webhook and the reconcile job.
+ */
+export function classifyStage(stage: string | null | undefined): "won" | "lost" | null {
+  const lower = (stage ?? "").toLowerCase().trim();
+  if (!lower) return null;
+  const won = (process.env.ZOHO_CIQ_WON_STAGE || "Closed Won").toLowerCase();
+  const lost = (process.env.ZOHO_CIQ_LOST_STAGE || "Closed Lost").toLowerCase();
+  if (lower === won || /\bwon\b|signed/.test(lower)) return "won";
+  if (lower === lost || /\blost\b|disqualif|dead/.test(lower)) return "lost";
+  return null;
+}
