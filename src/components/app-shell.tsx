@@ -4,7 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Menu, X, Radio } from "lucide-react";
-import { NAV, PRIMARY_HREFS } from "@/lib/nav";
+import { NAV, NAV_GROUPS, PRIMARY_HREFS } from "@/lib/nav";
 import { cn } from "@/lib/utils";
 import { ago } from "@/lib/format";
 import { Toaster } from "@/components/ui/toast";
@@ -40,10 +40,8 @@ export function AppShell({
       {/* Desktop sidebar */}
       <aside className="sticky top-0 hidden h-screen w-60 shrink-0 flex-col border-r border-white/[0.06] bg-ink-900/40 px-3 py-4 backdrop-blur-xl md:flex">
         <Brand />
-        <nav className="mt-6 flex flex-1 flex-col gap-1">
-          {NAV.map((item) => (
-            <NavLink key={item.href} item={item} active={isActive(pathname, item.href)} badge={item.href === "/replies" ? queueCount : undefined} />
-          ))}
+        <nav className="mt-6 flex flex-1 flex-col gap-1 overflow-y-auto">
+          <NavSections pathname={pathname} queueCount={queueCount} />
         </nav>
         <DataModePill dataMode={dataMode} connectedCount={connectedCount} totalIntegrations={totalIntegrations} lastSyncAt={lastSyncAt} />
       </aside>
@@ -99,10 +97,8 @@ export function AppShell({
                 <X className="h-5 w-5" />
               </button>
             </div>
-            <nav className="mt-5 flex flex-col gap-1">
-              {NAV.map((item) => (
-                <NavLink key={item.href} item={item} active={isActive(pathname, item.href)} onClick={() => setDrawer(false)} badge={item.href === "/replies" ? queueCount : undefined} />
-              ))}
+            <nav className="mt-5 flex flex-col gap-1 overflow-y-auto pb-4" style={{ maxHeight: "calc(100vh - 7rem)" }}>
+              <NavSections pathname={pathname} queueCount={queueCount} onNavigate={() => setDrawer(false)} />
             </nav>
             <div className="mt-5"><DataModePill dataMode={dataMode} connectedCount={connectedCount} totalIntegrations={totalIntegrations} lastSyncAt={lastSyncAt} /></div>
           </div>
@@ -145,6 +141,25 @@ function NavLink({ item, active, badge, onClick }: { item: (typeof NAV)[number];
       <span className="flex-1">{item.label}</span>
       {!!badge && badge > 0 && <span className="rounded-full bg-brand-gradient px-1.5 py-0.5 text-[10px] font-semibold text-white shadow-[0_2px_8px_-2px_rgba(124,108,255,0.8)]">{badge}</span>}
     </Link>
+  );
+}
+
+function NavSections({ pathname, queueCount, onNavigate }: { pathname: string; queueCount: number; onNavigate?: () => void }) {
+  const badgeFor = (href: string) => (href === "/replies" ? queueCount : undefined);
+  return (
+    <>
+      {NAV.filter((n) => n.group === "").map((item) => (
+        <NavLink key={item.href} item={item} active={isActive(pathname, item.href)} badge={badgeFor(item.href)} onClick={onNavigate} />
+      ))}
+      {NAV_GROUPS.map((g) => (
+        <div key={g.id} className="mt-3 flex flex-col gap-1">
+          <p className="px-3 pb-0.5 text-[10px] font-semibold uppercase tracking-wider text-slate-600">{g.label}</p>
+          {NAV.filter((n) => n.group === g.id).map((item) => (
+            <NavLink key={item.href} item={item} active={isActive(pathname, item.href)} badge={badgeFor(item.href)} onClick={onNavigate} />
+          ))}
+        </div>
+      ))}
+    </>
   );
 }
 
