@@ -60,6 +60,11 @@ export const appConfig = {
       return this.grossRate / this.splitWays; // ~6.67%
     },
   },
+  /** North-star targets the whole operation is run against. */
+  goals: {
+    demosPerDay: 2, // booked demos/day — the number to blow past
+    monthlyBudgetUsd: 1000, // hard ceiling on total spend until it self-funds
+  },
   /** Deliverability guardrails (existential with ~49 inboxes). */
   deliverability: {
     warmupGate: 80, // block sends from inboxes under this score
