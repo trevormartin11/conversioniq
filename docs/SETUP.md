@@ -35,7 +35,7 @@ INSTANTLY_API_KEY=...
 INSTANTLY_WEBHOOK_SECRET=<any random string>
 ```
 - The hub pulls replies from the unibox and reads inbox/warmup health.
-- **Replies (preferred):** in Instantly, point a webhook at `https://<your-app>/api/webhooks/instantly?secret=<INSTANTLY_WEBHOOK_SECRET>`. A fallback cron (`/api/cron/sync-replies`, every 5 min) is configured in `vercel.json`.
+- **Replies (preferred):** in Instantly, point a webhook at `https://<your-app>/api/webhooks/instantly?secret=<INSTANTLY_WEBHOOK_SECRET>`. On a reply event the webhook runs the full ingestion (classify → draft → persist → auto-handle → hot-ping); a fallback cron (`/api/cron/sync-replies`, every 10 min) catches anything missed.
 - Note: when creating campaigns, `campaign_schedule.schedules[].timezone` must be a valid Instantly enum (`"America/New_York"` was rejected in testing — fetch the allowed list first).
 
 ## 4. Zoho CRM (canonical leads + Do-Not-Contact)
@@ -79,11 +79,50 @@ Only needed if you want to read a mailbox directly; the primary reply source is 
    ```
 Hot replies ping instantly; the daily digest posts here too.
 
+## 8. ConversionIQ's Zoho org (partner — demo → outcome loop)
+
+A **separate** Zoho org from your canonical CRM, with its own OAuth app, used **only** for the
+outcome feedback loop: on a booked demo we create a Deal in CIQ's pipeline, and its won/lost
+outcome flows back to train sourcing. Its historical data is never used for deal-size/economics.
+
+```
+ZOHO_CIQ_CLIENT_ID=...
+ZOHO_CIQ_CLIENT_SECRET=...
+ZOHO_CIQ_REFRESH_TOKEN=...
+ZOHO_CIQ_ACCOUNTS_URL=https://accounts.zoho.com
+ZOHO_CIQ_API_DOMAIN=https://www.zohoapis.com
+ZOHO_CIQ_DEMO_STAGE=Demo Scheduled
+ZOHO_CIQ_WON_STAGE=Closed Won
+ZOHO_CIQ_LOST_STAGE=Closed Lost
+CIQ_ZOHO_WEBHOOK_SECRET=<any random string>
+```
+
+- **Outcome webhook:** add a workflow in CIQ's Zoho that POSTs to `https://<your-app>/api/webhooks/civ-zoho?secret=<CIQ_ZOHO_WEBHOOK_SECRET>` when a Deal reaches a won/lost stage. Map the stage names via the `*_STAGE` vars above.
+- **Reconcile cron (belt-and-suspenders):** `/api/cron/civ-outcomes` (every 6h) polls CIQ for any handed-off demo still awaiting an outcome, so a missed webhook still closes the loop.
+- The CIQ pipeline stages (verified live) are: Discovery Call → Demo Scheduled → Demo Completed → Proposal Sent/Onboarding Scheduled → Onboarding Complete/Free Trial → **Closed Won** / **Closed Lost** → Paused Accounts — so the defaults above are correct.
+
+## 9. Namecheap (DMARC / SPF auto-fix)
+
+```
+NAMECHEAP_API_KEY=...
+NAMECHEAP_USERNAME=...
+NAMECHEAP_CLIENT_IP=<the calling server IP, whitelisted in Namecheap>
+```
+Enable API access in Namecheap and whitelist the calling IP. Powers safe read-merge-write DNS fixes for the sending domains.
+
+---
+
+## Operations & secrets
+
+- **`SYNC_SECRET`** (or `CRON_SECRET`) gates the cron + ops endpoints. Set it in Vercel; Vercel Cron sends it automatically as a Bearer token. Manual calls pass `?secret=` or `Authorization: Bearer <secret>`.
+- **Connection self-test:** Settings → **Test live connections** (or `GET /api/health/integrations?secret=<SYNC_SECRET>`) runs a read-only, zero-cost probe of every configured provider and reports which keys actually *work*, not just which are present. It never spends — Apollo uses only the free `auth/health` endpoint; Outscraper/Findymail/Lusha/Namecheap stay presence-only.
+- **Crons** (in `vercel.json`): `sync-replies` (every 10 min), `daily` (13:00 UTC), `weekly-report` (Mon 14:00 UTC), `civ-outcomes` (every 6h).
+
 ---
 
 ## Deploy (Vercel)
 
 1. Import the repo into Vercel.
 2. Add all the env vars above to the project.
-3. Deploy. The cron in `vercel.json` runs `/api/cron/sync-replies` every 5 minutes.
+3. Deploy. The crons in `vercel.json` run automatically (see **Operations & secrets**); set `SYNC_SECRET` so they authenticate.
 4. Set `NEXT_PUBLIC_APP_URL` to the deployed URL and register the Instantly webhook against it.
