@@ -30,7 +30,10 @@ export const integrations = {
     process.env.ZOHO_CIQ_REFRESH_TOKEN,
   ),
   // SMS sending (A2P 10DLC) — the consent-gated warm channel. Off until keyed (sends simulate).
-  twilio: has(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN, process.env.TWILIO_FROM_NUMBER),
+  // Needs creds + a sender: either a From number OR a Messaging Service SID (the 10DLC path).
+  twilio:
+    has(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN) &&
+    (has(process.env.TWILIO_FROM_NUMBER) || has(process.env.TWILIO_MESSAGING_SERVICE_SID)),
   apolloPersonal: has(process.env.APOLLO_PERSONAL_API_KEY),
   apolloCiq: has(process.env.APOLLO_CIQ_API_KEY),
   // Lead-sourcing providers — each lights up its lane when its key arrives.
