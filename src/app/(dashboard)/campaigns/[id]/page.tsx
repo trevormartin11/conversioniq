@@ -6,6 +6,7 @@ import { Card, CardBody, PageHeader, SectionHeader } from "@/components/ui/card"
 import { HealthBadge, Tag } from "@/components/ui/badge";
 import { CampaignActions } from "@/components/campaigns/campaign-actions";
 import { EditableVariant } from "@/components/campaigns/editable-variant";
+import { PersonalizationLab } from "@/components/campaigns/personalization-lab";
 import { campaignCards, campaignCapacity } from "@/lib/data/queries";
 import { suggestCopy } from "@/lib/ai/copy";
 import { ensureData, getCampaign, getInboxes, getPersonas, getVariants } from "@/lib/data/store";
@@ -182,6 +183,16 @@ export default async function CampaignDetail({ params }: { params: Promise<{ id:
             <Card><CardBody className="text-sm text-slate-500">No sequence synced yet. Run a sync, or open this campaign in Instantly.</CardBody></Card>
           )}
         </div>
+      </section>
+
+      {/* Hyper-personalization (beta) */}
+      <section>
+        <SectionHeader title="Hyper-personalization (beta)" subtitle="Generate one specific, true opener line from a prospect's website — preview-only, review before it sends. Social / LinkedIn signals come next." />
+        <Card>
+          <CardBody>
+            <PersonalizationLab aiOn={integrations.anthropic} vertical={c.vertical} />
+          </CardBody>
+        </Card>
       </section>
 
       {/* AI Coach — recommendations from this campaign's open & positive-reply rates */}
