@@ -15,15 +15,18 @@ export interface CompleteOpts {
   system: string;
   user: string;
   maxTokens?: number;
+  /** Route to the cheap/fast model (appConfig.fastModel) instead of the premium one.
+   *  Use for high-frequency, low-complexity calls (e.g. reply classification). */
+  fast?: boolean;
   /** Accepted for call-site compatibility, but not sent: newer models (e.g.
    *  Opus 4.8) reject `temperature` as deprecated. */
   temperature?: number;
 }
 
 /** Single-turn completion returning plain text. Throws NotConfiguredError if no key. */
-export async function complete({ system, user, maxTokens = 1024 }: CompleteOpts): Promise<string> {
+export async function complete({ system, user, maxTokens = 1024, fast = false }: CompleteOpts): Promise<string> {
   const msg = await getClient().messages.create({
-    model: appConfig.model,
+    model: fast ? appConfig.fastModel : appConfig.model,
     max_tokens: maxTokens,
     system,
     messages: [{ role: "user", content: user }],

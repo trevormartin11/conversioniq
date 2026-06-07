@@ -88,5 +88,10 @@ export const appConfig = {
   autoSafeClasses: ["referral"] as const,
   /** Classes that trigger an immediate Telegram ping rather than the digest. */
   hotClasses: ["interested", "question"] as const,
+  /** Premium model — generative, quality-sensitive work (strategy, copy, drafting, personalization). */
   model: process.env.ANTHROPIC_MODEL || "claude-opus-4-8",
+  /** Fast/cheap model — high-frequency, low-complexity work (reply classification runs every 10 min).
+   *  This is the main cost lever: classification fires per inbound reply on the sync cron + webhook,
+   *  so it stays off the premium tier by default. Falls back to keyword rules if AI is unavailable. */
+  fastModel: process.env.ANTHROPIC_FAST_MODEL || "claude-haiku-4-5-20251001",
 } as const;
