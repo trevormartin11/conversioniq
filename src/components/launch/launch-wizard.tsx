@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Check, Clock, Loader2, Sparkles, Wand2 } from "lucide-react";
 import { Card, CardBody } from "@/components/ui/card";
@@ -18,6 +18,8 @@ import { createCampaignAction } from "@/app/(dashboard)/campaigns/actions";
 import type { GeneratedStep } from "@/lib/ai/copy";
 
 const STEPS = ["Vertical", "People", "Sequence", "Send"] as const;
+// Auto-save the in-progress wizard to this browser so closing the tab mid-build never loses work.
+const DRAFT_KEY = "ciq:launch-wizard:v1";
 type Persona = { id: string; name: string };
 type Idea = { vertical: string; angle: string; fit: number };
 
@@ -162,6 +164,88 @@ export function LaunchWizard({
   const [suggesting, setSuggesting] = useState<"" | "verticals" | "problems" | "titles">("");
   const [error, setError] = useState<string | null>(null);
   const [pending, start] = useTransition();
+  // Draft autosave (localStorage) — resume an in-progress campaign on the same browser.
+  const [hydrated, setHydrated] = useState(false);
+  const [restored, setRestored] = useState(false);
+
+  const draftHasContent = !!(vertical.trim() || problem.trim() || titles.trim() || name.trim() || seq || step > 0);
+
+  useEffect(() => {
+    // Restore once on mount (guarded against SSR + corrupt JSON).
+    try {
+      const raw = typeof window !== "undefined" ? localStorage.getItem(DRAFT_KEY) : null;
+      if (raw) {
+        const d = JSON.parse(raw) as Record<string, unknown>;
+        const meaningful = !!(
+          (typeof d.vertical === "string" && d.vertical.trim()) ||
+          (typeof d.problem === "string" && d.problem.trim()) ||
+          (typeof d.titles === "string" && d.titles.trim()) ||
+          (typeof d.name === "string" && d.name.trim()) ||
+          d.seq ||
+          (typeof d.step === "number" && d.step > 0)
+        );
+        if (meaningful) {
+          if (typeof d.step === "number") setStep(d.step);
+          if (typeof d.vertical === "string") setVertical(d.vertical);
+          if (typeof d.problem === "string") setProblem(d.problem);
+          if (typeof d.titles === "string") setTitles(d.titles);
+          if (typeof d.leadTarget === "number") setLeadTarget(d.leadTarget);
+          // Only restore a persona that still exists — otherwise keep the default (avoids a dangling id).
+          if (typeof d.personaId === "string" && personas.some((p) => p.id === d.personaId)) setPersonaId(d.personaId);
+          if (typeof d.dailyCap === "number") setDailyCap(d.dailyCap);
+          if (typeof d.name === "string") setName(d.name);
+          if (d.seq && typeof d.seq === "object" && Array.isArray((d.seq as { steps?: unknown }).steps)) {
+            const raw = (d.seq as { steps: unknown[]; source?: unknown }).steps;
+            const steps = raw.filter(
+              (s): s is GeneratedStep =>
+                !!s && typeof (s as GeneratedStep).step === "number" && typeof (s as GeneratedStep).subject === "string" && typeof (s as GeneratedStep).body === "string",
+            );
+            if (steps.length) setSeq({ steps, source: (d.seq as { source?: unknown }).source === "ai" ? "ai" : "rules" });
+          }
+          setRestored(true);
+        }
+      }
+    } catch {
+      /* ignore a corrupt draft */
+    }
+    setHydrated(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    if (!hydrated) return; // don't clobber the saved draft before we've restored it
+    try {
+      if (draftHasContent) localStorage.setItem(DRAFT_KEY, JSON.stringify({ step, vertical, problem, titles, leadTarget, personaId, dailyCap, name, seq }));
+      else localStorage.removeItem(DRAFT_KEY);
+    } catch {
+      /* storage full / unavailable — non-fatal */
+    }
+  }, [hydrated, step, vertical, problem, titles, leadTarget, personaId, dailyCap, name, seq, draftHasContent]);
+
+  function clearDraft() {
+    try {
+      localStorage.removeItem(DRAFT_KEY);
+    } catch {
+      /* ignore */
+    }
+  }
+  function startOver() {
+    setStep(0);
+    setVertical("");
+    setProblem("");
+    setTitles("");
+    setLeadTarget(500);
+    setPersonaId(personas[0]?.id ?? "");
+    setDailyCap(80);
+    setName("");
+    setSeq(null);
+    setIdeas([]);
+    setProblemOpts([]);
+    setTitleOpts(null);
+    setError(null);
+    setRestored(false);
+    clearDraft();
+  }
 
   const maxCostPerDemo = monthlyBudget / (dailyGoal * 30);
   const maxCostPerLead = maxCostPerDemo * 0.01;
@@ -250,6 +334,7 @@ export function LaunchWizard({
         setError(res.error ?? "Could not create campaign.");
         return;
       }
+      clearDraft(); // campaign is persisted — drop the in-progress draft
       router.push(res.id ? `/campaigns/${res.id}` : "/campaigns");
       router.refresh();
     });
@@ -278,6 +363,15 @@ export function LaunchWizard({
           </div>
         ))}
       </div>
+
+      {restored ? (
+        <div className="flex items-center justify-between gap-2 rounded-lg border border-brand-500/25 bg-brand-600/10 px-3 py-2 text-xs text-slate-300">
+          <span>Resumed your in-progress draft — auto-saved on this browser.</span>
+          <button type="button" onClick={startOver} className="shrink-0 font-medium text-brand-300 transition-colors hover:text-brand-200">Start over</button>
+        </div>
+      ) : (
+        draftHasContent && <p className="text-[11px] text-slate-500">Progress saves automatically on this browser — you can close the tab and pick up where you left off.</p>
+      )}
 
       <Card>
         <CardBody className="space-y-4">
