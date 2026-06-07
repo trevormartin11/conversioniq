@@ -199,7 +199,7 @@ export default async function CampaignDetail({ params }: { params: Promise<{ id:
         <SectionHeader title="Hyper-personalization (beta)" subtitle="Generate one specific, true opener line from a prospect's website — preview-only, review before it sends. Social / LinkedIn signals come next." />
         <Card>
           <CardBody>
-            <PersonalizationLab aiOn={integrations.anthropic} vertical={c.vertical} />
+            <PersonalizationLab aiOn={integrations.anthropic} vertical={c.vertical} campaignId={c.id} />
           </CardBody>
         </Card>
       </section>

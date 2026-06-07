@@ -265,6 +265,8 @@ export interface NewInstantlyLead {
   last_name?: string;
   company_name?: string;
   phone?: string;
+  /** Per-lead hyper-personalization line — fills the {{personalization}} merge tag in the sequence. */
+  personalization?: string;
 }
 
 /**
@@ -276,11 +278,15 @@ export async function addLeadsToCampaign(campaignId: string, leads: NewInstantly
   let added = 0;
   let failed = 0;
   for (const lead of leads) {
+    const { personalization, ...rest } = lead;
+    const body: Record<string, unknown> = { campaign: campaignId, ...rest };
+    // Personalization rides as a custom variable → {{personalization}} in the sequence copy.
+    if (personalization) body.custom_variables = { personalization };
     try {
       await httpJson("instantly", `${BASE}/leads`, {
         method: "POST",
         headers: headers(),
-        body: JSON.stringify({ campaign: campaignId, ...lead }),
+        body: JSON.stringify(body),
       });
       added++;
     } catch {
