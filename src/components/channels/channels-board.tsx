@@ -20,9 +20,10 @@ import {
   sendOutreachAction,
   skipOutreachAction,
 } from "@/app/(dashboard)/channels/actions";
+import { AccountsPanel } from "@/components/channels/accounts-panel";
 
 type LeadLite = { id: string; name: string; company: string; title: string; vertical: string; phone: string | null; status: string };
-type Tab = "social" | "sms" | "consent";
+type Tab = "social" | "sms" | "consent" | "accounts";
 
 const STATUS_TAG: Record<OutreachStatus, { tone: "slate" | "brand" | "ok" | "warn" | "bad"; label: string }> = {
   needs_consent: { tone: "bad", label: "Needs consent" },
@@ -50,7 +51,8 @@ export function ChannelsBoard({
   aiOn: boolean;
   twilioOn: boolean;
 }) {
-  const [tab, setTab] = useState<Tab>("social");
+  // Land on setup first when there's nothing to send from yet (fresh / live mode).
+  const [tab, setTab] = useState<Tab>(accounts.length ? "social" : "accounts");
 
   const channels = useMemo(() => {
     const order: OutreachChannel[] = ["sms", "linkedin", "instagram"];
@@ -75,6 +77,7 @@ export function ChannelsBoard({
     { id: "social", label: "Social DM queue", count: socialQueue.filter((o) => o.status !== "sent").length },
     { id: "sms", label: "SMS", count: smsQueue.filter((o) => o.status !== "sent").length },
     { id: "consent", label: "Consent ledger", count: consent.filter((c) => c.status === "opted_in").length },
+    { id: "accounts", label: "Sending accounts", count: accounts.length },
   ];
 
   return (
@@ -186,6 +189,8 @@ export function ChannelsBoard({
       )}
 
       {tab === "consent" && <ConsentLedger consent={consent} />}
+
+      {tab === "accounts" && <AccountsPanel accounts={accounts} />}
     </div>
   );
 }

@@ -3,20 +3,30 @@
 import { revalidatePath } from "next/cache";
 import { getCurrentUser } from "@/lib/auth";
 import {
+  addChannelAccount,
   addOutreach,
   approveOutreach,
   ensureData,
+  getChannelAccount,
   getLead,
   getOutreachMessage,
   recordConsent,
+  removeChannelAccount,
   sendOutreach,
   setConsentStatus,
   skipOutreach,
+  updateChannelAccount,
   updateOutreachBody,
 } from "@/lib/data/store";
 import { draftChannelMessage } from "@/lib/ai/channels";
-import { isValidHandle } from "@/lib/channels/policy";
-import type { ConsentSource, OutreachChannel } from "@/lib/data/types";
+import { isValidHandle, normalizeHandle } from "@/lib/channels/policy";
+import type { ChannelAccountStatus, ConsentSource, OutreachChannel, TenDlcStatus } from "@/lib/data/types";
+
+/** Daily caps are the anti-ban chokepoint — keep them sane (1–1000). Returns null if invalid. */
+function cleanCap(raw: unknown): number | null {
+  const n = Math.round(Number(raw));
+  return Number.isFinite(n) && n >= 1 && n <= 1000 ? n : null;
+}
 
 function rev() {
   revalidatePath("/channels");
@@ -137,4 +147,72 @@ export async function skipOutreachAction(id: string) {
   await skipOutreach(id, user.name);
   rev();
   return { ok: true as const };
+}
+
+// --- sending-account setup --------------------------------------------------
+
+/** Register a sending identity (SMS number / social account) so a channel can send. */
+export async function addChannelAccountAction(input: {
+  channel: OutreachChannel;
+  label: string;
+  identifier: string;
+  dailyCap: number;
+  status?: ChannelAccountStatus;
+  tenDlc?: TenDlcStatus;
+  provider?: string;
+  note?: string;
+}) {
+  await ensureData();
+  const user = await getCurrentUser();
+  if (!input.label.trim()) return { ok: false as const, error: "Give the account a label." };
+  if (!input.identifier.trim()) return { ok: false as const, error: input.channel === "sms" ? "Enter the phone number." : "Enter the account handle." };
+  if (input.channel === "sms" && !isValidHandle("sms", input.identifier)) return { ok: false as const, error: "Enter a valid phone number, e.g. +14155550123." };
+  const cap = cleanCap(input.dailyCap);
+  if (cap == null) return { ok: false as const, error: "Daily cap must be between 1 and 1000." };
+  const identifier = input.channel === "sms" ? normalizeHandle("sms", input.identifier) : input.identifier.trim();
+  const acct = await addChannelAccount(
+    { channel: input.channel, label: input.label.trim(), identifier, dailyCap: cap, status: input.status, tenDlc: input.tenDlc, provider: input.provider?.trim() || undefined, note: input.note?.trim() || null },
+    user.name,
+  );
+  rev();
+  return { ok: true as const, id: acct.id };
+}
+
+/** Edit a sending account (cap, status, 10DLC, label, note). */
+export async function updateChannelAccountAction(
+  id: string,
+  patch: { label?: string; identifier?: string; dailyCap?: number; status?: ChannelAccountStatus; tenDlc?: TenDlcStatus; note?: string },
+) {
+  await ensureData();
+  const user = await getCurrentUser();
+  const existing = getChannelAccount(id);
+  if (!existing) return { ok: false as const, error: "Account not found." };
+  const clean: Parameters<typeof updateChannelAccount>[1] = {};
+  if (patch.label !== undefined) {
+    if (!patch.label.trim()) return { ok: false as const, error: "Label can't be empty." };
+    clean.label = patch.label.trim();
+  }
+  if (patch.identifier !== undefined) {
+    if (existing.channel === "sms" && !isValidHandle("sms", patch.identifier)) return { ok: false as const, error: "Enter a valid phone number, e.g. +14155550123." };
+    clean.identifier = existing.channel === "sms" ? normalizeHandle("sms", patch.identifier) : patch.identifier.trim();
+  }
+  if (patch.dailyCap !== undefined) {
+    const cap = cleanCap(patch.dailyCap);
+    if (cap == null) return { ok: false as const, error: "Daily cap must be between 1 and 1000." };
+    clean.dailyCap = cap;
+  }
+  if (patch.status !== undefined) clean.status = patch.status;
+  if (patch.tenDlc !== undefined) clean.tenDlc = patch.tenDlc;
+  if (patch.note !== undefined) clean.note = patch.note.trim() || null;
+  await updateChannelAccount(id, clean, user.name);
+  rev();
+  return { ok: true as const };
+}
+
+export async function removeChannelAccountAction(id: string) {
+  await ensureData();
+  const user = await getCurrentUser();
+  const ok = await removeChannelAccount(id, user.name);
+  rev();
+  return ok ? { ok: true as const } : { ok: false as const, error: "Account not found." };
 }

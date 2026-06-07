@@ -13,6 +13,7 @@ import type {
   AutomationLevel,
   Campaign,
   ChannelAccount,
+  ChannelAccountStatus,
   ConsentRecord,
   ConsentSource,
   ConsentStatus,
@@ -32,6 +33,7 @@ import type {
   ReplyStatus,
   SequenceVariant,
   SuppressionEntry,
+  TenDlcStatus,
 } from "./types";
 import { capRemaining, findConsent, GATE_REASONS, normalizeHandle, sendGate } from "@/lib/channels/policy";
 import { pushDemoDeal } from "@/lib/integrations/zoho-civ";
@@ -703,7 +705,7 @@ export async function approveOutreach(id: string, actor: string): Promise<{ ok: 
   const m = getOutreachMessage(id);
   if (!m) return { ok: false, error: "Message not found." };
   if (m.channel === "sms") {
-    const gate = sendGate("sms", db().consent, m.toHandle, m.accountId ? getChannelAccount(m.accountId) : defaultAccountFor("sms") ?? null);
+    const gate = sendGate("sms", db().consent, m.toHandle, (m.accountId ? getChannelAccount(m.accountId) : null) ?? defaultAccountFor("sms") ?? null);
     if (!gate.ok && (gate.reason === "no_consent" || gate.reason === "opted_out")) {
       m.status = "needs_consent";
       await liveUpsert("outreach_messages", { id, status: m.status });
@@ -725,7 +727,8 @@ export async function sendOutreach(id: string, actor: string): Promise<{ ok: boo
   const m = getOutreachMessage(id);
   if (!m) return { ok: false, error: "Message not found." };
   if (m.status === "sent") return { ok: true, msg: m };
-  const account = m.accountId ? getChannelAccount(m.accountId) : defaultAccountFor(m.channel) ?? null;
+  // Re-resolve to the channel default if the pinned account is gone (e.g. it was removed).
+  const account = (m.accountId ? getChannelAccount(m.accountId) : null) ?? defaultAccountFor(m.channel) ?? null;
   const gate = sendGate(m.channel, db().consent, m.toHandle, account);
   if (!gate.ok) {
     // A consent failure re-parks an SMS so the queue reflects reality; cap/account failures just report.
@@ -764,4 +767,72 @@ export function channelCapacity(channel: OutreachChannel): { cap: number; sentTo
   const sentToday = accts.reduce((s, a) => s + a.sentToday, 0);
   const remaining = accts.reduce((s, a) => s + capRemaining(a), 0);
   return { cap, sentToday, remaining };
+}
+
+function channelAccountRow(a: ChannelAccount): Record<string, unknown> {
+  return {
+    id: a.id, channel: a.channel, label: a.label, identifier: a.identifier, status: a.status,
+    daily_cap: a.dailyCap, sent_today: a.sentToday, ten_dlc: a.tenDlc, provider: a.provider, note: a.note,
+  };
+}
+
+export interface NewChannelAccount {
+  channel: OutreachChannel;
+  label: string;
+  identifier: string;
+  dailyCap: number;
+  status?: ChannelAccountStatus;
+  tenDlc?: TenDlcStatus;
+  provider?: string;
+  note?: string | null;
+}
+
+/** Register a sending identity (an SMS number / a social account) so a channel can send. */
+export async function addChannelAccount(input: NewChannelAccount, actor = "system"): Promise<ChannelAccount> {
+  const account: ChannelAccount = {
+    id: `ca_${Math.random().toString(36).slice(2, 9)}`,
+    channel: input.channel,
+    label: input.label,
+    identifier: input.identifier,
+    status: input.status ?? "active",
+    dailyCap: input.dailyCap,
+    sentToday: 0,
+    tenDlc: input.channel === "sms" ? input.tenDlc ?? "pending" : "n/a",
+    provider: input.provider ?? (input.channel === "sms" ? "twilio" : input.channel),
+    note: input.note ?? null,
+  };
+  db().channelAccounts.push(account);
+  await liveUpsert("channel_accounts", channelAccountRow(account));
+  await pushAudit(actor, "channel_account.added", "channel_account", account.id, { channel: account.channel, label: account.label });
+  return account;
+}
+
+/** Edit a sending account (cap, status, 10DLC, label, note). Cannot change sentToday here. */
+export async function updateChannelAccount(
+  id: string,
+  patch: Partial<Pick<ChannelAccount, "label" | "identifier" | "dailyCap" | "status" | "tenDlc" | "provider" | "note">>,
+  actor = "system",
+): Promise<ChannelAccount | null> {
+  const a = db().channelAccounts.find((x) => x.id === id);
+  if (!a) return null;
+  if (patch.label !== undefined) a.label = patch.label;
+  if (patch.identifier !== undefined) a.identifier = patch.identifier;
+  if (patch.dailyCap !== undefined) a.dailyCap = patch.dailyCap;
+  if (patch.status !== undefined) a.status = patch.status;
+  if (patch.tenDlc !== undefined) a.tenDlc = a.channel === "sms" ? patch.tenDlc : "n/a";
+  if (patch.provider !== undefined) a.provider = patch.provider;
+  if (patch.note !== undefined) a.note = patch.note;
+  await liveUpsert("channel_accounts", channelAccountRow(a));
+  await pushAudit(actor, "channel_account.updated", "channel_account", a.id, { ...patch });
+  return a;
+}
+
+/** Remove a sending account. Queued messages keep their (now-dangling) accountId and re-resolve to the channel default at send. */
+export async function removeChannelAccount(id: string, actor = "system"): Promise<boolean> {
+  const before = db().channelAccounts.length;
+  db().channelAccounts = db().channelAccounts.filter((a) => a.id !== id);
+  if (db().channelAccounts.length === before) return false;
+  await liveDeleteRow("channel_accounts", id);
+  await pushAudit(actor, "channel_account.removed", "channel_account", id, {});
+  return true;
 }
