@@ -2,12 +2,10 @@ import { Card, CardBody, SectionHeader } from "@/components/ui/card";
 import { Stat } from "@/components/ui/stat";
 import { LabeledBar } from "@/components/ui/charts";
 import { CostManager, type CostView } from "@/components/costs/cost-manager";
-import { AiSpendMeter } from "@/components/costs/ai-spend-meter";
-import { costSummary } from "@/lib/data/queries";
+import { costSummary, costDashboard } from "@/lib/data/queries";
 import { PageHeader } from "@/components/ui/card";
 import { ensureData, getCosts } from "@/lib/data/store";
 import { loadCostMeter } from "@/lib/ai/cost-meter";
-import { appConfig } from "@/lib/config";
 import { usd, titleCase } from "@/lib/format";
 
 export const dynamic = "force-dynamic";
@@ -16,6 +14,15 @@ export default async function CostsPage() {
   await ensureData();
   const s = costSummary();
   const meter = await loadCostMeter();
+  const claudeMonthly = meter.actual ? meter.actual.monthToDateUsd : meter.self.monthToDateUsd;
+  const d = costDashboard({ monthlyUsd: claudeMonthly, byDay: meter.actual?.byDayUsd });
+  const cplArrow = d.costPerLeadTrend === "down" ? "▼" : d.costPerLeadTrend === "up" ? "▲" : "→";
+  const cplSub = d.costPerLead == null ? "no leads sourced yet" : `${cplArrow} vs prior 30d · ${d.leadsSourced30d} leads`;
+  const claudeSub = meter.actual
+    ? meter.actual.scoped
+      ? "billed · scoped to this app"
+      : "billed · org-wide — set ANTHROPIC_WORKSPACE_ID"
+    : "estimate · add admin key for actual";
   const costs: CostView[] = getCosts().map((c) => ({
     id: c.id,
     category: c.category,
@@ -32,17 +39,25 @@ export default async function CostsPage() {
     <div className="space-y-6">
       <PageHeader title="Costs & P&L" subtitle="Every cost of running the operation — sending, data, email, domains, leads — against your residual, for true net." />
 
-      {/* Top line */}
+      {/* Top line — the five headline KPIs */}
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
-        <Stat label="Monthly costs" value={usd(s.monthly)} sub={`${s.activeCount} line items`} tone="warn" />
-        <Stat label="Annual run-rate" value={usd(s.annual)} />
-        <Stat label="One-time / setup" value={usd(s.oneTime)} sub="sunk" />
-        <Stat label="Net / mo" value={usd(s.netMonthly)} sub="residual − costs" tone={s.netMonthly >= 0 ? "ok" : "bad"} />
-        <Stat label="Your net / mo" value={usd(s.netPerPartnerMonthly)} sub="1 of 3" tone={s.netPerPartnerMonthly >= 0 ? "ok" : "bad"} />
+        <Stat label="Variable cost / lead" value={d.costPerLead == null ? "—" : usd(d.costPerLead)} sub={cplSub} tone={d.costPerLeadTrend === "down" ? "ok" : d.costPerLeadTrend === "up" ? "bad" : undefined} />
+        <Stat label="Fixed costs / mo" value={usd(d.fixedMonthly)} sub="recurring overhead" />
+        <Stat label="Variable costs / mo" value={usd(d.variableMonthly)} sub="scales w/ volume + Claude" tone="warn" />
+        <Stat label="Total spend / mo" value={usd(d.totalMonthly)} sub="rolling 30-day" tone="warn" />
+        <Stat label="Revenue / mo" value={usd(d.revenueMonthly)} sub={`net ${usd(d.netRevenueMonthly)}/mo`} tone={d.netRevenueMonthly >= 0 ? "ok" : "bad"} />
       </div>
 
-      {/* Live Claude API spend meter */}
-      <AiSpendMeter initial={meter} softBudget={appConfig.ai.softMonthlyBudgetUsd} />
+      {/* Single Claude API spend box */}
+      <Card>
+        <CardBody className="flex items-center justify-between gap-3">
+          <div>
+            <p className="text-xs font-medium text-slate-400">Claude API · month to date</p>
+            <p className="mt-0.5 text-2xl font-semibold text-slate-100">{usd(claudeMonthly)}</p>
+          </div>
+          <span className="max-w-[14rem] text-right text-[11px] text-slate-500">{claudeSub}</span>
+        </CardBody>
+      </Card>
 
       {/* Net explainer */}
       <Card>
