@@ -5,11 +5,15 @@ import { updateInstantlyCampaignSchedule, updateInstantlyCampaignSequence } from
 import { integrations } from "@/lib/config";
 import { bucketByTimezone, OPTIMAL_WINDOW, type Tz } from "@/lib/send-timing";
 
+// Instantly's schedule timezone is a restricted enum (verified live against the API):
+// New_York / Denver / Los_Angeles are REJECTED — these city names are the accepted
+// equivalents. Instantly has no Pacific (UTC-8) entry, so Pacific maps to Boise (Mountain),
+// the closest accepted zone (~1h early for PT). Unknown falls back to Chicago.
 const TZ_IANA: Record<Exclude<Tz, "unknown">, string> = {
-  ET: "America/New_York",
+  ET: "America/Detroit",
   CT: "America/Chicago",
-  MT: "America/Denver",
-  PT: "America/Los_Angeles",
+  MT: "America/Boise",
+  PT: "America/Boise",
 };
 
 /** Push the hub's edited sequence copy to the live Instantly campaign (cadence preserved). */

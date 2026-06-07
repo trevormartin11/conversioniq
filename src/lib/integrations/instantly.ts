@@ -246,9 +246,14 @@ export async function createInstantlyCampaign(input: {
   return { id: res.id ?? "" };
 }
 
-/** Delete a campaign (cleanup / operator control). */
+/** Delete a campaign (cleanup / operator control). DELETE must NOT carry a JSON content-type
+ *  with no body — Instantly 400s ("empty json body") — so send an auth-only header. */
 export async function deleteInstantlyCampaign(id: string): Promise<unknown> {
-  return httpJson("instantly", `${BASE}/campaigns/${id}`, { method: "DELETE", headers: headers() });
+  if (!integrations.instantly) throw new NotConfiguredError("instantly");
+  return httpJson("instantly", `${BASE}/campaigns/${id}`, {
+    method: "DELETE",
+    headers: { Authorization: `Bearer ${process.env.INSTANTLY_API_KEY}` },
+  });
 }
 
 /** Best-effort: are leads loaded into this campaign? (presence, not exact count) */
