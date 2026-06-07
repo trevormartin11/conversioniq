@@ -5,6 +5,7 @@ import { ArrowLeft, CheckCircle2, Clock, Lightbulb } from "lucide-react";
 import { Card, CardBody, PageHeader, SectionHeader } from "@/components/ui/card";
 import { HealthBadge, Tag } from "@/components/ui/badge";
 import { CampaignActions } from "@/components/campaigns/campaign-actions";
+import { InstantlySync } from "@/components/campaigns/instantly-sync";
 import { EditableVariant } from "@/components/campaigns/editable-variant";
 import { PersonalizationLab } from "@/components/campaigns/personalization-lab";
 import { campaignCards, campaignCapacity } from "@/lib/data/queries";
@@ -73,6 +74,14 @@ export default async function CampaignDetail({ params }: { params: Promise<{ id:
           <CampaignActions id={c.id} status={c.status} />
         </CardBody>
       </Card>
+
+      {/* Sync to Instantly (beta) — only when linked to a live campaign */}
+      {c.instantlyCampaignId && integrations.instantly && (
+        <section>
+          <SectionHeader title="Sync to Instantly" subtitle="Push edited copy + the optimal send window to the live campaign." />
+          <Card><CardBody><InstantlySync campaignId={c.id} /></CardBody></Card>
+        </section>
+      )}
 
       {/* Meta */}
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">

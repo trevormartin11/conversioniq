@@ -308,3 +308,49 @@ export async function replyToEmail(input: { replyToUuid: string; eaccount: strin
     }),
   });
 }
+
+/**
+ * Push edited copy to a LIVE campaign's sequence (PATCH /campaigns/{id}). Preserves each
+ * step's existing delay (cadence untouched) and only swaps in the new subjects/bodies.
+ * Fails loud if Instantly rejects the shape — the caller surfaces the error, never fakes it.
+ */
+export async function updateInstantlyCampaignSequence(id: string, stepsVariants: { subject: string; body: string }[][]): Promise<unknown> {
+  let delays: number[] = [];
+  try {
+    const existing = await httpJson<RawCampaignDetail>("instantly", `${BASE}/campaigns/${id}`, { headers: headers() });
+    delays = (existing.sequences?.[0]?.steps ?? []).map((s) => Number(s.delay ?? 0));
+  } catch {
+    /* no existing delays available — fall back to the default cadence below */
+  }
+  const DEFAULT_DELAYS = [0, 3, 4, 4, 5, 5];
+  const steps = stepsVariants.map((variants, i) => ({
+    type: "email",
+    delay: delays[i] ?? DEFAULT_DELAYS[i] ?? 4,
+    variants: variants.map((v) => ({ subject: v.subject, body: textToHtml(v.body) })),
+  }));
+  return httpJson("instantly", `${BASE}/campaigns/${id}`, {
+    method: "PATCH",
+    headers: headers(),
+    body: JSON.stringify({ sequences: [{ steps }] }),
+  });
+}
+
+/**
+ * Set a LIVE campaign's sending schedule (PATCH /campaigns/{id}) — the optimal window +
+ * days in a given timezone. NB: Instantly's timezone enum is finicky (America/Chicago is
+ * known-good; America/New_York was rejected in testing), so callers default to Chicago.
+ */
+export async function updateInstantlyCampaignSchedule(
+  id: string,
+  opts: { timezone: string; from: string; to: string; days?: Record<string, boolean> },
+): Promise<unknown> {
+  return httpJson("instantly", `${BASE}/campaigns/${id}`, {
+    method: "PATCH",
+    headers: headers(),
+    body: JSON.stringify({
+      campaign_schedule: {
+        schedules: [{ name: "optimal", timing: { from: opts.from, to: opts.to }, days: opts.days ?? { "2": true, "3": true, "4": true }, timezone: opts.timezone }],
+      },
+    }),
+  });
+}
