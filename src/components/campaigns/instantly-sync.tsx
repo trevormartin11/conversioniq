@@ -1,16 +1,29 @@
 "use client";
 
 import { useState } from "react";
-import { Check, Clock, Loader2, UploadCloud } from "lucide-react";
-import { applyOptimalScheduleAction, pushCopyToInstantlyAction } from "@/app/(dashboard)/campaigns/push-actions";
+import { Check, Clock, Loader2, UploadCloud, Wand2 } from "lucide-react";
+import { applyOptimalScheduleAction, pushCopyToInstantlyAction, upgradeSequenceAction } from "@/app/(dashboard)/campaigns/push-actions";
 
 /**
  * Push hub edits to the LIVE Instantly campaign — copy (cadence preserved) and the optimal
  * send window. Gated to an explicit click; failures surface verbatim (never faked).
  */
 export function InstantlySync({ campaignId }: { campaignId: string }) {
-  const [pending, setPending] = useState<"" | "copy" | "schedule">("");
+  const [pending, setPending] = useState<"" | "copy" | "schedule" | "upgrade">("");
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
+
+  async function upgrade() {
+    setPending("upgrade");
+    setMsg(null);
+    const r = await upgradeSequenceAction(campaignId);
+    if (r.ok) {
+      const bits = [r.personalized ? "added the personalization opener" : null, r.subjectsAdded ? `${r.subjectsAdded} A/B subject${r.subjectsAdded === 1 ? "" : "s"}` : null].filter(Boolean);
+      setMsg({ ok: true, text: bits.length ? `Pushed: ${bits.join(" + ")} across ${r.steps} steps.` : "Already upgraded — nothing to change." });
+    } else {
+      setMsg({ ok: false, text: r.error ?? "Failed." });
+    }
+    setPending("");
+  }
 
   async function pushCopy() {
     setPending("copy");
@@ -38,6 +51,10 @@ export function InstantlySync({ campaignId }: { campaignId: string }) {
         <button onClick={applySchedule} disabled={!!pending} className={btn}>
           {pending === "schedule" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Clock className="h-4 w-4 text-brand-400" />}
           Apply optimal send window
+        </button>
+        <button onClick={upgrade} disabled={!!pending} className={btn}>
+          {pending === "upgrade" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Wand2 className="h-4 w-4 text-brand-400" />}
+          Add personalization + A/B
         </button>
       </div>
       {msg && (
