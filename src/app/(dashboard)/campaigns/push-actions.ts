@@ -8,7 +8,10 @@ import {
   updateInstantlyCampaignSequence,
 } from "@/lib/integrations/instantly";
 import { integrations } from "@/lib/config";
+import { rewriteCopy } from "@/lib/ai/copy";
 import { INSTANTLY_TZ, TZ_LABEL, bucketByTimezone, leadTimezone, optimalWindowHHMM, type Tz } from "@/lib/send-timing";
+
+const PERSONALIZATION_TAG = "{{personalization}}";
 
 /** First variant per step, ordered — the sequence to replicate into Instantly. */
 function sequenceFor(campaignId: string): { subject: string; body: string }[] {
@@ -40,6 +43,64 @@ export async function pushCopyToInstantlyAction(campaignId: string): Promise<{ o
   try {
     await updateInstantlyCampaignSequence(c.instantlyCampaignId, stepsVariants);
     return { ok: true };
+  } catch (e) {
+    return { ok: false, error: (e as Error).message };
+  }
+}
+
+/**
+ * Upgrade a campaign's sequence in place and push it to Instantly: prepend the
+ * {{personalization}} opener to step 1 (filled per-lead at load via the Hyper-Personalization
+ * flow) and add a second, AI-generated subject variant to each step for an A/B test. Idempotent
+ * — re-running skips steps that are already personalized / already have two variants.
+ */
+export async function upgradeSequenceAction(
+  campaignId: string,
+): Promise<{ ok: boolean; error?: string; steps?: number; subjectsAdded?: number; personalized?: boolean }> {
+  await ensureData();
+  const c = getCampaign(campaignId);
+  if (!c?.instantlyCampaignId) return { ok: false, error: "This campaign isn't linked to an Instantly campaign yet." };
+  if (!integrations.instantly) return { ok: false, error: "Instantly isn't connected." };
+  const vars = getVariants().filter((v) => v.campaignId === campaignId);
+  if (!vars.length) return { ok: false, error: "No sequence copy to upgrade." };
+
+  const byStep = new Map<number, { subject: string; body: string }[]>();
+  for (const v of [...vars].sort((a, b) => a.step - b.step || a.variant.localeCompare(b.variant))) {
+    const arr = byStep.get(v.step) ?? [];
+    arr.push({ subject: v.subject, body: v.body });
+    byStep.set(v.step, arr);
+  }
+  const stepKeys = [...byStep.keys()].sort((a, b) => a - b);
+
+  let subjectsAdded = 0;
+  let personalized = false;
+  const stepsVariants: { subject: string; body: string }[][] = [];
+  for (const step of stepKeys) {
+    const variants = byStep.get(step)!.map((v) => ({ ...v }));
+    // 1) personalization opener on step 1's primary variant
+    if (step === stepKeys[0] && !variants[0].body.includes(PERSONALIZATION_TAG)) {
+      variants[0] = { ...variants[0], body: `${PERSONALIZATION_TAG}\n\n${variants[0].body}` };
+      personalized = true;
+    }
+    // 2) add a second subject variant (A/B) when the step has only one
+    if (variants.length === 1) {
+      const alt = await rewriteCopy({
+        subject: variants[0].subject,
+        body: variants[0].body,
+        instruction: "Write ONLY an alternate subject line for an A/B test — same intent, a different angle (more direct or more curiosity-driven). Keep it short and lowercase. Do not change the body.",
+      });
+      const altSubject = alt.subject.trim();
+      if (alt.source === "ai" && altSubject && altSubject.toLowerCase() !== variants[0].subject.trim().toLowerCase()) {
+        variants.push({ subject: altSubject, body: variants[0].body });
+        subjectsAdded++;
+      }
+    }
+    stepsVariants.push(variants);
+  }
+
+  try {
+    await updateInstantlyCampaignSequence(c.instantlyCampaignId, stepsVariants);
+    return { ok: true, steps: stepKeys.length, subjectsAdded, personalized };
   } catch (e) {
     return { ok: false, error: (e as Error).message };
   }
