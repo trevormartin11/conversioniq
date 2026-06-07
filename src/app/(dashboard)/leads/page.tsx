@@ -5,6 +5,7 @@ import { SuppressionTools } from "@/components/leads/suppression-tools";
 import { SourcingPlanner } from "@/components/leads/sourcing-planner";
 import { ensureData, getCampaigns, getLeads, getSuppression } from "@/lib/data/store";
 import { num, titleCase } from "@/lib/format";
+import { leadTimezone } from "@/lib/send-timing";
 import type { SuppressionReason } from "@/lib/data/types";
 
 export const dynamic = "force-dynamic";
@@ -52,7 +53,7 @@ export default async function LeadsPage({ searchParams }: { searchParams: Promis
 
       {/* Lead table */}
       <section>
-        <SectionHeader title="Leads" subtitle={`${num(filtered.length)} ${query ? `matching “${q}”` : "total"}`} />
+        <SectionHeader title="Leads" subtitle={`${num(filtered.length)} ${query ? `matching “${q}”` : "total"} · timezone inferred for send timing`} />
         <form className="mb-3">
           <input
             name="q"
@@ -64,20 +65,26 @@ export default async function LeadsPage({ searchParams }: { searchParams: Promis
         <Card>
           <CardBody className="p-0">
             <div className="divide-y divide-ink-800">
-              {filtered.slice(0, 40).map((l) => (
-                <div key={l.id} className="flex items-center justify-between gap-3 px-4 py-3">
-                  <div className="min-w-0">
-                    <p className="truncate text-sm font-medium text-slate-100">{l.firstName} {l.lastName}</p>
-                    <p className="truncate text-xs text-slate-500">{l.email} · {l.company}</p>
+              {filtered.slice(0, 40).map((l) => {
+                const tz = leadTimezone(l);
+                return (
+                  <div key={l.id} className="flex items-center justify-between gap-3 px-4 py-3">
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-medium text-slate-100">{l.firstName} {l.lastName}</p>
+                      <p className="truncate text-xs text-slate-500">{l.email} · {l.company}</p>
+                    </div>
+                    <div className="flex shrink-0 items-center gap-2">
+                      {tz !== "unknown" && (
+                        <span className="hidden rounded bg-white/5 px-1.5 py-0.5 text-[10px] text-slate-400 sm:inline" title="Inferred send timezone (from area code)">{tz}</span>
+                      )}
+                      <span className="hidden text-xs text-slate-500 sm:inline">{l.vertical}</span>
+                      <Tag tone={l.status === "closed" ? "ok" : l.status === "lost" ? "bad" : l.status === "positive" || l.status.startsWith("demo") ? "brand" : "slate"}>
+                        {titleCase(l.status)}
+                      </Tag>
+                    </div>
                   </div>
-                  <div className="flex shrink-0 items-center gap-2">
-                    <span className="hidden text-xs text-slate-500 sm:inline">{l.vertical}</span>
-                    <Tag tone={l.status === "closed" ? "ok" : l.status === "lost" ? "bad" : l.status === "positive" || l.status.startsWith("demo") ? "brand" : "slate"}>
-                      {titleCase(l.status)}
-                    </Tag>
-                  </div>
-                </div>
-              ))}
+                );
+              })}
               {filtered.length === 0 && <p className="px-4 py-8 text-center text-sm text-slate-500">No leads match.</p>}
             </div>
           </CardBody>
