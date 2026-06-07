@@ -6,6 +6,7 @@ import { Card, CardBody, PageHeader, SectionHeader } from "@/components/ui/card"
 import { HealthBadge, Tag } from "@/components/ui/badge";
 import { CampaignActions } from "@/components/campaigns/campaign-actions";
 import { InstantlySync } from "@/components/campaigns/instantly-sync";
+import { TimezoneSplit } from "@/components/campaigns/timezone-split";
 import { EditableVariant } from "@/components/campaigns/editable-variant";
 import { PersonalizationLab } from "@/components/campaigns/personalization-lab";
 import { campaignCards, campaignCapacity } from "@/lib/data/queries";
@@ -80,6 +81,14 @@ export default async function CampaignDetail({ params }: { params: Promise<{ id:
         <section>
           <SectionHeader title="Sync to Instantly" subtitle="Push edited copy + the optimal send window to the live campaign." />
           <Card><CardBody><InstantlySync campaignId={c.id} /></CardBody></Card>
+        </section>
+      )}
+
+      {/* Send timing by timezone (beta) */}
+      {integrations.instantly && (
+        <section>
+          <SectionHeader title="Send timing by timezone" subtitle="Split into per-timezone draft campaigns so each recipient is sent in their optimal local window." />
+          <Card><CardBody><TimezoneSplit campaignId={c.id} /></CardBody></Card>
         </section>
       )}
 

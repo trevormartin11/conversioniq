@@ -50,6 +50,23 @@ export function serverWindowFor(tz: Exclude<Tz, "unknown">): string {
   return `${pad(toUtc(OPTIMAL_WINDOW.startHour))}:00–${pad(toUtc(OPTIMAL_WINDOW.endHour))}:${pad(OPTIMAL_WINDOW.endMinute)} UTC`;
 }
 
+/**
+ * Instantly's schedule timezone is a restricted enum (verified live against the API):
+ * New_York / Denver / Los_Angeles are rejected — these are the accepted zones per US
+ * timezone. Instantly has no Pacific (UTC-8) entry, so PT maps to Boise (~1h early).
+ */
+export const INSTANTLY_TZ: Record<Exclude<Tz, "unknown">, string> = {
+  ET: "America/Detroit",
+  CT: "America/Chicago",
+  MT: "America/Boise",
+  PT: "America/Boise",
+};
+
+/** The optimal window as HH:MM strings for an Instantly campaign schedule. */
+export function optimalWindowHHMM(): { from: string; to: string } {
+  return { from: `${pad(OPTIMAL_WINDOW.startHour)}:00`, to: `${pad(OPTIMAL_WINDOW.endHour)}:${pad(OPTIMAL_WINDOW.endMinute)}` };
+}
+
 export interface TzBucket {
   tz: Tz;
   label: string;
