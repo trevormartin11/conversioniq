@@ -4,7 +4,6 @@ import {
   LayoutDashboard,
   Lightbulb,
   Megaphone,
-  Radar,
   Rocket,
   Settings,
   ShieldCheck,
@@ -47,7 +46,6 @@ export const NAV: NavItem[] = [
   // Build a campaign — the outbound flow, in order
   { href: "/launch", label: "Launch Campaign", short: "Launch", icon: Rocket, phase: 1, group: "build" },
   { href: "/strategy", label: "Strategy", short: "Strategy", icon: Target, phase: 1, group: "build" },
-  { href: "/source", label: "Source", short: "Source", icon: Radar, phase: 1, group: "build" },
   { href: "/leads", label: "Leads & Suppression", short: "Leads", icon: Users, phase: 1, group: "build" },
   { href: "/campaigns", label: "Campaigns", short: "Send", icon: Megaphone, phase: 2, group: "build" },
   // Run the machine

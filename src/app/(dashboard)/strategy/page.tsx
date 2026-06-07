@@ -66,8 +66,8 @@ export default async function StrategyPage() {
             </Card>
           ))}
         </div>
-        <Link href="/source" className="mt-3 inline-flex items-center gap-1.5 text-xs font-medium text-brand-400 hover:text-brand-300">
-          <Sparkles className="h-3.5 w-3.5" /> Next: find the people in Source →
+        <Link href="/leads" className="mt-3 inline-flex items-center gap-1.5 text-xs font-medium text-brand-400 hover:text-brand-300">
+          <Sparkles className="h-3.5 w-3.5" /> Next: find the people in Leads →
         </Link>
       </section>
     </div>

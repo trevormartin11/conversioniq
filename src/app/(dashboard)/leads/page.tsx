@@ -7,6 +7,7 @@ import { Progress } from "@/components/ui/charts";
 import { Lock } from "lucide-react";
 import { ensureData, getCampaigns, getLeads, getSuppression } from "@/lib/data/store";
 import { creditSummary } from "@/lib/data/queries";
+import { appConfig } from "@/lib/config";
 import { ago, num, pct, titleCase } from "@/lib/format";
 import { leadTimezone } from "@/lib/send-timing";
 import type { SuppressionReason } from "@/lib/data/types";
@@ -20,6 +21,9 @@ export default async function LeadsPage({ searchParams }: { searchParams: Promis
   const leads = getLeads();
   const suppression = getSuppression();
   const meters = creditSummary();
+  const demosPerMonth = appConfig.goals.demosPerDay * 30;
+  const maxCostPerDemo = appConfig.goals.monthlyBudgetUsd / demosPerMonth;
+  const maxCostPerLead = maxCostPerDemo * 0.01;
   const campaignOptions = getCampaigns().map((c) => ({ id: c.id, name: c.name, status: c.status, hasInstantly: !!c.instantlyCampaignId }));
 
   const byReason = {} as Record<SuppressionReason, number>;
@@ -51,7 +55,12 @@ export default async function LeadsPage({ searchParams }: { searchParams: Promis
 
       {/* Lead sourcing — the smart router: vertical -> cheapest source with coverage -> verify -> dedupe */}
       <section>
-        <SectionHeader title="Source new leads" subtitle="The router picks the cheapest source that covers your target (Maps for local, B2B database for enterprise), prices it, then verifies + dedupes before load." />
+        <SectionHeader title="Source new leads" subtitle="Discover → Enrich → Verify → Dedupe → Load. The router picks the cheapest source that covers your target (Maps for local, B2B database for enterprise), prices it, then verifies + dedupes before load." />
+        <div className="mb-3 grid grid-cols-3 gap-3">
+          <Stat label="Max cost / demo" value={`$${maxCostPerDemo.toFixed(2)}`} />
+          <Stat label="Max cost / lead" value={`~$${maxCostPerLead.toFixed(2)}`} sub="at 1% lead→demo" />
+          <Stat label="Monthly budget" value={`$${num(appConfig.goals.monthlyBudgetUsd)}`} />
+        </div>
         <SourcingPlanner campaigns={campaignOptions} />
       </section>
 
