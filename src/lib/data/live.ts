@@ -32,12 +32,14 @@ export async function loadDatasetLive(): Promise<Dataset> {
   const [
     users, personas, domains, inboxes, campaigns, leads, replies, suppression,
     creditMeters, creditRequests, audit, jobs, demos, variants, metrics, costs,
+    consent, channelAccounts, outreach,
   ] = await Promise.all([
     fetchAll("users"), fetchAll("personas"), fetchAll("domains"), fetchAll("inboxes"),
     fetchAll("campaigns"), fetchAll("leads"), fetchAll("replies"), fetchAll("suppression"),
     fetchAll("credit_meters"), fetchAll("credit_requests"), fetchAll("audit_log"),
     fetchAll("job_runs"), fetchAll("demos"), fetchAll("sequence_variants"),
     fetchAll("daily_metrics"), fetchAll("costs"),
+    fetchAll("consent_records"), fetchAll("channel_accounts"), fetchAll("outreach_messages"),
   ]);
 
   return {
@@ -58,6 +60,9 @@ export async function loadDatasetLive(): Promise<Dataset> {
     metrics: metrics.map((r) => ({ date: s(r.date), campaignId: sn(r.campaign_id), sends: num(r.sends), opens: num(r.opens), replies: num(r.replies), positives: num(r.positives), bounces: num(r.bounces), demos: num(r.demos) })),
     costs: costs.map((r) => ({ id: s(r.id), category: s(r.category) as Dataset["costs"][number]["category"], vendor: s(r.vendor), description: s(r.description), amount: num(r.amount), cadence: (s(r.cadence) || "monthly") as Dataset["costs"][number]["cadence"], status: (s(r.status) || "active") as "active" | "cancelled", startedAt: s(r.started_at), nextChargeAt: sn(r.next_charge_at), source: (s(r.source) || "manual") as "manual" | "auto", note: sn(r.note), createdBy: s(r.created_by) })),
     alerts: [],
+    consent: consent.map((r) => ({ id: s(r.id), leadId: sn(r.lead_id), channel: s(r.channel) as Dataset["consent"][number]["channel"], handle: s(r.handle), status: (s(r.status) || "pending") as Dataset["consent"][number]["status"], source: (s(r.source) || "manual") as Dataset["consent"][number]["source"], proof: sn(r.proof), capturedAt: s(r.captured_at), updatedAt: s(r.updated_at) || s(r.captured_at), note: sn(r.note) })),
+    channelAccounts: channelAccounts.map((r) => ({ id: s(r.id), channel: s(r.channel) as Dataset["channelAccounts"][number]["channel"], label: s(r.label), identifier: s(r.identifier), status: (s(r.status) || "pending") as Dataset["channelAccounts"][number]["status"], dailyCap: num(r.daily_cap), sentToday: num(r.sent_today), tenDlc: (s(r.ten_dlc) || "n/a") as Dataset["channelAccounts"][number]["tenDlc"], provider: s(r.provider), note: sn(r.note) })),
+    outreach: outreach.map((r) => ({ id: s(r.id), channel: s(r.channel) as Dataset["outreach"][number]["channel"], leadId: sn(r.lead_id), campaignId: sn(r.campaign_id), accountId: sn(r.account_id), toName: s(r.to_name), toHandle: s(r.to_handle), body: s(r.body), status: (s(r.status) || "draft") as Dataset["outreach"][number]["status"], source: (s(r.source) || "manual") as Dataset["outreach"][number]["source"], consentId: sn(r.consent_id), profileUrl: sn(r.profile_url), rationale: sn(r.rationale), createdAt: s(r.created_at), scheduledAt: sn(r.scheduled_at), sentAt: sn(r.sent_at), approvedBy: sn(r.approved_by), sentBy: sn(r.sent_by), note: sn(r.note) })),
   };
 }
 

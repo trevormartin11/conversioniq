@@ -12,6 +12,10 @@ import { appConfig, DATA_MODE } from "@/lib/config";
 import type {
   AutomationLevel,
   Campaign,
+  ChannelAccount,
+  ConsentRecord,
+  ConsentSource,
+  ConsentStatus,
   Cost,
   CreditSpendRequest,
   Dataset,
@@ -21,11 +25,15 @@ import type {
   DemoStatus,
   Lead,
   LeadStatus,
+  OutreachChannel,
+  OutreachMessage,
+  OutreachStatus,
   Reply,
   ReplyStatus,
   SequenceVariant,
   SuppressionEntry,
 } from "./types";
+import { capRemaining, findConsent, GATE_REASONS, normalizeHandle, sendGate } from "@/lib/channels/policy";
 import { pushDemoDeal } from "@/lib/integrations/zoho-civ";
 import { buildSeed } from "./seed";
 import { loadAutomationLevel, loadAssumptions, loadDatasetLive } from "./live";
@@ -89,6 +97,11 @@ export const getDemos = () => db().demos;
 export const getVariants = () => db().variants;
 export const getMetrics = () => db().metrics;
 export const getCosts = () => db().costs;
+export const getConsent = () => db().consent;
+export const getChannelAccounts = () => db().channelAccounts;
+export const getOutreach = () => [...db().outreach].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+export const getChannelAccount = (id: string) => db().channelAccounts.find((a) => a.id === id) ?? null;
+export const getOutreachMessage = (id: string) => db().outreach.find((o) => o.id === id) ?? null;
 
 export const getReply = (id: string) => db().replies.find((r) => r.id === id) ?? null;
 export const getLead = (id: string) => db().leads.find((l) => l.id === id) ?? null;
@@ -564,4 +577,191 @@ export async function recordInboxBounce(eaccount: string) {
   inbox.bounceRate = Math.min(1, inbox.bounceRate + 1 / denom);
   await liveUpsert("inboxes", { id: inbox.id, bounce_rate: inbox.bounceRate });
   return inbox;
+}
+
+// --- channels: consent ledger + SMS/social DM queue -------------------------
+// SMS is consent-gated (TCPA) and social DMs are AI-drafted but human-sent. The send
+// chokepoint (sendOutreach) is the only place a message leaves, so the policy is enforced once.
+
+function defaultAccountFor(channel: OutreachChannel): ChannelAccount | undefined {
+  const accts = db().channelAccounts.filter((a) => a.channel === channel);
+  return accts.find((a) => a.status === "active") ?? accts[0];
+}
+
+function outreachRow(m: OutreachMessage): Record<string, unknown> {
+  return {
+    id: m.id, channel: m.channel, lead_id: m.leadId, campaign_id: m.campaignId, account_id: m.accountId,
+    to_name: m.toName, to_handle: m.toHandle, body: m.body, status: m.status, source: m.source,
+    consent_id: m.consentId, profile_url: m.profileUrl, rationale: m.rationale, created_at: m.createdAt,
+    scheduled_at: m.scheduledAt, sent_at: m.sentAt, approved_by: m.approvedBy, sent_by: m.sentBy, note: m.note,
+  };
+}
+
+/**
+ * Record (or update) a consent record for a (channel, handle). Opting in/out also reconciles
+ * the SMS queue so a fresh opt-in unblocks parked drafts and an opt-out (STOP) re-blocks them.
+ */
+export async function recordConsent(
+  input: { leadId?: string | null; channel: OutreachChannel; handle: string; status?: ConsentStatus; source: ConsentSource; proof?: string | null; note?: string | null },
+  actor = "system",
+): Promise<ConsentRecord> {
+  const handle = normalizeHandle(input.channel, input.handle);
+  const now = new Date().toISOString();
+  const status: ConsentStatus = input.status ?? "opted_in";
+  let saved = db().consent.find((c) => c.channel === input.channel && normalizeHandle(c.channel, c.handle) === handle);
+  if (saved) {
+    saved.status = status;
+    saved.source = input.source;
+    if (input.proof !== undefined) saved.proof = input.proof;
+    if (input.note !== undefined) saved.note = input.note;
+    if (input.leadId) saved.leadId = input.leadId;
+    saved.updatedAt = now;
+  } else {
+    saved = {
+      id: `cs_${Math.random().toString(36).slice(2, 9)}`,
+      leadId: input.leadId ?? null, channel: input.channel, handle, status,
+      source: input.source, proof: input.proof ?? null, capturedAt: now, updatedAt: now, note: input.note ?? null,
+    };
+    db().consent.unshift(saved);
+  }
+  await liveUpsert("consent_records", {
+    id: saved.id, lead_id: saved.leadId, channel: saved.channel, handle: saved.handle, status: saved.status,
+    source: saved.source, proof: saved.proof, captured_at: saved.capturedAt, updated_at: saved.updatedAt, note: saved.note,
+  });
+  // Keep the SMS queue consistent with the consent change.
+  if (input.channel === "sms") {
+    for (const m of db().outreach.filter((o) => o.channel === "sms" && normalizeHandle("sms", o.toHandle) === handle && o.status !== "sent" && o.status !== "skipped")) {
+      if (status === "opted_in" && m.status === "needs_consent") {
+        m.status = "draft";
+        m.consentId = saved.id;
+        await liveUpsert("outreach_messages", { id: m.id, status: m.status, consent_id: m.consentId });
+      } else if (status === "opted_out" && (m.status === "draft" || m.status === "approved")) {
+        m.status = "needs_consent";
+        await liveUpsert("outreach_messages", { id: m.id, status: m.status });
+      }
+    }
+  }
+  await pushAudit(actor, `consent.${status}`, "consent", saved.id, { channel: saved.channel, handle: saved.handle, source: saved.source });
+  return saved;
+}
+
+/** STOP handling / manual opt-out. Creates a record if none exists so the block is enforced. */
+export async function setConsentStatus(channel: OutreachChannel, handle: string, status: ConsentStatus, actor = "system", source: ConsentSource = "manual"): Promise<ConsentRecord> {
+  return recordConsent({ channel, handle, status, source, note: status === "opted_out" ? "Opt-out (STOP) recorded" : null }, actor);
+}
+
+export interface NewOutreach {
+  channel: OutreachChannel;
+  leadId?: string | null;
+  campaignId?: string | null;
+  accountId?: string | null;
+  toName: string;
+  toHandle: string;
+  body: string;
+  source?: "ai" | "rules" | "manual";
+  profileUrl?: string | null;
+  rationale?: string | null;
+}
+
+/** Queue a new outreach message. SMS with no opt-in is parked in `needs_consent` from birth. */
+export async function addOutreach(input: NewOutreach, actor = "system"): Promise<OutreachMessage> {
+  const channel = input.channel;
+  const toHandle = normalizeHandle(channel, input.toHandle);
+  let status: OutreachStatus = "draft";
+  let consentId: string | null = null;
+  if (channel === "sms") {
+    const c = findConsent(db().consent, "sms", toHandle);
+    if (c && c.status === "opted_in") consentId = c.id;
+    else status = "needs_consent";
+  }
+  const now = new Date().toISOString();
+  const msg: OutreachMessage = {
+    id: `om_${Math.random().toString(36).slice(2, 9)}`,
+    channel, leadId: input.leadId ?? null, campaignId: input.campaignId ?? null,
+    accountId: input.accountId ?? defaultAccountFor(channel)?.id ?? null,
+    toName: input.toName, toHandle, body: input.body, status, source: input.source ?? "manual",
+    consentId, profileUrl: input.profileUrl ?? null, rationale: input.rationale ?? null,
+    createdAt: now, scheduledAt: null, sentAt: null, approvedBy: null, sentBy: null, note: null,
+  };
+  db().outreach.unshift(msg);
+  await liveUpsert("outreach_messages", outreachRow(msg));
+  await pushAudit(actor, "outreach.drafted", "outreach", msg.id, { channel, to: msg.toName, status });
+  return msg;
+}
+
+export async function updateOutreachBody(id: string, body: string, actor = "system"): Promise<OutreachMessage | null> {
+  const m = getOutreachMessage(id);
+  if (!m) return null;
+  m.body = body;
+  await liveUpsert("outreach_messages", { id, body });
+  await pushAudit(actor, "outreach.edited", "outreach", id, {});
+  return m;
+}
+
+/** Mark a draft approved/ready. SMS re-checks consent so an opted-out contact can't be queued. */
+export async function approveOutreach(id: string, actor: string): Promise<{ ok: boolean; msg?: OutreachMessage; error?: string }> {
+  const m = getOutreachMessage(id);
+  if (!m) return { ok: false, error: "Message not found." };
+  if (m.channel === "sms") {
+    const gate = sendGate("sms", db().consent, m.toHandle, m.accountId ? getChannelAccount(m.accountId) : defaultAccountFor("sms") ?? null);
+    if (!gate.ok && (gate.reason === "no_consent" || gate.reason === "opted_out")) {
+      m.status = "needs_consent";
+      await liveUpsert("outreach_messages", { id, status: m.status });
+      return { ok: false, error: GATE_REASONS[gate.reason] };
+    }
+  }
+  m.status = "approved";
+  m.approvedBy = actor;
+  await liveUpsert("outreach_messages", { id, status: m.status, approved_by: actor });
+  await pushAudit(actor, "outreach.approved", "outreach", id, { channel: m.channel });
+  return { ok: true, msg: m };
+}
+
+/**
+ * THE send chokepoint. SMS runs the consent gate (legal); every channel runs the daily-cap +
+ * active-account check (durability). For social this is invoked when the human clicks "sent".
+ */
+export async function sendOutreach(id: string, actor: string): Promise<{ ok: boolean; msg?: OutreachMessage; error?: string }> {
+  const m = getOutreachMessage(id);
+  if (!m) return { ok: false, error: "Message not found." };
+  if (m.status === "sent") return { ok: true, msg: m };
+  const account = m.accountId ? getChannelAccount(m.accountId) : defaultAccountFor(m.channel) ?? null;
+  const gate = sendGate(m.channel, db().consent, m.toHandle, account);
+  if (!gate.ok) {
+    // A consent failure re-parks an SMS so the queue reflects reality; cap/account failures just report.
+    if (m.channel === "sms" && (gate.reason === "no_consent" || gate.reason === "opted_out") && m.status !== "needs_consent") {
+      m.status = "needs_consent";
+      await liveUpsert("outreach_messages", { id, status: m.status });
+    }
+    return { ok: false, error: GATE_REASONS[gate.reason] };
+  }
+  m.status = "sent";
+  m.sentAt = new Date().toISOString();
+  m.sentBy = actor;
+  if (m.channel === "sms" && !m.consentId) m.consentId = findConsent(db().consent, "sms", m.toHandle)?.id ?? null;
+  await liveUpsert("outreach_messages", { id, status: m.status, sent_at: m.sentAt, sent_by: actor, consent_id: m.consentId });
+  if (account) {
+    account.sentToday += 1;
+    await liveUpsert("channel_accounts", { id: account.id, sent_today: account.sentToday });
+  }
+  await pushAudit(actor, "outreach.sent", "outreach", id, { channel: m.channel, to: m.toName });
+  return { ok: true, msg: m };
+}
+
+export async function skipOutreach(id: string, actor: string): Promise<OutreachMessage | null> {
+  const m = getOutreachMessage(id);
+  if (!m) return null;
+  m.status = "skipped";
+  await liveUpsert("outreach_messages", { id, status: "skipped" });
+  await pushAudit(actor, "outreach.skipped", "outreach", id, {});
+  return m;
+}
+
+/** Capacity snapshot for a channel — used by the UI to show "N of cap left today". */
+export function channelCapacity(channel: OutreachChannel): { cap: number; sentToday: number; remaining: number } {
+  const accts = db().channelAccounts.filter((a) => a.channel === channel);
+  const cap = accts.reduce((s, a) => s + a.dailyCap, 0);
+  const sentToday = accts.reduce((s, a) => s + a.sentToday, 0);
+  const remaining = accts.reduce((s, a) => s + capRemaining(a), 0);
+  return { cap, sentToday, remaining };
 }

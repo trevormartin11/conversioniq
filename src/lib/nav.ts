@@ -4,6 +4,7 @@ import {
   LayoutDashboard,
   Lightbulb,
   Megaphone,
+  MessageSquare,
   Rocket,
   Settings,
   ShieldCheck,
@@ -50,6 +51,7 @@ export const NAV: NavItem[] = [
   { href: "/campaigns", label: "Campaigns", short: "Send", icon: Megaphone, phase: 2, group: "build" },
   // Run the machine
   { href: "/replies", label: "Reply Approval", short: "Replies", icon: Inbox, phase: 1, group: "run" },
+  { href: "/channels", label: "SMS & Social DMs", short: "Channels", icon: MessageSquare, phase: 2, group: "run" },
   { href: "/deliverability", label: "Deliverability", short: "Health", icon: ShieldCheck, phase: 2, group: "run" },
   // Measure
   { href: "/analysis", label: "Analysis", short: "Analysis", icon: Lightbulb, phase: 3, group: "measure" },

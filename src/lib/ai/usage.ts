@@ -18,6 +18,7 @@ export type AiPurpose =
   | "strategy"
   | "personalization"
   | "next_moves"
+  | "channel"
   | "other";
 
 export interface AiUsageEvent {

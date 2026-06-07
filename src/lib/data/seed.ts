@@ -12,6 +12,8 @@ import type {
   Alert,
   AuditEvent,
   Campaign,
+  ChannelAccount,
+  ConsentRecord,
   Cost,
   CreditMeter,
   CreditSpendRequest,
@@ -23,6 +25,7 @@ import type {
   JobRun,
   Lead,
   LeadStatus,
+  OutreachMessage,
   Persona,
   Reply,
   ReplyClass,
@@ -382,10 +385,36 @@ const costs: Cost[] = [
 ];
 // Zoho CRM: on the free plan ($0). CIQ-side Zoho + Apollo are CIQ's costs, not billed here.
 
+// --- channels: SMS (consent-gated) + social DMs (AI-drafted, human-sent) ----
+const channelAccounts: ChannelAccount[] = [
+  { id: "ca_sms", channel: "sms", label: "CIQ SMS — +1 (415) 555-0142", identifier: "+14155550142", status: "active", dailyCap: 200, sentToday: 18, tenDlc: "registered", provider: "twilio", note: "A2P 10DLC brand + campaign registered." },
+  { id: "ca_li", channel: "linkedin", label: "LinkedIn — Trevor Martin", identifier: "trevor-martin", status: "active", dailyCap: 25, sentToday: 6, tenDlc: "n/a", provider: "linkedin", note: "Human-paced: ≤25 personalized DMs/day to stay under the automation radar." },
+  { id: "ca_ig", channel: "instagram", label: "Instagram — @conversioniq", identifier: "conversioniq", status: "warming", dailyCap: 15, sentToday: 3, tenDlc: "n/a", provider: "instagram", note: "Warming a newer handle — keep volume low for the first few weeks." },
+];
+
+const consent: ConsentRecord[] = [
+  { id: "cs_1", leadId: leads[3].id, channel: "sms", handle: "+14155550111", status: "opted_in", source: "reply_keyword", proof: `Replied “yes, text me” to email on ${daysAgo(2).slice(0, 10)}`, capturedAt: daysAgo(2), updatedAt: daysAgo(2), note: null },
+  { id: "cs_2", leadId: leads[8].id, channel: "sms", handle: "+14155550122", status: "opted_in", source: "web_optin", proof: "Checked the SMS opt-in box on the demo booking form", capturedAt: daysAgo(3), updatedAt: daysAgo(3), note: null },
+  { id: "cs_3", leadId: leads[63].id, channel: "sms", handle: "+14155550163", status: "opted_out", source: "reply_keyword", proof: `Texted STOP on ${daysAgo(1).slice(0, 10)}`, capturedAt: daysAgo(1), updatedAt: daysAgo(1), note: "Auto opt-out (STOP) — permanently blocked." },
+  { id: "cs_4", leadId: leads[11].id, channel: "linkedin", handle: "jessica-williams", status: "opted_in", source: "inbound_dm", proof: "Messaged us first on LinkedIn", capturedAt: daysAgo(1), updatedAt: daysAgo(1), note: null },
+];
+
+const outreach: OutreachMessage[] = [
+  // SMS to an opted-in contact — ready to review + send
+  { id: "om_1", channel: "sms", leadId: leads[3].id, campaignId: "c_medspa", accountId: "ca_sms", toName: `${leads[3].firstName} ${leads[3].lastName}`, toHandle: "+14155550111", body: `Hi ${leads[3].firstName}, it's Trevor at ConversionIQ — thanks for the reply! Our AI answers the after-hours leads ${leads[3].company} misses and books them in seconds. Open to a quick 15-min look Thursday? Reply STOP to opt out.`, status: "draft", source: "ai", consentId: "cs_1", profileUrl: null, rationale: "Warm SMS to a contact who opted in by replying — references their interest, one soft CTA, opt-out included.", createdAt: minsAgo(40), scheduledAt: null, sentAt: null, approvedBy: null, sentBy: null, note: null },
+  // SMS with NO consent — blocked by design until consent is captured
+  { id: "om_2", channel: "sms", leadId: leads[19].id, campaignId: "c_medspa", accountId: "ca_sms", toName: `${leads[19].firstName} ${leads[19].lastName}`, toHandle: "+14155550199", body: `Hi ${leads[19].firstName}, Trevor at ConversionIQ — quick idea for the leads ${leads[19].company} misses after hours. Open to a look? Reply STOP to opt out.`, status: "needs_consent", source: "ai", consentId: null, profileUrl: null, rationale: "Blocked: no opt-in on file. The product won't let this send until consent is captured.", createdAt: minsAgo(35), scheduledAt: null, sentAt: null, approvedBy: null, sentBy: null, note: null },
+  // LinkedIn DM drafts — AI-sourced + drafted, awaiting your one-click send
+  { id: "om_3", channel: "linkedin", leadId: leads[11].id, campaignId: null, accountId: "ca_li", toName: `${leads[11].firstName} ${leads[11].lastName}`, toHandle: "jessica-williams", body: `Saw ${leads[11].company} is expanding hours — hey ${leads[11].firstName}, when a lead DMs after you've closed, who answers? Most spas lose those to whoever replies first. We put an AI on it that responds in seconds and books the consult. Open to a quick look?`, status: "draft", source: "ai", consentId: null, profileUrl: "https://www.linkedin.com/in/jessica-williams", rationale: "Opener personalized to a real signal (expanded hours); after-hours pain; one soft CTA.", createdAt: minsAgo(25), scheduledAt: null, sentAt: null, approvedBy: null, sentBy: null, note: null },
+  { id: "om_4", channel: "linkedin", leadId: leads[21].id, campaignId: null, accountId: "ca_li", toName: `${leads[21].firstName} ${leads[21].lastName}`, toHandle: "mike-davis", body: `hey ${leads[21].firstName} — quick one: how does ${leads[21].company} handle the late-night “any openings?” DMs right now? We put an AI on them that replies in seconds and books the appt. Worth a peek?`, status: "draft", source: "ai", consentId: null, profileUrl: "https://www.linkedin.com/in/mike-davis", rationale: "Question-led opener; a concrete after-hours scenario; one soft CTA.", createdAt: minsAgo(20), scheduledAt: null, sentAt: null, approvedBy: null, sentBy: null, note: null },
+  // A sent social DM (history)
+  { id: "om_5", channel: "instagram", leadId: leads[8].id, campaignId: null, accountId: "ca_ig", toName: `${leads[8].firstName} ${leads[8].lastName}`, toHandle: "luxmedspa", body: `hey ${leads[8].firstName} — saw ${leads[8].company}'s IG stays busy in the DMs. when those come in after hours, who replies? ours is an AI that answers + books instantly. quick look?`, status: "sent", source: "ai", consentId: null, profileUrl: "https://instagram.com/luxmedspa", rationale: "Sent — personalized to their active IG DMs.", createdAt: hoursAgo(20), scheduledAt: null, sentAt: hoursAgo(19), approvedBy: "Trevor Martin", sentBy: "Trevor Martin", note: null },
+];
+
 export function buildSeed(): Dataset {
   return {
     users, personas, domains, inboxes, campaigns, leads, replies,
     suppression, creditMeters, creditRequests, audit, jobs, demos,
-    variants, metrics, alerts, costs,
+    variants, metrics, alerts, costs, consent, channelAccounts, outreach,
   };
 }

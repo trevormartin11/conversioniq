@@ -323,6 +323,113 @@ export interface Alert {
   source: string;
 }
 
+// ---------------------------------------------------------------------------
+// Channels beyond email — SMS (consent-gated) + social DMs (AI-drafted, human-sent)
+// ---------------------------------------------------------------------------
+
+/** Outreach channels the hub orchestrates besides email. */
+export const OUTREACH_CHANNELS = ["sms", "linkedin", "instagram"] as const;
+export type OutreachChannel = (typeof OUTREACH_CHANNELS)[number];
+
+export const OUTREACH_CHANNEL_LABELS: Record<OutreachChannel, string> = {
+  sms: "SMS",
+  linkedin: "LinkedIn",
+  instagram: "Instagram",
+};
+
+/** Consent ledger states. SMS sends are LEGALLY gated on `opted_in` (TCPA). */
+export const CONSENT_STATUSES = ["opted_in", "opted_out", "pending"] as const;
+export type ConsentStatus = (typeof CONSENT_STATUSES)[number];
+
+/** How consent was captured — the evidence trail that makes a send defensible. */
+export const CONSENT_SOURCES = [
+  "reply_keyword", // they replied YES / texted START
+  "web_optin", // checked an SMS opt-in box on a form
+  "verbal", // captured on a call, logged
+  "inbound_dm", // they messaged us first (social)
+  "import", // migrated with documented consent
+  "manual", // operator-entered with a note
+] as const;
+export type ConsentSource = (typeof CONSENT_SOURCES)[number];
+
+export const CONSENT_SOURCE_LABELS: Record<ConsentSource, string> = {
+  reply_keyword: "Replied / texted in",
+  web_optin: "Web opt-in form",
+  verbal: "Verbal (logged)",
+  inbound_dm: "Messaged us first",
+  import: "Imported w/ consent",
+  manual: "Manual entry",
+};
+
+/** One consent record per (channel, handle) — the global source of truth for who we may contact. */
+export interface ConsentRecord {
+  id: string;
+  leadId: string | null;
+  channel: OutreachChannel;
+  handle: string; // E.164 phone for SMS; @handle / profile slug for social
+  status: ConsentStatus;
+  source: ConsentSource;
+  proof: string | null; // free-text evidence (e.g. "replied YES 6/3", form URL)
+  capturedAt: string;
+  updatedAt: string;
+  note: string | null;
+}
+
+export const CHANNEL_ACCOUNT_STATUSES = ["active", "warming", "pending", "error"] as const;
+export type ChannelAccountStatus = (typeof CHANNEL_ACCOUNT_STATUSES)[number];
+
+/** US A2P 10DLC registration state — carriers filter unregistered SMS traffic. */
+export const TENDLC_STATUSES = ["registered", "pending", "unregistered", "n/a"] as const;
+export type TenDlcStatus = (typeof TENDLC_STATUSES)[number];
+
+/** A sending identity for a non-email channel (an SMS number, a social account). */
+export interface ChannelAccount {
+  id: string;
+  channel: OutreachChannel;
+  label: string;
+  identifier: string; // phone number or handle
+  status: ChannelAccountStatus;
+  dailyCap: number; // human-paced cap/day — the chokepoint that keeps accounts unbanned
+  sentToday: number;
+  tenDlc: TenDlcStatus; // SMS only; "n/a" for social
+  provider: string; // "twilio" | "linkedin" | "instagram"
+  note: string | null;
+}
+
+/** Lifecycle of one outbound message on a non-email channel. */
+export const OUTREACH_STATUSES = [
+  "needs_consent", // SMS to a handle with no opt-in — blocked by design until consent exists
+  "draft", // AI/operator drafted, awaiting review
+  "approved", // human approved; for social = "ready for you to send"
+  "sent", // SMS sent (consent present); social marked sent once the human clicks
+  "skipped", // dismissed
+  "failed", // provider error
+] as const;
+export type OutreachStatus = (typeof OUTREACH_STATUSES)[number];
+
+/** A cross-channel outreach message — the SMS + social DM queue (email stays on campaigns). */
+export interface OutreachMessage {
+  id: string;
+  channel: OutreachChannel;
+  leadId: string | null;
+  campaignId: string | null;
+  accountId: string | null; // sending ChannelAccount
+  toName: string;
+  toHandle: string; // phone / @handle
+  body: string; // SMS/DM are body-only (no subject)
+  status: OutreachStatus;
+  source: "ai" | "rules" | "manual";
+  consentId: string | null; // the consent record that authorized an SMS send
+  profileUrl: string | null; // social profile the human opens to send
+  rationale: string | null; // why AI drafted it this way / the personalization basis
+  createdAt: string;
+  scheduledAt: string | null;
+  sentAt: string | null;
+  approvedBy: string | null;
+  sentBy: string | null;
+  note: string | null;
+}
+
 /** The complete in-memory dataset. Mirrors the Supabase tables 1:1. */
 export interface Dataset {
   users: User[];
@@ -342,4 +449,7 @@ export interface Dataset {
   metrics: DailyMetric[];
   alerts: Alert[];
   costs: Cost[];
+  consent: ConsentRecord[];
+  channelAccounts: ChannelAccount[];
+  outreach: OutreachMessage[];
 }
