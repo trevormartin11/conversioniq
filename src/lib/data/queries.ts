@@ -469,6 +469,71 @@ export function costSummary() {
   };
 }
 
+// Volume-driven spend (scales with how many leads you source) vs. fixed overhead.
+// Apollo $ shows up here via the "data" cost line; Claude API $ is added separately by the caller.
+const VARIABLE_COST_CATEGORIES = new Set<string>(["data", "leads"]);
+
+export interface CostDashboard {
+  fixedMonthly: number;
+  variableMonthly: number;
+  totalMonthly: number;
+  claudeMonthly: number;
+  revenueMonthly: number; // gross partnership residual
+  netRevenueMonthly: number; // revenue − total costs
+  costPerLead: number | null; // variable spend ÷ leads sourced, last 30d (null when no leads yet)
+  costPerLeadTrend: "up" | "down" | "flat" | null; // direction vs prior 30d (down = cheaper = good)
+  leadsSourced30d: number;
+}
+
+/**
+ * The Costs-page headline KPIs. Hybrid basis: accrual for the unit-economics figures
+ * (recurring spend amortized to monthly), and the caller passes Claude's billed dollars in.
+ * Cost-per-lead is VARIABLE spend only (acquisition) ÷ leads sourced, with a 30d-vs-prior-30d trend.
+ */
+export function costDashboard(claude: { monthlyUsd: number; byDay?: { date: string; usd: number }[] }): CostDashboard {
+  const active = getCosts().filter((c) => c.status === "active");
+  const fixedMonthly = active
+    .filter((c) => c.cadence !== "one_time" && !VARIABLE_COST_CATEGORIES.has(c.category))
+    .reduce((s, c) => s + monthlyOf(c), 0);
+  const variableEntriesMonthly = active
+    .filter((c) => c.cadence !== "one_time" && VARIABLE_COST_CATEGORIES.has(c.category))
+    .reduce((s, c) => s + monthlyOf(c), 0);
+  const variableMonthly = variableEntriesMonthly + claude.monthlyUsd;
+  const totalMonthly = fixedMonthly + variableMonthly;
+
+  const r = residual();
+  const revenueMonthly = r.grossMonthly;
+  const netRevenueMonthly = revenueMonthly - totalMonthly;
+
+  // cost per lead (variable only), last 30d vs prior 30d
+  const now = Date.now();
+  const DAY = 86_400_000;
+  const inWin = (iso: string, startAgo: number, endAgo: number) => {
+    const t = Date.parse(iso);
+    return Number.isFinite(t) && t >= now - startAgo * DAY && t < now - endAgo * DAY;
+  };
+  const leads = getLeads();
+  const leads30 = leads.filter((l) => inWin(l.createdAt, 30, 0)).length;
+  const leadsPrev = leads.filter((l) => inWin(l.createdAt, 60, 30)).length;
+  const oneTimeVar = (a: number, b: number) =>
+    active.filter((c) => c.cadence === "one_time" && VARIABLE_COST_CATEGORIES.has(c.category) && inWin(c.startedAt, a, b)).reduce((s, c) => s + c.amount, 0);
+  const claudeWin = (a: number, b: number) =>
+    claude.byDay?.length
+      ? claude.byDay.filter((d) => inWin(`${d.date}T12:00:00Z`, a, b)).reduce((s, d) => s + d.usd, 0)
+      : claude.monthlyUsd / 2; // no daily series → split evenly so the trend reflects lead volume
+  const varSpend30 = variableEntriesMonthly + oneTimeVar(30, 0) + claudeWin(30, 0);
+  const varSpendPrev = variableEntriesMonthly + oneTimeVar(60, 30) + claudeWin(60, 30);
+  const costPerLead = leads30 > 0 ? varSpend30 / leads30 : null;
+  const costPerLeadPrev = leadsPrev > 0 ? varSpendPrev / leadsPrev : null;
+  let costPerLeadTrend: CostDashboard["costPerLeadTrend"] = null;
+  if (costPerLead != null && costPerLeadPrev != null) {
+    const diff = costPerLead - costPerLeadPrev;
+    costPerLeadTrend = Math.abs(diff) <= 0.005 * costPerLeadPrev ? "flat" : diff > 0 ? "up" : "down";
+  }
+
+  return { fixedMonthly, variableMonthly, totalMonthly, claudeMonthly: claude.monthlyUsd, revenueMonthly, netRevenueMonthly, costPerLead, costPerLeadTrend, leadsSourced30d: leads30 };
+}
+
 /**
  * The north star: booked-demo pace vs the goal (2/day), plus the monthly budget
  * burn-down. This is the number the whole operation is run to blow past.
