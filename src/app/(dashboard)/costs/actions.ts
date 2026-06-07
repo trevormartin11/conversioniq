@@ -3,27 +3,31 @@
 import { revalidatePath } from "next/cache";
 import { getCurrentUser } from "@/lib/auth";
 import { addCost, deleteCost, ensureData } from "@/lib/data/store";
-import { aiSpendSummary, type AiSpendSummary } from "@/lib/ai/usage";
+import { loadCostMeter, type CostMeterData } from "@/lib/ai/cost-meter";
 import type { CostCadence, CostCategory } from "@/lib/data/types";
 
-/** Live Claude API spend — polled by the meter on the Costs page. Always resolves (never throws). */
-export async function getAiSpendAction(): Promise<AiSpendSummary> {
+/** Live Claude cost (actual billed + self-metered) — polled by the meter on Costs. Never throws. */
+export async function getCostMeterAction(): Promise<CostMeterData> {
   try {
-    return await aiSpendSummary();
+    return await loadCostMeter();
   } catch {
+    const now = new Date().toISOString();
     return {
-      source: "live",
-      available: false,
-      monthToDateUsd: 0,
-      last24hUsd: 0,
-      last7dUsd: 0,
-      mtdCalls: 0,
-      byPurpose: [],
-      byModel: [],
-      recent: [],
-      lastCallAt: null,
-      capped: false,
-      asOf: new Date().toISOString(),
+      self: {
+        source: "live",
+        available: false,
+        monthToDateUsd: 0,
+        last24hUsd: 0,
+        last7dUsd: 0,
+        mtdCalls: 0,
+        byPurpose: [],
+        byModel: [],
+        recent: [],
+        lastCallAt: null,
+        capped: false,
+        asOf: now,
+      },
+      actual: null,
     };
   }
 }

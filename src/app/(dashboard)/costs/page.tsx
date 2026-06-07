@@ -6,7 +6,7 @@ import { AiSpendMeter } from "@/components/costs/ai-spend-meter";
 import { costSummary } from "@/lib/data/queries";
 import { PageHeader } from "@/components/ui/card";
 import { ensureData, getCosts } from "@/lib/data/store";
-import { aiSpendSummary } from "@/lib/ai/usage";
+import { loadCostMeter } from "@/lib/ai/cost-meter";
 import { appConfig } from "@/lib/config";
 import { usd, titleCase } from "@/lib/format";
 
@@ -15,7 +15,7 @@ export const dynamic = "force-dynamic";
 export default async function CostsPage() {
   await ensureData();
   const s = costSummary();
-  const aiSpend = await aiSpendSummary();
+  const meter = await loadCostMeter();
   const costs: CostView[] = getCosts().map((c) => ({
     id: c.id,
     category: c.category,
@@ -42,7 +42,7 @@ export default async function CostsPage() {
       </div>
 
       {/* Live Claude API spend meter */}
-      <AiSpendMeter initial={aiSpend} softBudget={appConfig.ai.softMonthlyBudgetUsd} />
+      <AiSpendMeter initial={meter} softBudget={appConfig.ai.softMonthlyBudgetUsd} />
 
       {/* Net explainer */}
       <Card>
