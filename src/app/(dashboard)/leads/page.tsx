@@ -3,8 +3,13 @@ import { Stat } from "@/components/ui/stat";
 import { Tag } from "@/components/ui/badge";
 import { SuppressionTools } from "@/components/leads/suppression-tools";
 import { SourcingPlanner } from "@/components/leads/sourcing-planner";
+import { Progress } from "@/components/ui/charts";
+import { Lock } from "lucide-react";
 import { ensureData, getCampaigns, getLeads, getSuppression } from "@/lib/data/store";
-import { num, titleCase } from "@/lib/format";
+import { creditSummary } from "@/lib/data/queries";
+import { appConfig } from "@/lib/config";
+import { ago, num, pct, titleCase } from "@/lib/format";
+import { leadTimezone } from "@/lib/send-timing";
 import type { SuppressionReason } from "@/lib/data/types";
 
 export const dynamic = "force-dynamic";
@@ -15,6 +20,10 @@ export default async function LeadsPage({ searchParams }: { searchParams: Promis
   const query = (q ?? "").toLowerCase().trim();
   const leads = getLeads();
   const suppression = getSuppression();
+  const meters = creditSummary();
+  const demosPerMonth = appConfig.goals.demosPerDay * 30;
+  const maxCostPerDemo = appConfig.goals.monthlyBudgetUsd / demosPerMonth;
+  const maxCostPerLead = maxCostPerDemo * 0.01;
   const campaignOptions = getCampaigns().map((c) => ({ id: c.id, name: c.name, status: c.status, hasInstantly: !!c.instantlyCampaignId }));
 
   const byReason = {} as Record<SuppressionReason, number>;
@@ -46,13 +55,41 @@ export default async function LeadsPage({ searchParams }: { searchParams: Promis
 
       {/* Lead sourcing — the smart router: vertical -> cheapest source with coverage -> verify -> dedupe */}
       <section>
-        <SectionHeader title="Source new leads" subtitle="The router picks the cheapest source that covers your target (Maps for local, B2B database for enterprise), prices it, then verifies + dedupes before load." />
+        <SectionHeader title="Source new leads" subtitle="Discover → Enrich → Verify → Dedupe → Load. The router picks the cheapest source that covers your target (Maps for local, B2B database for enterprise), prices it, then verifies + dedupes before load." />
+        <div className="mb-3 grid grid-cols-3 gap-3">
+          <Stat label="Max cost / demo" value={`$${maxCostPerDemo.toFixed(2)}`} />
+          <Stat label="Max cost / lead" value={`~$${maxCostPerLead.toFixed(2)}`} sub="at 1% lead→demo" />
+          <Stat label="Monthly budget" value={`$${num(appConfig.goals.monthlyBudgetUsd)}`} />
+        </div>
         <SourcingPlanner campaigns={campaignOptions} />
+      </section>
+
+      {/* Credit visibility — what's left to spend on sourcing + enrichment (folded in from Credit Guard) */}
+      <section>
+        <SectionHeader title="Credits" subtitle="What's left to spend on sourcing & enrichment. CIQ credits are gated — never auto-spent." />
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          {meters.map((m) => (
+            <Card key={m.provider}>
+              <CardBody>
+                <div className="flex items-start justify-between gap-2">
+                  <p className="text-sm font-semibold text-slate-100">{m.label}</p>
+                  {m.gated && <span className="chip bg-bad/15 text-bad"><Lock className="h-3 w-3" /> Gated</span>}
+                </div>
+                <div className="mt-2 flex items-end justify-between">
+                  <span className="text-xl font-semibold tabular-nums text-slate-100">{num(m.remaining)}</span>
+                  <span className="text-[11px] text-slate-500">{num(m.used)}/{num(m.total)} · {pct(m.pctUsed, 0)}</span>
+                </div>
+                <div className="mt-2"><Progress value={m.pctUsed} tone={m.pctUsed > 0.85 ? "bad" : m.pctUsed > 0.6 ? "warn" : "ok"} /></div>
+                {m.resetsAt && <p className="mt-1 text-[10px] text-slate-500">Resets {ago(m.resetsAt)}</p>}
+              </CardBody>
+            </Card>
+          ))}
+        </div>
       </section>
 
       {/* Lead table */}
       <section>
-        <SectionHeader title="Leads" subtitle={`${num(filtered.length)} ${query ? `matching “${q}”` : "total"}`} />
+        <SectionHeader title="Leads" subtitle={`${num(filtered.length)} ${query ? `matching “${q}”` : "total"} · timezone inferred for send timing`} />
         <form className="mb-3">
           <input
             name="q"
@@ -64,20 +101,26 @@ export default async function LeadsPage({ searchParams }: { searchParams: Promis
         <Card>
           <CardBody className="p-0">
             <div className="divide-y divide-ink-800">
-              {filtered.slice(0, 40).map((l) => (
-                <div key={l.id} className="flex items-center justify-between gap-3 px-4 py-3">
-                  <div className="min-w-0">
-                    <p className="truncate text-sm font-medium text-slate-100">{l.firstName} {l.lastName}</p>
-                    <p className="truncate text-xs text-slate-500">{l.email} · {l.company}</p>
+              {filtered.slice(0, 40).map((l) => {
+                const tz = leadTimezone(l);
+                return (
+                  <div key={l.id} className="flex items-center justify-between gap-3 px-4 py-3">
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-medium text-slate-100">{l.firstName} {l.lastName}</p>
+                      <p className="truncate text-xs text-slate-500">{l.email} · {l.company}</p>
+                    </div>
+                    <div className="flex shrink-0 items-center gap-2">
+                      {tz !== "unknown" && (
+                        <span className="hidden rounded bg-white/5 px-1.5 py-0.5 text-[10px] text-slate-400 sm:inline" title="Inferred send timezone (from area code)">{tz}</span>
+                      )}
+                      <span className="hidden text-xs text-slate-500 sm:inline">{l.vertical}</span>
+                      <Tag tone={l.status === "closed" ? "ok" : l.status === "lost" ? "bad" : l.status === "positive" || l.status.startsWith("demo") ? "brand" : "slate"}>
+                        {titleCase(l.status)}
+                      </Tag>
+                    </div>
                   </div>
-                  <div className="flex shrink-0 items-center gap-2">
-                    <span className="hidden text-xs text-slate-500 sm:inline">{l.vertical}</span>
-                    <Tag tone={l.status === "closed" ? "ok" : l.status === "lost" ? "bad" : l.status === "positive" || l.status.startsWith("demo") ? "brand" : "slate"}>
-                      {titleCase(l.status)}
-                    </Tag>
-                  </div>
-                </div>
-              ))}
+                );
+              })}
               {filtered.length === 0 && <p className="px-4 py-8 text-center text-sm text-slate-500">No leads match.</p>}
             </div>
           </CardBody>

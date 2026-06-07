@@ -4,6 +4,7 @@
  * store.ensureData() in live mode (request-cached).
  */
 import { supabaseAdmin } from "./supabase";
+import { appConfig } from "@/lib/config";
 import type {
   AutomationLevel,
   Dataset,
@@ -65,4 +66,23 @@ export async function loadAutomationLevel(): Promise<AutomationLevel> {
   const v = (data as { value?: unknown } | null)?.value;
   const lvl = typeof v === "string" ? v.replace(/"/g, "") : "approve_all";
   return (["approve_all", "auto_safe", "auto_all"].includes(lvl) ? lvl : "approve_all") as AutomationLevel;
+}
+
+export async function loadAssumptions(): Promise<{ closeRate: number; monthlyMrr: number }> {
+  const def = { closeRate: appConfig.projection.assumedCloseRate, monthlyMrr: appConfig.projection.assumedMonthlyMrr };
+  try {
+    const { data } = await supabaseAdmin()
+      .from("settings")
+      .select("key,value")
+      .in("key", ["assumed_close_rate", "assumed_monthly_mrr"]);
+    const rows = (data as { key: string; value: unknown }[] | null) ?? [];
+    const get = (k: string) => rows.find((r) => r.key === k)?.value;
+    const toNum = (v: unknown, d: number) => {
+      const n = Number(typeof v === "string" ? v.replace(/"/g, "") : v);
+      return Number.isFinite(n) ? n : d;
+    };
+    return { closeRate: toNum(get("assumed_close_rate"), def.closeRate), monthlyMrr: toNum(get("assumed_monthly_mrr"), def.monthlyMrr) };
+  } catch {
+    return def;
+  }
 }

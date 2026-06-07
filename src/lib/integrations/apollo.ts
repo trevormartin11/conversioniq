@@ -57,3 +57,30 @@ export async function enrichWithCiqCredits(
     body: JSON.stringify({ id }),
   });
 }
+
+/**
+ * Best-effort hiring signal for personalization — via the PERSONAL (free) key only, NEVER the
+ * gated CIQ key. Enriches the org by domain, then reads active job postings. Returns null on
+ * no key / no data / error, so personalization just falls back to its other signals.
+ */
+export async function apolloHiringSignal(domain: string): Promise<string | null> {
+  if (!integrations.apolloPersonal || !domain) return null;
+  try {
+    const org = await httpJson<{ organization?: { id?: string } }>(
+      "apollo",
+      `${BASE}/organizations/enrich?domain=${encodeURIComponent(domain)}`,
+      { method: "GET", headers: { "X-Api-Key": personalKey() } },
+    );
+    const orgId = org.organization?.id;
+    if (!orgId) return null;
+    const jobs = await httpJson<{ organization_job_postings?: { title?: string }[] }>(
+      "apollo",
+      `${BASE}/organizations/${encodeURIComponent(orgId)}/job_postings`,
+      { method: "GET", headers: { "X-Api-Key": personalKey() } },
+    );
+    const titles = (jobs.organization_job_postings ?? []).map((j) => j.title).filter((t): t is string => !!t).slice(0, 3);
+    return titles.length ? `Currently hiring: ${titles.join(", ")}` : null;
+  } catch {
+    return null;
+  }
+}

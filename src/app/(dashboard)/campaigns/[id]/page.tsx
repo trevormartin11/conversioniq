@@ -5,7 +5,10 @@ import { ArrowLeft, CheckCircle2, Clock, Lightbulb } from "lucide-react";
 import { Card, CardBody, PageHeader, SectionHeader } from "@/components/ui/card";
 import { HealthBadge, Tag } from "@/components/ui/badge";
 import { CampaignActions } from "@/components/campaigns/campaign-actions";
+import { InstantlySync } from "@/components/campaigns/instantly-sync";
+import { TimezoneSplit } from "@/components/campaigns/timezone-split";
 import { EditableVariant } from "@/components/campaigns/editable-variant";
+import { PersonalizationLab } from "@/components/campaigns/personalization-lab";
 import { campaignCards, campaignCapacity } from "@/lib/data/queries";
 import { suggestCopy } from "@/lib/ai/copy";
 import { ensureData, getCampaign, getInboxes, getPersonas, getVariants } from "@/lib/data/store";
@@ -72,6 +75,22 @@ export default async function CampaignDetail({ params }: { params: Promise<{ id:
           <CampaignActions id={c.id} status={c.status} />
         </CardBody>
       </Card>
+
+      {/* Sync to Instantly (beta) — only when linked to a live campaign */}
+      {c.instantlyCampaignId && integrations.instantly && (
+        <section>
+          <SectionHeader title="Sync to Instantly" subtitle="Push edited copy + the optimal send window to the live campaign." />
+          <Card><CardBody><InstantlySync campaignId={c.id} /></CardBody></Card>
+        </section>
+      )}
+
+      {/* Send timing by timezone (beta) */}
+      {integrations.instantly && (
+        <section>
+          <SectionHeader title="Send timing by timezone" subtitle="Split into per-timezone draft campaigns so each recipient is sent in their optimal local window." />
+          <Card><CardBody><TimezoneSplit campaignId={c.id} /></CardBody></Card>
+        </section>
+      )}
 
       {/* Meta */}
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
@@ -182,6 +201,16 @@ export default async function CampaignDetail({ params }: { params: Promise<{ id:
             <Card><CardBody className="text-sm text-slate-500">No sequence synced yet. Run a sync, or open this campaign in Instantly.</CardBody></Card>
           )}
         </div>
+      </section>
+
+      {/* Hyper-personalization (beta) */}
+      <section>
+        <SectionHeader title="Hyper-personalization (beta)" subtitle="Generate one specific, true opener line from a prospect's website — preview-only, review before it sends. Social / LinkedIn signals come next." />
+        <Card>
+          <CardBody>
+            <PersonalizationLab aiOn={integrations.anthropic} vertical={c.vertical} campaignId={c.id} instantlyLinked={!!c.instantlyCampaignId && integrations.instantly} />
+          </CardBody>
+        </Card>
       </section>
 
       {/* AI Coach — recommendations from this campaign's open & positive-reply rates */}

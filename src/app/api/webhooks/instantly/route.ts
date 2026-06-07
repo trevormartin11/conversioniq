@@ -4,6 +4,9 @@ import { appConfig, integrations } from "@/lib/config";
 import { addSuppression, ensureData, isSuppressed, recordInboxBounce } from "@/lib/data/store";
 import { addToBlocklist } from "@/lib/integrations/instantly";
 import { sendTelegram } from "@/lib/integrations/telegram";
+import { syncReplies } from "@/lib/sync/replies";
+
+export const maxDuration = 60;
 
 /**
  * Inbound Instantly webhook (preferred over polling for replies/bounces).
@@ -31,12 +34,23 @@ export async function POST(req: NextRequest) {
     case "email_received": {
       const body = String(payload.body ?? payload.text ?? "");
       const from = String(payload.from ?? payload.lead_email ?? "");
+      // Live: delegate to the canonical sync path so the reply is classified, drafted,
+      // persisted, auto-handled and hot-pinged exactly like the cron — no divergence. We
+      // pull a small recent window (not the full 1000) since we're reacting to one event.
+      if (integrations.instantly && integrations.supabase) {
+        try {
+          const res = await syncReplies(100);
+          return NextResponse.json({ ok: true, mode: "synced", ...res });
+        } catch {
+          /* fall through to lightweight handling below */
+        }
+      }
+      // No DB (preview) or the sync failed: classify + hot-ping so nothing's silently dropped.
       const { classification, confidence } = await classifyReply(body);
-      // TODO(live): upsert reply, reconcile to lead, draft response, persist.
-      if (appConfig.hotClasses.includes(classification as (typeof appConfig.hotClasses)[number])) {
+      if (from && appConfig.hotClasses.includes(classification as (typeof appConfig.hotClasses)[number])) {
         await sendTelegram(`🔥 *${classification}* reply from ${from}\n${body.slice(0, 240)}`);
       }
-      return NextResponse.json({ ok: true, classification, confidence });
+      return NextResponse.json({ ok: true, mode: "classified", classification, confidence });
     }
     case "email_bounced":
     case "bounce": {

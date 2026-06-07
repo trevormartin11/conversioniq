@@ -246,9 +246,14 @@ export async function createInstantlyCampaign(input: {
   return { id: res.id ?? "" };
 }
 
-/** Delete a campaign (cleanup / operator control). */
+/** Delete a campaign (cleanup / operator control). DELETE must NOT carry a JSON content-type
+ *  with no body — Instantly 400s ("empty json body") — so send an auth-only header. */
 export async function deleteInstantlyCampaign(id: string): Promise<unknown> {
-  return httpJson("instantly", `${BASE}/campaigns/${id}`, { method: "DELETE", headers: headers() });
+  if (!integrations.instantly) throw new NotConfiguredError("instantly");
+  return httpJson("instantly", `${BASE}/campaigns/${id}`, {
+    method: "DELETE",
+    headers: { Authorization: `Bearer ${process.env.INSTANTLY_API_KEY}` },
+  });
 }
 
 /** Best-effort: are leads loaded into this campaign? (presence, not exact count) */
@@ -265,6 +270,8 @@ export interface NewInstantlyLead {
   last_name?: string;
   company_name?: string;
   phone?: string;
+  /** Per-lead hyper-personalization line — fills the {{personalization}} merge tag in the sequence. */
+  personalization?: string;
 }
 
 /**
@@ -276,11 +283,15 @@ export async function addLeadsToCampaign(campaignId: string, leads: NewInstantly
   let added = 0;
   let failed = 0;
   for (const lead of leads) {
+    const { personalization, ...rest } = lead;
+    const body: Record<string, unknown> = { campaign: campaignId, ...rest };
+    // Personalization rides as a custom variable → {{personalization}} in the sequence copy.
+    if (personalization) body.custom_variables = { personalization };
     try {
       await httpJson("instantly", `${BASE}/leads`, {
         method: "POST",
         headers: headers(),
-        body: JSON.stringify({ campaign: campaignId, ...lead }),
+        body: JSON.stringify(body),
       });
       added++;
     } catch {
@@ -305,6 +316,52 @@ export async function replyToEmail(input: { replyToUuid: string; eaccount: strin
       eaccount: input.eaccount,
       subject: input.subject,
       body: { text: input.bodyText, html: input.bodyText.replace(/\n/g, "<br />") },
+    }),
+  });
+}
+
+/**
+ * Push edited copy to a LIVE campaign's sequence (PATCH /campaigns/{id}). Preserves each
+ * step's existing delay (cadence untouched) and only swaps in the new subjects/bodies.
+ * Fails loud if Instantly rejects the shape — the caller surfaces the error, never fakes it.
+ */
+export async function updateInstantlyCampaignSequence(id: string, stepsVariants: { subject: string; body: string }[][]): Promise<unknown> {
+  let delays: number[] = [];
+  try {
+    const existing = await httpJson<RawCampaignDetail>("instantly", `${BASE}/campaigns/${id}`, { headers: headers() });
+    delays = (existing.sequences?.[0]?.steps ?? []).map((s) => Number(s.delay ?? 0));
+  } catch {
+    /* no existing delays available — fall back to the default cadence below */
+  }
+  const DEFAULT_DELAYS = [0, 3, 4, 4, 5, 5];
+  const steps = stepsVariants.map((variants, i) => ({
+    type: "email",
+    delay: delays[i] ?? DEFAULT_DELAYS[i] ?? 4,
+    variants: variants.map((v) => ({ subject: v.subject, body: textToHtml(v.body) })),
+  }));
+  return httpJson("instantly", `${BASE}/campaigns/${id}`, {
+    method: "PATCH",
+    headers: headers(),
+    body: JSON.stringify({ sequences: [{ steps }] }),
+  });
+}
+
+/**
+ * Set a LIVE campaign's sending schedule (PATCH /campaigns/{id}) — the optimal window +
+ * days in a given timezone. NB: Instantly's timezone enum is finicky (America/Chicago is
+ * known-good; America/New_York was rejected in testing), so callers default to Chicago.
+ */
+export async function updateInstantlyCampaignSchedule(
+  id: string,
+  opts: { timezone: string; from: string; to: string; days?: Record<string, boolean> },
+): Promise<unknown> {
+  return httpJson("instantly", `${BASE}/campaigns/${id}`, {
+    method: "PATCH",
+    headers: headers(),
+    body: JSON.stringify({
+      campaign_schedule: {
+        schedules: [{ name: "optimal", timing: { from: opts.from, to: opts.to }, days: opts.days ?? { "2": true, "3": true, "4": true }, timezone: opts.timezone }],
+      },
     }),
   });
 }

@@ -60,6 +60,17 @@ export const appConfig = {
       return this.grossRate / this.splitWays; // ~6.67%
     },
   },
+  /** North-star targets the whole operation is run against. */
+  goals: {
+    demosPerDay: 2, // booked demos/day — the number to blow past
+    monthlyBudgetUsd: 1000, // hard ceiling on total spend until it self-funds
+  },
+  /** Forward-projection assumptions — OPERATOR-SET, never inferred from CIQ's data.
+   *  Used only for the illustrative pipeline projection; actuals drive real residual. */
+  projection: {
+    assumedCloseRate: 0.25, // booked demo -> closed account
+    assumedMonthlyMrr: 500, // avg MRR per closed account ($)
+  },
   /** Deliverability guardrails (existential with ~49 inboxes). */
   deliverability: {
     warmupGate: 80, // block sends from inboxes under this score

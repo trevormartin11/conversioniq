@@ -1,11 +1,11 @@
 import { CheckCircle2, Circle, ExternalLink, LogOut } from "lucide-react";
 import { Card, CardBody, PageHeader, SectionHeader } from "@/components/ui/card";
 import { Tag } from "@/components/ui/badge";
-import { UserSwitcher } from "@/components/settings/user-switcher";
 import { logoutAction } from "@/app/login/actions";
-import { getCurrentUser, listPartners } from "@/lib/auth";
-import { ensureData, getAutomationLevel } from "@/lib/data/store";
+import { ensureData, getAutomationLevel, getAssumptions } from "@/lib/data/store";
 import { integrationStatuses } from "@/lib/integrations";
+import { ConnectionTester } from "@/components/settings/connection-tester";
+import { AssumptionsForm } from "@/components/settings/assumptions-form";
 import { appConfig, DATA_MODE } from "@/lib/config";
 import { pct, titleCase } from "@/lib/format";
 
@@ -27,10 +27,9 @@ const SETUP_STEPS = [
 
 export default async function SettingsPage() {
   await ensureData();
-  const user = await getCurrentUser();
-  const partners = listPartners();
   const statuses = integrationStatuses();
   const connectedMap = Object.fromEntries(statuses.map((s) => [s.key, s.connected]));
+  const assumptions = getAssumptions();
 
   return (
     <div className="space-y-6">
@@ -40,11 +39,10 @@ export default async function SettingsPage() {
         action={<Tag tone={DATA_MODE === "live" ? "ok" : "warn"}>{DATA_MODE === "live" ? "Live data" : "Preview / seed data"}</Tag>}
       />
 
-      {/* Acting user */}
+      {/* Access */}
       <section>
-        <SectionHeader title="Acting as" subtitle="All 3 partners have equal powers. Switch identity, or sign out." />
-        <UserSwitcher partners={partners} currentId={user.id} />
-        <form action={logoutAction} className="mt-3">
+        <SectionHeader title="Access" subtitle="The hub is gated by a single shared team password — no individual logins. Sign out to lock it." />
+        <form action={logoutAction}>
           <button className="inline-flex items-center gap-1.5 rounded-lg border border-ink-700 bg-ink-850 px-3 py-2 text-sm text-slate-300 transition-colors hover:border-ink-600">
             <LogOut className="h-4 w-4" /> Sign out
           </button>
@@ -53,19 +51,10 @@ export default async function SettingsPage() {
 
       {/* Integrations */}
       <section>
-        <SectionHeader title="Integrations" />
-        <div className="grid gap-2 sm:grid-cols-2">
-          {statuses.map((s) => (
-            <div key={s.key} className="card flex items-start justify-between gap-2 p-3">
-              <div>
-                <p className="text-sm text-slate-200">{s.label}</p>
-                <p className="text-xs text-slate-500">{s.role}</p>
-                {s.note && <p className="mt-0.5 text-[11px] text-warn">{s.note}</p>}
-              </div>
-              <Tag tone={s.connected ? "ok" : "slate"}>{s.connected ? "On" : "Off"}</Tag>
-            </div>
-          ))}
-        </div>
+        <SectionHeader title="Integrations" subtitle="On/Off is key presence from your env. “Test live connections” pings each provider read-only (zero-cost) to prove the keys actually work." />
+        <ConnectionTester
+          items={statuses.map((s) => ({ key: String(s.key), label: s.label, role: s.role, note: s.note, connected: s.connected }))}
+        />
       </section>
 
       {/* Setup checklist */}
@@ -108,6 +97,16 @@ export default async function SettingsPage() {
             <p className="mt-1 text-sm text-slate-200">Hard-gated. Never auto-spent — request → approve → execute, all logged.</p>
           </CardBody></Card>
         </div>
+      </section>
+
+      {/* Forward-projection assumptions — operator-set */}
+      <section>
+        <SectionHeader title="Forward-projection assumptions" subtitle="Operator-set inputs for the Pipeline projection — never inferred from CIQ. Real residual still comes from actual closed deals." />
+        <Card>
+          <CardBody>
+            <AssumptionsForm closeRate={assumptions.closeRate} monthlyMrr={assumptions.monthlyMrr} />
+          </CardBody>
+        </Card>
       </section>
 
       <a href="https://code.claude.com/docs/en/claude-code-on-the-web" target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-xs text-brand-400 hover:underline">

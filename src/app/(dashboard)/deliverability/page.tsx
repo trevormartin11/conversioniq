@@ -5,7 +5,8 @@ import { Progress } from "@/components/ui/charts";
 import { deliverabilitySummary } from "@/lib/data/queries";
 import { PageHeader } from "@/components/ui/card";
 import { InboxActions } from "@/components/deliverability/inbox-actions";
-import { ensureData, getDomains, getInboxes, getPersonas } from "@/lib/data/store";
+import { ensureData, getDomains, getInboxes, getLeads, getPersonas } from "@/lib/data/store";
+import { bucketByTimezone, OPTIMAL_WINDOW } from "@/lib/send-timing";
 import { appConfig } from "@/lib/config";
 import { num, pct, titleCase } from "@/lib/format";
 import type { Health } from "@/lib/data/types";
@@ -19,6 +20,7 @@ export default async function DeliverabilityPage() {
   const inboxes = getInboxes();
   const personas = getPersonas();
   const personaName = (id: string) => personas.find((p) => p.id === id)?.name ?? "—";
+  const tzBuckets = bucketByTimezone(getLeads());
 
   const rollup = domains.map((d) => {
     const ibs = inboxes.filter((i) => i.domainId === d.id);
@@ -52,6 +54,30 @@ export default async function DeliverabilityPage() {
           <p className="mt-2 text-xs text-slate-500">{s.belowGate} inbox(es) below the warmup gate are blocked from sending.</p>
         </CardBody>
       </Card>
+
+      {/* Send timing — optimal local window per recipient timezone */}
+      <section>
+        <SectionHeader title="Send timing" subtitle={`Fire in each recipient's local window — ${OPTIMAL_WINDOW.label}. Timezone is inferred from area code; sends bucket per timezone.`} />
+        {tzBuckets.length === 0 ? (
+          <p className="text-sm text-slate-500">No leads loaded yet — timezone buckets appear once a list is in.</p>
+        ) : (
+          <Card>
+            <CardBody className="p-0">
+              <div className="divide-y divide-ink-800">
+                {tzBuckets.map((b) => (
+                  <div key={b.tz} className="flex items-center justify-between gap-3 px-4 py-3 text-sm">
+                    <div className="min-w-0">
+                      <p className="text-slate-200">{b.label} <span className="text-slate-500">· {num(b.count)} lead{b.count === 1 ? "" : "s"}</span></p>
+                      <p className="text-xs text-slate-500">{b.localWindow}{b.serverWindow ? ` · ${b.serverWindow}` : ""}</p>
+                    </div>
+                    <Tag tone={b.tz === "unknown" ? "warn" : "brand"}>{b.tz}</Tag>
+                  </div>
+                ))}
+              </div>
+            </CardBody>
+          </Card>
+        )}
+      </section>
 
       {/* Domain rollup */}
       <section>

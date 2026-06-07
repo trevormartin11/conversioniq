@@ -1,11 +1,11 @@
 import Link from "next/link";
-import { Coins, Flame, Inbox, ShieldAlert, type LucideIcon } from "lucide-react";
+import { Flame, Inbox, ShieldAlert, type LucideIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Card, CardBody, SectionHeader } from "@/components/ui/card";
 import { Stat } from "@/components/ui/stat";
 import { HealthBadge } from "@/components/ui/badge";
 import { LabeledBar, Sparkline } from "@/components/ui/charts";
-import { commandSummary, deliverabilitySummary, unitEconomics } from "@/lib/data/queries";
+import { commandSummary, deliverabilitySummary, northStar, unitEconomics } from "@/lib/data/queries";
 import { ensureData } from "@/lib/data/store";
 import { getCurrentUser } from "@/lib/auth";
 import { num, pct, titleCase, usd } from "@/lib/format";
@@ -18,6 +18,7 @@ export default async function CommandCenter() {
   const s = commandSummary();
   const deliver = deliverabilitySummary();
   const econ = unitEconomics();
+  const ns = northStar();
   const user = await getCurrentUser();
   const hour = new Date().getHours();
   const greeting = hour < 12 ? "Good morning" : hour < 18 ? "Good afternoon" : "Good evening";
@@ -33,6 +34,42 @@ export default async function CommandCenter() {
           {new Date().toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" })} · 10-second read
         </p>
       </div>
+
+      {/* North star — the number we run to blow past */}
+      <section>
+        <Card>
+          <CardBody className="grid gap-4 sm:grid-cols-3">
+            <div>
+              <p className="text-xs uppercase tracking-wide text-slate-500">Demos booked today</p>
+              <p className="mt-1 text-3xl font-semibold tabular-nums text-slate-100">
+                {ns.todayDemos}
+                <span className="text-lg font-normal text-slate-500"> / {ns.dailyGoal} goal</span>
+              </p>
+              <div className="mt-2 h-2 w-full overflow-hidden rounded-full bg-ink-800">
+                <div
+                  className={cn("h-full rounded-full", ns.todayDemos >= ns.dailyGoal ? "bg-ok" : "bg-brand-gradient")}
+                  style={{ width: `${Math.min(100, ns.dailyGoal ? (ns.todayDemos / ns.dailyGoal) * 100 : 0)}%` }}
+                />
+              </div>
+              <p className="mt-1.5 text-xs text-slate-500">
+                {ns.weekDemos} of {ns.weeklyGoal} this week
+              </p>
+            </div>
+            <Stat
+              label="Monthly spend"
+              value={`${usd(ns.monthlySpend)} / ${usd(ns.budget)}`}
+              sub={ns.monthlySpend <= ns.budget ? `${usd(ns.budget - ns.monthlySpend)} under ceiling` : `${usd(ns.monthlySpend - ns.budget)} over ceiling`}
+              tone={ns.monthlySpend <= ns.budget ? "ok" : "bad"}
+            />
+            <Stat
+              label="Residual run-rate"
+              value={`${usd(ns.grossResidualMonthly)}/mo`}
+              sub={`${usd(ns.netPerPartnerMonthly)}/mo each after costs`}
+              tone={ns.breakeven ? "ok" : "warn"}
+            />
+          </CardBody>
+        </Card>
+      </section>
 
       {/* Alerts */}
       {s.alerts.length > 0 && (
@@ -61,7 +98,6 @@ export default async function CommandCenter() {
       <div className="flex flex-wrap gap-2">
         {s.queueDepth > 0 && <ActionChip href="/replies" icon={Inbox} tone={s.hotCount > 0 ? "warn" : "brand"} label={`${s.queueDepth} repl${s.queueDepth === 1 ? "y" : "ies"} to review`} />}
         {s.hotCount > 0 && <ActionChip href="/replies" icon={Flame} tone="warn" label={`${s.hotCount} hot`} />}
-        {s.creditApprovals > 0 && <ActionChip href="/credits" icon={Coins} tone="warn" label={`${s.creditApprovals} credit approval${s.creditApprovals === 1 ? "" : "s"}`} />}
         {s.pausedInboxes > 0 && <ActionChip href="/deliverability" icon={ShieldAlert} tone="bad" label={`${s.pausedInboxes} inbox${s.pausedInboxes === 1 ? "" : "es"} paused`} />}
         {s.queueDepth === 0 && s.creditApprovals === 0 && s.pausedInboxes === 0 && (
           <span className="chip bg-ok/15 px-3 py-1.5 text-emerald-300 ring-1 ring-inset ring-ok/25">All caught up — nothing needs you right now ✓</span>
@@ -71,11 +107,10 @@ export default async function CommandCenter() {
       {/* Today */}
       <section>
         <SectionHeader title="Today" subtitle="Across all live campaigns" />
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
           <Stat label="Sends" value={num(s.today.sends)} sub={`${deliver.sentToday} from inboxes`} />
           <Stat label="Replies" value={num(s.today.replies)} tone="brand" />
           <Stat label="Positive" value={num(s.today.positives)} tone="ok" />
-          <Stat label="Demos booked" value={num(s.demosBooked)} tone="ok" />
           <Stat label="Queue" value={num(s.queueDepth)} sub="awaiting approval" tone={s.queueDepth > 0 ? "warn" : "default"} />
         </div>
       </section>

@@ -28,13 +28,17 @@ import type {
 } from "./types";
 import { pushDemoDeal } from "@/lib/integrations/zoho-civ";
 import { buildSeed } from "./seed";
-import { loadAutomationLevel, loadDatasetLive } from "./live";
+import { loadAutomationLevel, loadAssumptions, loadDatasetLive } from "./live";
 import { supabaseAdmin } from "./supabase";
 
 const LIVE = DATA_MODE === "live";
 
 let _data: Dataset | null = null;
 let _automationLevel: AutomationLevel = "approve_all";
+let _assumptions: { closeRate: number; monthlyMrr: number } = {
+  closeRate: appConfig.projection.assumedCloseRate,
+  monthlyMrr: appConfig.projection.assumedMonthlyMrr,
+};
 
 function db(): Dataset {
   if (!_data) _data = buildSeed();
@@ -44,6 +48,7 @@ function db(): Dataset {
 const hydrateLive = cache(async () => {
   _data = await loadDatasetLive();
   _automationLevel = await loadAutomationLevel();
+  _assumptions = await loadAssumptions();
 });
 
 /** Populate the in-memory dataset for this request (live: from Supabase). */
@@ -97,6 +102,22 @@ export async function setAutomationLevel(level: AutomationLevel) {
   await liveUpsert("settings", { key: "automation_level", value: level }, "key");
   await pushAudit("system", "automation.level_changed", "settings", null, { level });
   return _automationLevel;
+}
+
+// --- forward-projection assumptions (operator-set; never inferred from CIQ) --
+export interface Assumptions {
+  closeRate: number;
+  monthlyMrr: number;
+}
+export const getAssumptions = (): Assumptions => _assumptions;
+export async function setAssumptions(input: Partial<Assumptions>): Promise<Assumptions> {
+  const closeRate = Math.min(1, Math.max(0, Number(input.closeRate ?? _assumptions.closeRate) || 0));
+  const monthlyMrr = Math.max(0, Math.round(Number(input.monthlyMrr ?? _assumptions.monthlyMrr) || 0));
+  _assumptions = { closeRate, monthlyMrr };
+  await liveUpsert("settings", { key: "assumed_close_rate", value: String(closeRate) }, "key");
+  await liveUpsert("settings", { key: "assumed_monthly_mrr", value: String(monthlyMrr) }, "key");
+  await pushAudit("system", "assumptions.changed", "settings", null, _assumptions);
+  return _assumptions;
 }
 
 // --- audit ------------------------------------------------------------------
@@ -444,6 +465,21 @@ export async function markDemoReminded(id: string, actor = "system"): Promise<De
 export function getDemoByCivDealId(civDealId: string): Demo | undefined {
   if (!civDealId) return undefined;
   return db().demos.find((d) => d.civDealId === civDealId);
+}
+
+/**
+ * Reconcile a CIQ outcome to a demo by the contact's email when no deal id matches — e.g.
+ * CIQ's workflow posts the contact email instead of our deal id. Picks the most recent
+ * still-open demo (booked/showed/no_show) for the lead with that email.
+ */
+export function getOpenDemoByEmail(email: string): Demo | undefined {
+  const norm = email.trim().toLowerCase();
+  if (!norm) return undefined;
+  const lead = db().leads.find((l) => l.email?.toLowerCase() === norm);
+  if (!lead) return undefined;
+  return db()
+    .demos.filter((d) => d.leadId === lead.id && d.status !== "closed" && d.status !== "lost")
+    .sort((a, b) => (b.scheduledAt > a.scheduledAt ? 1 : -1))[0];
 }
 
 // --- campaign copy (inline sequence editing) --------------------------------
