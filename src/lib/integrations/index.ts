@@ -13,6 +13,7 @@ export function integrationStatuses(): IntegrationStatus[] {
   return [
     { key: "supabase", label: "Supabase (Hub DB)", connected: integrations.supabase, role: "Orchestration + analytics + the cross-tool JOIN", note: DATA_MODE === "mock" ? "Running on seed data until connected" : undefined },
     { key: "instantly", label: "Instantly.ai", connected: integrations.instantly, role: "Sending + replies (unibox) + inbox/warmup health" },
+    { key: "twilio", label: "Twilio (SMS)", connected: integrations.twilio, role: "Consent-gated SMS sending (A2P 10DLC)", note: integrations.twilio ? undefined : "SMS sends simulate until connected" },
     { key: "zoho", label: "Zoho CRM (ours)", connected: integrations.zoho, role: "Canonical leads/contacts + Do-Not-Contact" },
     { key: "zohoCiq", label: "ConversionIQ Zoho (partner)", connected: integrations.zohoCiq, role: "Demo→deal handoff + won/lost outcome webhook" },
     { key: "apolloPersonal", label: "Apollo (Personal)", connected: integrations.apolloPersonal, role: "Search + enrich (free)" },

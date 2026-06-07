@@ -117,6 +117,15 @@ export const probes: Partial<Record<IntegrationKey, () => Promise<string>>> = {
     if (!j.access_token) throw new Error(j.error || "no access_token returned");
     return "access token minted";
   },
+  twilio: async () => {
+    // GET the account resource — a free, read-only call that proves the SID + token work.
+    const sid = process.env.TWILIO_ACCOUNT_SID ?? "";
+    const res = await probeFetch(`https://api.twilio.com/2010-04-01/Accounts/${sid}.json`, {
+      headers: { Authorization: `Basic ${Buffer.from(`${sid}:${process.env.TWILIO_AUTH_TOKEN ?? ""}`).toString("base64")}` },
+    });
+    const j = (await res.json().catch(() => ({}))) as { friendly_name?: string; status?: string };
+    return j.friendly_name ? `account: ${j.friendly_name}` : "credentials valid";
+  },
   telegram: async () => {
     const res = await probeFetch(`https://api.telegram.org/bot${process.env.TELEGRAM_BOT_TOKEN ?? ""}/getMe`);
     const j = (await res.json().catch(() => ({}))) as { ok?: boolean; description?: string; result?: { username?: string } };

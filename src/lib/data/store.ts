@@ -8,7 +8,7 @@
  * just `await ensureData()` first.
  */
 import { cache } from "react";
-import { appConfig, DATA_MODE } from "@/lib/config";
+import { appConfig, DATA_MODE, integrations } from "@/lib/config";
 import type {
   AutomationLevel,
   Campaign,
@@ -37,6 +37,7 @@ import type {
 } from "./types";
 import { capRemaining, findConsent, GATE_REASONS, normalizeHandle, sendGate } from "@/lib/channels/policy";
 import { pushDemoDeal } from "@/lib/integrations/zoho-civ";
+import { sendSms } from "@/lib/integrations/twilio";
 import { buildSeed } from "./seed";
 import { loadAutomationLevel, loadAssumptions, loadDatasetLive } from "./live";
 import { supabaseAdmin } from "./supabase";
@@ -738,6 +739,20 @@ export async function sendOutreach(id: string, actor: string): Promise<{ ok: boo
     }
     return { ok: false, error: GATE_REASONS[gate.reason] };
   }
+  // SMS goes on the wire via Twilio when configured (gate already passed). Social is human-sent,
+  // and without Twilio keys SMS is simulated (demo) — both just mark sent below.
+  let providerSid: string | null = null;
+  if (m.channel === "sms" && integrations.twilio) {
+    const res = await sendSms({ to: m.toHandle, body: m.body, from: account?.identifier });
+    if (!res.ok) {
+      // A provider rejection must NOT mark sent or burn cap — surface it and leave it retryable.
+      m.status = "failed";
+      await liveUpsert("outreach_messages", { id, status: m.status });
+      await pushAudit(actor, "outreach.failed", "outreach", id, { channel: "sms", to: m.toName, error: res.reason ?? null, code: res.code ?? null });
+      return { ok: false, error: res.reason ? `Twilio: ${res.reason}` : "SMS send failed." };
+    }
+    providerSid = res.sid ?? null;
+  }
   m.status = "sent";
   m.sentAt = new Date().toISOString();
   m.sentBy = actor;
@@ -747,7 +762,7 @@ export async function sendOutreach(id: string, actor: string): Promise<{ ok: boo
     account.sentToday += 1;
     await liveUpsert("channel_accounts", { id: account.id, sent_today: account.sentToday });
   }
-  await pushAudit(actor, "outreach.sent", "outreach", id, { channel: m.channel, to: m.toName });
+  await pushAudit(actor, "outreach.sent", "outreach", id, { channel: m.channel, to: m.toName, ...(providerSid ? { provider: "twilio", sid: providerSid } : {}) });
   return { ok: true, msg: m };
 }
 
