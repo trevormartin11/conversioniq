@@ -18,6 +18,16 @@ const BANDS: { v: "" | SizeBand; label: string }[] = [
   { v: "enterprise", label: "Enterprise $100M+" },
 ];
 
+// One-click targets for the launch campaigns — pre-fills the planner so it's just Plan → Run.
+// Counts are sized to ~3 weeks of runway at each campaign's daily cap.
+const PRESETS: { label: string; vertical: string; geo: string; band: SizeBand; count: number }[] = [
+  { label: "Med Spas", vertical: "Med spas", geo: "United States", band: "local_smb", count: 800 },
+  { label: "Dental", vertical: "Dental practices", geo: "United States", band: "local_smb", count: 600 },
+  { label: "Home Services", vertical: "HVAC & home services contractors", geo: "United States", band: "local_smb", count: 600 },
+  { label: "Law", vertical: "Personal injury & family law firms", geo: "United States", band: "local_smb", count: 600 },
+  { label: "Auto", vertical: "Auto dealerships", geo: "United States", band: "local_smb", count: 600 },
+];
+
 export function SourcingPlanner({ campaigns }: { campaigns: PlannerCampaign[] }) {
   const [vertical, setVertical] = useState("");
   const [geo, setGeo] = useState("");
@@ -33,6 +43,15 @@ export function SourcingPlanner({ campaigns }: { campaigns: PlannerCampaign[] })
   const [loading, startLoad] = useTransition();
 
   const input = () => ({ vertical, geo, sizeBand: band || undefined, count: Number(count) || 100, budgetCap: Number(budget) || 50 });
+
+  function applyPreset(p: (typeof PRESETS)[number]) {
+    setVertical(p.vertical);
+    setGeo(p.geo);
+    setBand(p.band);
+    setCount(p.count);
+    setPlan(null);
+    setResult(null);
+  }
 
   function doPlan() {
     setResult(null);
@@ -68,6 +87,23 @@ export function SourcingPlanner({ campaigns }: { campaigns: PlannerCampaign[] })
   return (
     <Card>
       <CardBody className="space-y-3">
+        {/* quick targets — pre-fill the planner for the launch campaigns */}
+        <div>
+          <p className="text-xs font-medium text-slate-400">Quick targets <span className="text-slate-600">· your launch verticals</span></p>
+          <div className="mt-1.5 flex flex-wrap gap-1.5">
+            {PRESETS.map((p) => (
+              <button
+                key={p.label}
+                type="button"
+                onClick={() => applyPreset(p)}
+                className="rounded-lg bg-ink-800 px-2.5 py-1 text-xs text-slate-300 ring-1 ring-inset ring-white/10 transition-colors hover:text-slate-100 hover:ring-brand-500/40"
+              >
+                {p.label} <span className="text-slate-500">· {p.count}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+
         {/* inputs */}
         <div className="grid gap-2 sm:grid-cols-2">
           <div className="sm:col-span-2">
