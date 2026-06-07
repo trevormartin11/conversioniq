@@ -85,7 +85,7 @@ export default async function AnalysisPage() {
                     <Mini label="Positive" value={pct(c.positiveRate, 1)} />
                   </div>
                   <div className="mt-3 flex gap-3 text-xs">
-                    <Link href={`/copy?campaign=${c.id}`} className="font-medium text-brand-400 hover:text-brand-300">Tune copy →</Link>
+                    <Link href={`/campaigns/${c.id}`} className="font-medium text-brand-400 hover:text-brand-300">Tune copy →</Link>
                     <Link href={`/campaigns/${c.id}`} className="font-medium text-slate-400 hover:text-slate-200">Open campaign →</Link>
                   </div>
                 </CardBody>

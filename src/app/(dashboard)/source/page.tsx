@@ -99,8 +99,8 @@ export default async function SourcePage() {
         </div>
       </section>
 
-      <Link href="/copy" className="inline-flex items-center gap-1.5 text-xs font-medium text-brand-400 hover:text-brand-300">
-        Next: write the sequence &amp; cadence →
+      <Link href="/campaigns" className="inline-flex items-center gap-1.5 text-xs font-medium text-brand-400 hover:text-brand-300">
+        Next: build the sequence &amp; send →
       </Link>
     </div>
   );

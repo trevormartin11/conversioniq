@@ -4,7 +4,6 @@ import {
   LayoutDashboard,
   Lightbulb,
   Megaphone,
-  PenLine,
   Radar,
   Rocket,
   Settings,
@@ -50,7 +49,6 @@ export const NAV: NavItem[] = [
   { href: "/strategy", label: "Strategy", short: "Strategy", icon: Target, phase: 1, group: "build" },
   { href: "/source", label: "Source", short: "Source", icon: Radar, phase: 1, group: "build" },
   { href: "/leads", label: "Leads & Suppression", short: "Leads", icon: Users, phase: 1, group: "build" },
-  { href: "/copy", label: "Copy & Sequence", short: "Copy", icon: PenLine, phase: 2, group: "build" },
   { href: "/campaigns", label: "Campaigns", short: "Send", icon: Megaphone, phase: 2, group: "build" },
   // Run the machine
   { href: "/replies", label: "Reply Approval", short: "Replies", icon: Inbox, phase: 1, group: "run" },
