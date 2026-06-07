@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
-import { sendSms } from "@/lib/integrations/twilio";
+import { sendSms, twilioSignature, verifyTwilioSignature } from "@/lib/integrations/twilio";
 
 afterEach(() => {
   vi.restoreAllMocks();
@@ -78,5 +78,25 @@ describe("twilio sendSms", () => {
     const r = await sendSms({ to: "+14155550123", body: "hi" });
     expect(r.ok).toBe(false);
     expect(r.reason).toMatch(/Authentication|20003|401/i);
+  });
+});
+
+describe("twilioSignature (request validation)", () => {
+  // Twilio's own documented example — proves the algorithm byte-for-byte.
+  it("matches Twilio's published test vector", () => {
+    const url = "https://mycompany.com/myapp.php?foo=1&bar=2";
+    const params = { Caller: "+14158675309", Digits: "1234", From: "+14158675309", To: "+18005551212", CallSid: "CA1234567890ABCDE" };
+    expect(twilioSignature("12345", url, params)).toBe("RSOYDt4T1cUTdK1PDd93/VVr8B8=");
+  });
+
+  it("verifies a matching signature and rejects tampering / a missing header", () => {
+    const url = "https://app.example.com/api/webhooks/twilio";
+    const params = { From: "+14155550123", Body: "STOP", To: "+18005551212" };
+    const sig = twilioSignature("tok", url, params);
+    expect(verifyTwilioSignature("tok", url, params, sig)).toBe(true);
+    // Tampered body (e.g. someone trying to forge an opt-in) no longer matches.
+    expect(verifyTwilioSignature("tok", url, { ...params, Body: "START" }, sig)).toBe(false);
+    expect(verifyTwilioSignature("tok", url, params, null)).toBe(false);
+    expect(verifyTwilioSignature("wrong-token", url, params, sig)).toBe(false);
   });
 });

@@ -8,6 +8,7 @@
  * Docs: POST https://api.twilio.com/2010-04-01/Accounts/{SID}/Messages.json
  *       Basic auth (AccountSID:AuthToken), application/x-www-form-urlencoded body.
  */
+import { createHmac, timingSafeEqual } from "node:crypto";
 import { httpJson } from "./http";
 
 export interface SmsResult {
@@ -58,4 +59,24 @@ export async function sendSms(input: { to: string; body: string; from?: string }
   } catch (err) {
     return { ok: false, reason: (err as Error).message };
   }
+}
+
+/**
+ * Twilio's request signature: HMAC-SHA1 of (full URL + each POST param's key+value, sorted
+ * by key), keyed by the Auth Token, base64-encoded. This is how we prove an inbound webhook
+ * (e.g. a STOP) genuinely came from Twilio and isn't a forged opt-in/opt-out.
+ */
+export function twilioSignature(authToken: string, url: string, params: Record<string, string>): string {
+  const data = Object.keys(params)
+    .sort()
+    .reduce((acc, key) => acc + key + params[key], url);
+  return createHmac("sha1", authToken).update(Buffer.from(data, "utf-8")).digest("base64");
+}
+
+/** Constant-time check of the X-Twilio-Signature header against the recomputed signature. */
+export function verifyTwilioSignature(authToken: string, url: string, params: Record<string, string>, signature: string | null | undefined): boolean {
+  if (!authToken || !signature) return false;
+  const expected = Buffer.from(twilioSignature(authToken, url, params));
+  const got = Buffer.from(signature);
+  return expected.length === got.length && timingSafeEqual(expected, got);
 }

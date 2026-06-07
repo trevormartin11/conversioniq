@@ -75,3 +75,17 @@ export function sendGate(channel: OutreachChannel, records: ConsentRecord[], han
   if (capRemaining(account) <= 0) return { ok: false, reason: "cap_reached" };
   return { ok: true };
 }
+
+// Carrier-standard inbound keywords. STOP-family suppresses (always safe); START-family
+// re-subscribes (only ever acted on from a signature-verified Twilio webhook).
+const STOP_KEYWORDS = new Set(["STOP", "STOPALL", "UNSUBSCRIBE", "CANCEL", "END", "QUIT", "REVOKE", "OPTOUT"]);
+const START_KEYWORDS = new Set(["START", "YES", "UNSTOP"]);
+
+/** Classify an inbound SMS body as an opt-out / opt-in keyword (or neither). Looks at the first word. */
+export function classifyInboundKeyword(body: string): "opt_out" | "opt_in" | null {
+  const token = ((body ?? "").trim().split(/\s+/)[0] ?? "").toUpperCase().replace(/[^A-Z0-9]/g, "");
+  if (!token) return null;
+  if (STOP_KEYWORDS.has(token)) return "opt_out";
+  if (START_KEYWORDS.has(token)) return "opt_in";
+  return null;
+}

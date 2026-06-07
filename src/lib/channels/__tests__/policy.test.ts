@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { capRemaining, findConsent, normalizeHandle, sendGate, smsConsentGate } from "@/lib/channels/policy";
+import { capRemaining, classifyInboundKeyword, findConsent, normalizeHandle, sendGate, smsConsentGate } from "@/lib/channels/policy";
 import type { ChannelAccount, ConsentRecord } from "@/lib/data/types";
 
 const consent = (over: Partial<ConsentRecord>): ConsentRecord => ({
@@ -78,5 +78,23 @@ describe("capRemaining + sendGate (durability)", () => {
   });
   it("allows an SMS with consent within cap", () => {
     expect(sendGate("sms", [consent({})], "+14155550100", acct({}))).toEqual({ ok: true });
+  });
+});
+
+describe("classifyInboundKeyword (inbound STOP/START)", () => {
+  it("treats carrier opt-out keywords as opt_out (case/punctuation-insensitive, first word)", () => {
+    for (const b of ["STOP", "stop", "Stop.", "STOP please", "stopall", "Unsubscribe", "CANCEL", "quit", "end", "OPTOUT"]) {
+      expect(classifyInboundKeyword(b)).toBe("opt_out");
+    }
+  });
+  it("treats re-subscribe keywords as opt_in", () => {
+    for (const b of ["START", "start", "Yes!", "unstop"]) {
+      expect(classifyInboundKeyword(b)).toBe("opt_in");
+    }
+  });
+  it("returns null for a normal reply or empty body", () => {
+    expect(classifyInboundKeyword("Sounds good, let's chat")).toBeNull();
+    expect(classifyInboundKeyword("")).toBeNull();
+    expect(classifyInboundKeyword("   ")).toBeNull();
   });
 });
