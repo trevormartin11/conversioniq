@@ -44,28 +44,40 @@ import { supabaseAdmin } from "./supabase";
 
 const LIVE = DATA_MODE === "live";
 
-let _data: Dataset | null = null;
-let _automationLevel: AutomationLevel = "approve_all";
-let _assumptions: { closeRate: number; monthlyMrr: number } = {
-  closeRate: appConfig.projection.assumedCloseRate,
-  monthlyMrr: appConfig.projection.assumedMonthlyMrr,
-};
+// In-memory runtime state lives on globalThis, NOT in module-level `let`s. Next's App Router
+// can instantiate this module separately for the Server Action layer and the RSC render layer
+// (and dev HMR re-evaluates modules), so a plain `let` is not shared — a write inside an action
+// would be invisible to the page that renders right after it (created campaign → 404). globalThis
+// is the single surface shared across those instances within a process.
+interface RuntimeState {
+  data: Dataset | null;
+  automationLevel: AutomationLevel;
+  assumptions: { closeRate: number; monthlyMrr: number };
+}
+const rt: RuntimeState = ((globalThis as unknown as { __ciqRuntime?: RuntimeState }).__ciqRuntime ??= {
+  data: null,
+  automationLevel: "approve_all",
+  assumptions: {
+    closeRate: appConfig.projection.assumedCloseRate,
+    monthlyMrr: appConfig.projection.assumedMonthlyMrr,
+  },
+});
 
 function db(): Dataset {
-  if (!_data) _data = buildSeed();
-  return _data;
+  if (!rt.data) rt.data = buildSeed();
+  return rt.data;
 }
 
 const hydrateLive = cache(async () => {
-  _data = await loadDatasetLive();
-  _automationLevel = await loadAutomationLevel();
-  _assumptions = await loadAssumptions();
+  rt.data = await loadDatasetLive();
+  rt.automationLevel = await loadAutomationLevel();
+  rt.assumptions = await loadAssumptions();
 });
 
 /** Populate the in-memory dataset for this request (live: from Supabase). */
 export async function ensureData(): Promise<void> {
   if (LIVE) await hydrateLive();
-  else if (!_data) _data = buildSeed();
+  else if (!rt.data) rt.data = buildSeed();
 }
 
 async function liveUpsert(table: string, row: Record<string, unknown>, onConflict = "id") {
@@ -112,12 +124,12 @@ export const getCampaign = (id: string) => db().campaigns.find((c) => c.id === i
 export const getInbox = (id: string) => db().inboxes.find((i) => i.id === id) ?? null;
 
 // --- automation dial --------------------------------------------------------
-export const getAutomationLevel = () => _automationLevel;
+export const getAutomationLevel = () => rt.automationLevel;
 export async function setAutomationLevel(level: AutomationLevel) {
-  _automationLevel = level;
+  rt.automationLevel = level;
   await liveUpsert("settings", { key: "automation_level", value: level }, "key");
   await pushAudit("system", "automation.level_changed", "settings", null, { level });
-  return _automationLevel;
+  return rt.automationLevel;
 }
 
 // --- forward-projection assumptions (operator-set; never inferred from CIQ) --
@@ -125,15 +137,15 @@ export interface Assumptions {
   closeRate: number;
   monthlyMrr: number;
 }
-export const getAssumptions = (): Assumptions => _assumptions;
+export const getAssumptions = (): Assumptions => rt.assumptions;
 export async function setAssumptions(input: Partial<Assumptions>): Promise<Assumptions> {
-  const closeRate = Math.min(1, Math.max(0, Number(input.closeRate ?? _assumptions.closeRate) || 0));
-  const monthlyMrr = Math.max(0, Math.round(Number(input.monthlyMrr ?? _assumptions.monthlyMrr) || 0));
-  _assumptions = { closeRate, monthlyMrr };
+  const closeRate = Math.min(1, Math.max(0, Number(input.closeRate ?? rt.assumptions.closeRate) || 0));
+  const monthlyMrr = Math.max(0, Math.round(Number(input.monthlyMrr ?? rt.assumptions.monthlyMrr) || 0));
+  rt.assumptions = { closeRate, monthlyMrr };
   await liveUpsert("settings", { key: "assumed_close_rate", value: String(closeRate) }, "key");
   await liveUpsert("settings", { key: "assumed_monthly_mrr", value: String(monthlyMrr) }, "key");
-  await pushAudit("system", "assumptions.changed", "settings", null, _assumptions);
-  return _assumptions;
+  await pushAudit("system", "assumptions.changed", "settings", null, rt.assumptions);
+  return rt.assumptions;
 }
 
 // --- audit ------------------------------------------------------------------
