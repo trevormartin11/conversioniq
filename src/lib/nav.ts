@@ -1,5 +1,4 @@
 import {
-  Coins,
   DollarSign,
   Inbox,
   LayoutDashboard,
@@ -60,7 +59,6 @@ export const NAV: NavItem[] = [
   { href: "/analysis", label: "Analysis", short: "Analysis", icon: Lightbulb, phase: 3, group: "measure" },
   { href: "/pipeline", label: "Pipeline & Residual", short: "Pipeline", icon: TrendingUp, phase: 3, group: "measure" },
   { href: "/costs", label: "Costs & P&L", short: "Costs", icon: DollarSign, phase: 1, group: "measure" },
-  { href: "/credits", label: "Credit Guard", short: "Credits", icon: Coins, phase: 1, group: "measure" },
   // System
   { href: "/automation", label: "Automation", short: "Jobs", icon: Workflow, phase: 4, group: "system" },
   { href: "/settings", label: "Settings", short: "Settings", icon: Settings, phase: 1, group: "system" },

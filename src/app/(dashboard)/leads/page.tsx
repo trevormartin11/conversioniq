@@ -3,8 +3,11 @@ import { Stat } from "@/components/ui/stat";
 import { Tag } from "@/components/ui/badge";
 import { SuppressionTools } from "@/components/leads/suppression-tools";
 import { SourcingPlanner } from "@/components/leads/sourcing-planner";
+import { Progress } from "@/components/ui/charts";
+import { Lock } from "lucide-react";
 import { ensureData, getCampaigns, getLeads, getSuppression } from "@/lib/data/store";
-import { num, titleCase } from "@/lib/format";
+import { creditSummary } from "@/lib/data/queries";
+import { ago, num, pct, titleCase } from "@/lib/format";
 import { leadTimezone } from "@/lib/send-timing";
 import type { SuppressionReason } from "@/lib/data/types";
 
@@ -16,6 +19,7 @@ export default async function LeadsPage({ searchParams }: { searchParams: Promis
   const query = (q ?? "").toLowerCase().trim();
   const leads = getLeads();
   const suppression = getSuppression();
+  const meters = creditSummary();
   const campaignOptions = getCampaigns().map((c) => ({ id: c.id, name: c.name, status: c.status, hasInstantly: !!c.instantlyCampaignId }));
 
   const byReason = {} as Record<SuppressionReason, number>;
@@ -49,6 +53,29 @@ export default async function LeadsPage({ searchParams }: { searchParams: Promis
       <section>
         <SectionHeader title="Source new leads" subtitle="The router picks the cheapest source that covers your target (Maps for local, B2B database for enterprise), prices it, then verifies + dedupes before load." />
         <SourcingPlanner campaigns={campaignOptions} />
+      </section>
+
+      {/* Credit visibility — what's left to spend on sourcing + enrichment (folded in from Credit Guard) */}
+      <section>
+        <SectionHeader title="Credits" subtitle="What's left to spend on sourcing & enrichment. CIQ credits are gated — never auto-spent." />
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          {meters.map((m) => (
+            <Card key={m.provider}>
+              <CardBody>
+                <div className="flex items-start justify-between gap-2">
+                  <p className="text-sm font-semibold text-slate-100">{m.label}</p>
+                  {m.gated && <span className="chip bg-bad/15 text-bad"><Lock className="h-3 w-3" /> Gated</span>}
+                </div>
+                <div className="mt-2 flex items-end justify-between">
+                  <span className="text-xl font-semibold tabular-nums text-slate-100">{num(m.remaining)}</span>
+                  <span className="text-[11px] text-slate-500">{num(m.used)}/{num(m.total)} · {pct(m.pctUsed, 0)}</span>
+                </div>
+                <div className="mt-2"><Progress value={m.pctUsed} tone={m.pctUsed > 0.85 ? "bad" : m.pctUsed > 0.6 ? "warn" : "ok"} /></div>
+                {m.resetsAt && <p className="mt-1 text-[10px] text-slate-500">Resets {ago(m.resetsAt)}</p>}
+              </CardBody>
+            </Card>
+          ))}
+        </div>
       </section>
 
       {/* Lead table */}

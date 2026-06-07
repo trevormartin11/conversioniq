@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Coins, Flame, Inbox, ShieldAlert, type LucideIcon } from "lucide-react";
+import { Flame, Inbox, ShieldAlert, type LucideIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Card, CardBody, SectionHeader } from "@/components/ui/card";
 import { Stat } from "@/components/ui/stat";
@@ -98,7 +98,6 @@ export default async function CommandCenter() {
       <div className="flex flex-wrap gap-2">
         {s.queueDepth > 0 && <ActionChip href="/replies" icon={Inbox} tone={s.hotCount > 0 ? "warn" : "brand"} label={`${s.queueDepth} repl${s.queueDepth === 1 ? "y" : "ies"} to review`} />}
         {s.hotCount > 0 && <ActionChip href="/replies" icon={Flame} tone="warn" label={`${s.hotCount} hot`} />}
-        {s.creditApprovals > 0 && <ActionChip href="/credits" icon={Coins} tone="warn" label={`${s.creditApprovals} credit approval${s.creditApprovals === 1 ? "" : "s"}`} />}
         {s.pausedInboxes > 0 && <ActionChip href="/deliverability" icon={ShieldAlert} tone="bad" label={`${s.pausedInboxes} inbox${s.pausedInboxes === 1 ? "" : "es"} paused`} />}
         {s.queueDepth === 0 && s.creditApprovals === 0 && s.pausedInboxes === 0 && (
           <span className="chip bg-ok/15 px-3 py-1.5 text-emerald-300 ring-1 ring-inset ring-ok/25">All caught up — nothing needs you right now ✓</span>
