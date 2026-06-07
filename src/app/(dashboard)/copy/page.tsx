@@ -59,7 +59,7 @@ export default async function CopyPage({ searchParams }: { searchParams: Promise
       </section>
 
       <section>
-        <SectionHeader title="Recommended next moves" subtitle="What to do about the results — scale winners, kill losers, test what's next" />
+        <SectionHeader title="Recommended next moves" subtitle="What to do about the results — scale winners, kill losers, test what's next" action={<Link href="/analysis" className="text-xs font-medium text-brand-400 hover:text-brand-300">Full analysis →</Link>} />
         <Suspense fallback={<SuggestionsSkeleton />}>
           <NextMoves />
         </Suspense>

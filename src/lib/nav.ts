@@ -3,6 +3,7 @@ import {
   DollarSign,
   Inbox,
   LayoutDashboard,
+  Lightbulb,
   Megaphone,
   PenLine,
   Radar,
@@ -56,6 +57,7 @@ export const NAV: NavItem[] = [
   { href: "/replies", label: "Reply Approval", short: "Replies", icon: Inbox, phase: 1, group: "run" },
   { href: "/deliverability", label: "Deliverability", short: "Health", icon: ShieldCheck, phase: 2, group: "run" },
   // Measure
+  { href: "/analysis", label: "Analysis", short: "Analysis", icon: Lightbulb, phase: 3, group: "measure" },
   { href: "/pipeline", label: "Pipeline & Residual", short: "Pipeline", icon: TrendingUp, phase: 3, group: "measure" },
   { href: "/costs", label: "Costs & P&L", short: "Costs", icon: DollarSign, phase: 1, group: "measure" },
   { href: "/credits", label: "Credit Guard", short: "Credits", icon: Coins, phase: 1, group: "measure" },
