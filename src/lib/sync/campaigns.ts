@@ -62,11 +62,26 @@ export async function syncCampaigns() {
   const campaignsWritten = await chunkedUpsert("campaigns", campRows);
   const variantsWritten = variantRows.length ? await chunkedUpsert("sequence_variants", variantRows) : 0;
 
-  // Drop the placeholder seeded campaign once real campaigns are present.
+  // Reconcile deletions. The sync is the source of truth for Instantly-sourced campaigns, so a hub
+  // campaign that came from Instantly but is no longer in the live list was deleted there — prune it
+  // (and its variants) so deletions propagate. Hub-native drafts (list_version != 'instantly') are
+  // left alone. Guard: only prune when the fetch actually returned campaigns, so a transient empty
+  // Instantly response can never wipe the hub.
+  const db = supabaseAdmin();
+  let pruned = 0;
   if (campRows.length > 0) {
-    await supabaseAdmin().from("sequence_variants").delete().eq("campaign_id", "c_medspa");
-    await supabaseAdmin().from("campaigns").delete().eq("id", "c_medspa");
+    const liveIds = new Set(campRows.map((r) => r.id as string));
+    const { data: existing } = await db.from("campaigns").select("id").eq("list_version", "instantly");
+    const stale = (existing ?? []).map((r) => r.id as string).filter((id) => id !== "c_medspa" && !liveIds.has(id));
+    if (stale.length) {
+      await db.from("sequence_variants").delete().in("campaign_id", stale);
+      await db.from("campaigns").delete().in("id", stale);
+      pruned = stale.length;
+    }
+    // Drop the legacy seeded placeholder once real campaigns are present.
+    await db.from("sequence_variants").delete().eq("campaign_id", "c_medspa");
+    await db.from("campaigns").delete().eq("id", "c_medspa");
   }
 
-  return { campaigns: campaignsWritten, variants: variantsWritten };
+  return { campaigns: campaignsWritten, variants: variantsWritten, pruned };
 }
