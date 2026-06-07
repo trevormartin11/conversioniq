@@ -15,6 +15,8 @@ function verticalFor(name: string): string {
   if (n.includes("med spa") || n.includes("medspa")) return "Med Spa";
   if (n.includes("home service")) return "Home Services";
   if (n.includes("dental")) return "Dental";
+  if (n.includes("auto") || n.includes("dealership")) return "Automotive";
+  if (n.includes("law") || n.includes("legal") || n.includes("attorney")) return "Legal";
   if (n.includes("e-commerce") || n.includes("ecommerce") || n.includes("dtc")) return "E-Commerce";
   if (n.includes("hospitality")) return "Hospitality";
   if (n.includes("political") || n.includes("pac")) return "Political";
