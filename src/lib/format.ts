@@ -16,6 +16,17 @@ export function usd(n: number): string {
   }).format(n);
 }
 
+/** Currency with cents, and extra precision for sub-dollar amounts — for the live AI spend meter. */
+export function usdFine(n: number): string {
+  if (n > 0 && n < 1) return `$${n.toFixed(n < 0.01 ? 4 : 3)}`;
+  return new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency: "USD",
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(n);
+}
+
 /** "3m ago", "2h ago" — for reply/inbox recency. */
 export function ago(iso: string | null): string {
   if (!iso) return "—";

@@ -77,6 +77,67 @@ export async function googleReviewSignal(company: string, location?: string): Pr
   }
 }
 
+/**
+ * Recent-news signal (Phase 2) — a real, specific company moment (an award, a new location, a
+ * press mention) via Outscraper's Google Search. PAID per call, so it only fires when Outscraper
+ * is connected; returns null otherwise / on thin data. Parsed defensively — an unexpected shape
+ * just yields null (Claude then falls back to its other signals).
+ */
+export async function companyNewsSignal(company: string, location?: string): Promise<string | null> {
+  if (!integrations.outscraper || !company.trim()) return null;
+  try {
+    const query = [`${company.trim()} news`, location].filter(Boolean).join(" ");
+    const url = `https://api.app.outscraper.com/google-search-v3?query=${encodeURIComponent(query)}&pagesPerQuery=1&async=false`;
+    const res = await httpJson<{ data?: Array<{ organic_results?: Array<{ title?: string; description?: string; snippet?: string }> }> }>(
+      "outscraper",
+      url,
+      { headers: { "X-API-KEY": process.env.OUTSCRAPER_API_KEY! }, timeoutMs: 60000 },
+    );
+    const organic = res.data?.[0]?.organic_results ?? [];
+    const top = organic.find((o) => (o.title || o.description || o.snippet || "").trim());
+    if (!top) return null;
+    const headline = (top.title || "").trim();
+    const snippet = (top.description || top.snippet || "").trim();
+    const text = [headline, snippet].filter(Boolean).join(" — ").slice(0, 240);
+    return text ? `Recent mention: ${text}` : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Social-activity signal (Phase 2) — recent public social / LinkedIn activity for a prospect, via a
+ * pluggable social-data provider. This is the honest seam: doing fresh social signals WELL needs a
+ * real provider, so it stays dark until SOCIAL_SIGNAL_API_KEY + SOCIAL_SIGNAL_API_URL are set, then
+ * lights up like every other integration. POSTs { domain, company }; accepts a few common response
+ * shapes; returns ONE specific line or null (never invents). Confirm the wire format when a key is
+ * added — the self-gating + defensive parse mean a mismatch degrades to null rather than breaking.
+ */
+export async function socialActivitySignal(input: { domain?: string; company?: string }): Promise<string | null> {
+  if (!integrations.socialSignals) return null;
+  const base = process.env.SOCIAL_SIGNAL_API_URL;
+  if (!base || (!input.domain && !input.company)) return null;
+  try {
+    const res = await httpJson<{ signal?: string; summary?: string; posts?: Array<{ text?: string; date?: string }> }>(
+      "social",
+      base,
+      {
+        method: "POST",
+        headers: { Authorization: `Bearer ${process.env.SOCIAL_SIGNAL_API_KEY!}`, "content-type": "application/json" },
+        body: JSON.stringify({ domain: input.domain, company: input.company }),
+        timeoutMs: 30000,
+      },
+    );
+    const direct = (res.signal || res.summary || "").trim();
+    if (direct) return `Recent social activity: ${direct.slice(0, 240)}`;
+    const post = res.posts?.find((p) => (p.text || "").trim());
+    if (post?.text) return `Recent post: ${post.text.trim().slice(0, 240)}`;
+    return null;
+  } catch {
+    return null;
+  }
+}
+
 /** Findymail — find a deliverable email for a business/owner from name + domain. */
 export async function findymailEnrich(lead: SourcedLead): Promise<SourcedLead> {
   if (!integrations.findymail || !lead.domain) return lead;

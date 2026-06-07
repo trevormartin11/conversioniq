@@ -55,6 +55,7 @@ export async function proposeVerticals(
         `Return ONLY JSON: [{"vertical":"...","fit":8,"why":"...","angle":"..."}]`,
       ].filter(Boolean).join("\n\n"),
       maxTokens: 1100,
+      purpose: "strategy",
     });
     const parsed = JSON.parse(out.match(/\[[\s\S]*\]/)?.[0] ?? out) as Omit<VerticalIdea, "source">[];
     const ideas = parsed.filter((i) => i.vertical && !ex.has(i.vertical.toLowerCase())).map((i) => ({ ...i, fit: Number(i.fit) || 7, source: "ai" as const }));
@@ -85,6 +86,7 @@ export async function suggestProblems(vertical: string): Promise<{ problems: str
         `Return ONLY JSON: ["problem one","problem two","problem three"]`,
       ].join("\n\n"),
       maxTokens: 500,
+      purpose: "strategy",
     });
     const parsed = JSON.parse(out.match(/\[[\s\S]*\]/)?.[0] ?? out) as string[];
     const problems = parsed.filter((p) => typeof p === "string" && p.trim()).slice(0, 3);
@@ -110,6 +112,7 @@ export async function suggestVerticalsForProblem(problem: string, exclude: strin
         `Return ONLY JSON: [{"vertical":"...","fit":8,"why":"...","angle":"..."}]`,
       ].join("\n\n"),
       maxTokens: 1100,
+      purpose: "strategy",
     });
     const parsed = JSON.parse(out.match(/\[[\s\S]*\]/)?.[0] ?? out) as Omit<VerticalIdea, "source">[];
     const ideas = parsed.filter((i) => i.vertical && !ex.has(i.vertical.toLowerCase())).map((i) => ({ ...i, fit: Number(i.fit) || 7, source: "ai" as const }));
@@ -134,6 +137,7 @@ export async function suggestTitles(vertical: string, problem?: string): Promise
         `Return ONLY JSON: ["Title one","Title two"]`,
       ].filter(Boolean).join("\n\n"),
       maxTokens: 300,
+      purpose: "strategy",
     });
     const parsed = JSON.parse(out.match(/\[[\s\S]*\]/)?.[0] ?? out) as string[];
     const titles = parsed.filter((t) => typeof t === "string" && t.trim()).slice(0, 6);

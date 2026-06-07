@@ -36,6 +36,8 @@ export const integrations = {
   outscraper: has(process.env.OUTSCRAPER_API_KEY),
   findymail: has(process.env.FINDYMAIL_API_KEY),
   millionverifier: has(process.env.MILLIONVERIFIER_API_KEY),
+  // Phase-2 personalization: a pluggable social/LinkedIn-activity provider (off until keyed).
+  socialSignals: has(process.env.SOCIAL_SIGNAL_API_KEY, process.env.SOCIAL_SIGNAL_API_URL),
   gmail: has(
     process.env.GMAIL_CLIENT_ID,
     process.env.GMAIL_CLIENT_SECRET,
@@ -94,4 +96,8 @@ export const appConfig = {
    *  This is the main cost lever: classification fires per inbound reply on the sync cron + webhook,
    *  so it stays off the premium tier by default. Falls back to keyword rules if AI is unavailable. */
   fastModel: process.env.ANTHROPIC_FAST_MODEL || "claude-haiku-4-5-20251001",
+  /** Claude API spend controls. The soft budget is an alert line for the live meter (NOT a hard cap). */
+  ai: {
+    softMonthlyBudgetUsd: Number(process.env.AI_SOFT_BUDGET_USD) || 50,
+  },
 } as const;

@@ -44,6 +44,7 @@ export async function draftReply(reply: ReplyLike, lead: LeadLike, senderName = 
       ].join("\n"),
       maxTokens: 280,
       temperature: 0.5,
+      purpose: "drafting",
     });
     return { draft, source: "ai" };
   } catch {

@@ -20,7 +20,26 @@ interface BatchRow {
  * a line for each of the campaign's real leads, review/edit/approve, then load the approved
  * ones to Instantly as the {{personalization}} merge variable. Nothing sends until you launch.
  */
-export function PersonalizationLab({ aiOn, vertical, campaignId, instantlyLinked }: { aiOn: boolean; vertical?: string; campaignId?: string; instantlyLinked?: boolean }) {
+export interface SignalSource {
+  label: string;
+  on: boolean;
+  /** Shown when off — what to connect to turn it on. */
+  needs?: string;
+}
+
+export function PersonalizationLab({
+  aiOn,
+  vertical,
+  campaignId,
+  instantlyLinked,
+  signals = [],
+}: {
+  aiOn: boolean;
+  vertical?: string;
+  campaignId?: string;
+  instantlyLinked?: boolean;
+  signals?: SignalSource[];
+}) {
   const [url, setUrl] = useState("");
   const [company, setCompany] = useState("");
   const [res, setRes] = useState<{ line: string | null; basis: string | null } | null>(null);
@@ -88,6 +107,25 @@ export function PersonalizationLab({ aiOn, vertical, campaignId, instantlyLinked
   return (
     <div className="space-y-4">
       {!aiOn && <p className="text-[11px] text-warn">Add a Claude key to enable AI personalization.</p>}
+
+      {signals.length > 0 && (
+        <div className="flex flex-wrap items-center gap-1.5">
+          <span className="text-[11px] text-slate-500">Signal sources:</span>
+          {signals.map((sig) => (
+            <span
+              key={sig.label}
+              title={sig.on ? `${sig.label}: active` : sig.needs ? `Connect ${sig.needs} to enable` : `${sig.label}: not connected`}
+              className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] ${
+                sig.on ? "border-ok/30 bg-ok/10 text-ok" : "border-ink-700 bg-ink-900/60 text-slate-500"
+              }`}
+            >
+              <span className={`h-1.5 w-1.5 rounded-full ${sig.on ? "bg-ok" : "bg-slate-600"}`} />
+              {sig.label}
+              {!sig.on && sig.needs ? <span className="text-slate-600">· needs {sig.needs}</span> : null}
+            </span>
+          ))}
+        </div>
+      )}
 
       <div className="grid gap-2 sm:grid-cols-[2fr_1fr_auto] sm:items-end">
         <label className="block">

@@ -205,10 +205,22 @@ export default async function CampaignDetail({ params }: { params: Promise<{ id:
 
       {/* Hyper-personalization (beta) */}
       <section>
-        <SectionHeader title="Hyper-personalization (beta)" subtitle="One true opener line per lead from their website + hiring activity (+ Google reviews when Outscraper is connected) — preview, edit, approve, then load. Social signals come next." />
+        <SectionHeader title="Hyper-personalization (beta)" subtitle="One true opener line per lead, drawn from real signals — website, hiring, Google reviews, recent news and social activity — preview, edit, approve, then load. Only verifiable details are used; thin leads fall back to the standard opener." />
         <Card>
           <CardBody>
-            <PersonalizationLab aiOn={integrations.anthropic} vertical={c.vertical} campaignId={c.id} instantlyLinked={!!c.instantlyCampaignId && integrations.instantly} />
+            <PersonalizationLab
+              aiOn={integrations.anthropic}
+              vertical={c.vertical}
+              campaignId={c.id}
+              instantlyLinked={!!c.instantlyCampaignId && integrations.instantly}
+              signals={[
+                { label: "Website", on: true },
+                { label: "Hiring", on: integrations.apolloPersonal, needs: "Apollo" },
+                { label: "Reviews", on: integrations.outscraper, needs: "Outscraper" },
+                { label: "News", on: integrations.outscraper, needs: "Outscraper" },
+                { label: "Social", on: integrations.socialSignals, needs: "a social provider" },
+              ]}
+            />
           </CardBody>
         </Card>
       </section>

@@ -37,6 +37,7 @@ export async function classifyReply(body: string): Promise<Classification> {
       maxTokens: 80,
       temperature: 0,
       fast: true, // highest-frequency AI call (every reply, every 10 min) — keep it off the premium tier
+      purpose: "classification",
     });
     const parsed = JSON.parse(out.match(/\{[\s\S]*\}/)?.[0] ?? out);
     const cls = REPLY_CLASSES.includes(parsed.classification) ? parsed.classification : "question";

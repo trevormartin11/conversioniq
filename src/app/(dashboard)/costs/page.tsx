@@ -2,9 +2,12 @@ import { Card, CardBody, SectionHeader } from "@/components/ui/card";
 import { Stat } from "@/components/ui/stat";
 import { LabeledBar } from "@/components/ui/charts";
 import { CostManager, type CostView } from "@/components/costs/cost-manager";
+import { AiSpendMeter } from "@/components/costs/ai-spend-meter";
 import { costSummary } from "@/lib/data/queries";
 import { PageHeader } from "@/components/ui/card";
 import { ensureData, getCosts } from "@/lib/data/store";
+import { aiSpendSummary } from "@/lib/ai/usage";
+import { appConfig } from "@/lib/config";
 import { usd, titleCase } from "@/lib/format";
 
 export const dynamic = "force-dynamic";
@@ -12,6 +15,7 @@ export const dynamic = "force-dynamic";
 export default async function CostsPage() {
   await ensureData();
   const s = costSummary();
+  const aiSpend = await aiSpendSummary();
   const costs: CostView[] = getCosts().map((c) => ({
     id: c.id,
     category: c.category,
@@ -36,6 +40,9 @@ export default async function CostsPage() {
         <Stat label="Net / mo" value={usd(s.netMonthly)} sub="residual − costs" tone={s.netMonthly >= 0 ? "ok" : "bad"} />
         <Stat label="Your net / mo" value={usd(s.netPerPartnerMonthly)} sub="1 of 3" tone={s.netPerPartnerMonthly >= 0 ? "ok" : "bad"} />
       </div>
+
+      {/* Live Claude API spend meter */}
+      <AiSpendMeter initial={aiSpend} softBudget={appConfig.ai.softMonthlyBudgetUsd} />
 
       {/* Net explainer */}
       <Card>

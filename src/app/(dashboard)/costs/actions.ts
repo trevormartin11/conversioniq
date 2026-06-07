@@ -3,7 +3,30 @@
 import { revalidatePath } from "next/cache";
 import { getCurrentUser } from "@/lib/auth";
 import { addCost, deleteCost, ensureData } from "@/lib/data/store";
+import { aiSpendSummary, type AiSpendSummary } from "@/lib/ai/usage";
 import type { CostCadence, CostCategory } from "@/lib/data/types";
+
+/** Live Claude API spend — polled by the meter on the Costs page. Always resolves (never throws). */
+export async function getAiSpendAction(): Promise<AiSpendSummary> {
+  try {
+    return await aiSpendSummary();
+  } catch {
+    return {
+      source: "live",
+      available: false,
+      monthToDateUsd: 0,
+      last24hUsd: 0,
+      last7dUsd: 0,
+      mtdCalls: 0,
+      byPurpose: [],
+      byModel: [],
+      recent: [],
+      lastCallAt: null,
+      capped: false,
+      asOf: new Date().toISOString(),
+    };
+  }
+}
 
 export async function createCostAction(input: {
   category: CostCategory;

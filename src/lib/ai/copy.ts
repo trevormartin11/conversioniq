@@ -55,6 +55,7 @@ export async function suggestCopy(variants: SequenceVariant[]): Promise<CopySugg
       ].join("\n\n"),
       maxTokens: 700,
       temperature: 0.5,
+      purpose: "copy",
     });
     const parsed = JSON.parse(out.match(/\[[\s\S]*\]/)?.[0] ?? out);
     return (parsed as { title: string; detail: string }[]).map((s) => ({ ...s, source: "ai" as const }));
@@ -79,6 +80,7 @@ export async function rewriteCopy(input: { subject: string; body: string; instru
       ].join("\n\n"),
       maxTokens: 800,
       temperature: 0.6,
+      purpose: "copy",
     });
     const parsed = JSON.parse(out.match(/\{[\s\S]*\}/)?.[0] ?? out) as { subject?: string; body?: string };
     return { subject: parsed.subject?.trim() || input.subject, body: parsed.body?.trim() || input.body, source: "ai" };
@@ -120,6 +122,7 @@ export async function generateSequence(
       ].filter(Boolean).join("\n\n"),
       maxTokens: 1600,
       temperature: 0.6,
+      purpose: "sequence",
     });
     const parsed = JSON.parse(out.match(/\{[\s\S]*\}/)?.[0] ?? out) as { steps?: GeneratedStep[] };
     const steps = (parsed.steps ?? []).map((s, i) => ({ step: s.step ?? i + 1, subject: s.subject ?? "", body: s.body ?? "", rationale: s.rationale }));

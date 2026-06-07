@@ -5,12 +5,16 @@
  * something concrete + verifiable, and to return empty rather than invent — so a lead with
  * nothing specific quietly falls back to the standard opener (never filler).
  *
- * All signals here are free (site fetches + the free Apollo key). Paid signals (e.g. Outscraper
- * Google reviews) would be a deliberate, budgeted add-on. Phase 2 social needs a data provider.
+ * Signal sources, each gated independently and composed when present:
+ *   - website text (homepage + about/services) and Apollo hiring — FREE (site fetch + free key)
+ *   - Google reviews + recent news — Outscraper (PAID; only when connected)
+ *   - recent social/LinkedIn activity — a pluggable social provider (off until keyed)
+ * Whatever is available is handed to Claude, which still references only something concrete and
+ * verifiable (or returns empty). Off/absent signals simply don't contribute — never invented.
  */
 import { aiAvailable, complete } from "@/lib/integrations/anthropic";
 import { apolloHiringSignal } from "@/lib/integrations/apollo";
-import { googleReviewSignal } from "@/lib/sourcing/providers";
+import { companyNewsSignal, googleReviewSignal, socialActivitySignal } from "@/lib/sourcing/providers";
 
 export interface Personalization {
   line: string | null;
@@ -73,12 +77,14 @@ export async function personalizeFromUrl(rawUrl: string, context?: { company?: s
   const url = normalizeUrl(rawUrl);
   if (!url || !aiAvailable()) return { line: null, basis: null, source: "none" };
   const domain = domainOf(url);
-  const [website, hiring, reviews] = await Promise.all([
+  const [website, hiring, reviews, news, social] = await Promise.all([
     gatherWebsiteText(url),
     domain ? apolloHiringSignal(domain) : Promise.resolve(null),
     context?.company ? googleReviewSignal(context.company) : Promise.resolve(null),
+    context?.company ? companyNewsSignal(context.company) : Promise.resolve(null),
+    socialActivitySignal({ domain: domain ?? undefined, company: context?.company }),
   ]);
-  if (!website && !hiring && !reviews) return { line: null, basis: null, source: "none" };
+  if (!website && !hiring && !reviews && !news && !social) return { line: null, basis: null, source: "none" };
   try {
     const out = await complete({
       system:
@@ -89,9 +95,12 @@ export async function personalizeFromUrl(rawUrl: string, context?: { company?: s
         website ? `Website text (homepage + about/services, truncated):\n"""${website}"""` : "",
         hiring ? `Public signal: ${hiring}` : "",
         reviews ? `Public signal: ${reviews}` : "",
+        news ? `Public signal: ${news}` : "",
+        social ? `Public signal: ${social}` : "",
         `Write a single opener line that proves we actually looked — prefer the most specific, verifiable detail. Return ONLY JSON: {"line":"...","basis":"what it drew from"}`,
       ].filter(Boolean).join("\n\n"),
       maxTokens: 220,
+      purpose: "personalization",
     });
     const parsed = JSON.parse(out.match(/\{[\s\S]*\}/)?.[0] ?? out) as { line?: string; basis?: string };
     const line = (parsed.line ?? "").trim();

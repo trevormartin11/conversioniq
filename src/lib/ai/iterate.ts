@@ -77,6 +77,7 @@ export async function nextMoves(campaigns: Campaign[], variants: SequenceVariant
         `Return ONLY JSON: [{"kind":"scale|kill|test|fix","title":"...","detail":"..."}]`,
       ].join("\n\n"),
       maxTokens: 900,
+      purpose: "next_moves",
     });
     const parsed = JSON.parse(out.match(/\[[\s\S]*\]/)?.[0] ?? out) as { kind: NextMove["kind"]; title: string; detail: string }[];
     const moves = parsed.filter((m) => m.title).map((m) => ({ ...m, source: "ai" as const }));
