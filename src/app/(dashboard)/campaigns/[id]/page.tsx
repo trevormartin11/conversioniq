@@ -205,7 +205,7 @@ export default async function CampaignDetail({ params }: { params: Promise<{ id:
 
       {/* Hyper-personalization (beta) */}
       <section>
-        <SectionHeader title="Hyper-personalization (beta)" subtitle="Generate one specific, true opener line from a prospect's website — preview-only, review before it sends. Social / LinkedIn signals come next." />
+        <SectionHeader title="Hyper-personalization (beta)" subtitle="One true opener line per lead from their website + hiring activity (+ Google reviews when Outscraper is connected) — preview, edit, approve, then load. Social signals come next." />
         <Card>
           <CardBody>
             <PersonalizationLab aiOn={integrations.anthropic} vertical={c.vertical} campaignId={c.id} instantlyLinked={!!c.instantlyCampaignId && integrations.instantly} />

@@ -10,6 +10,7 @@
  */
 import { aiAvailable, complete } from "@/lib/integrations/anthropic";
 import { apolloHiringSignal } from "@/lib/integrations/apollo";
+import { googleReviewSignal } from "@/lib/sourcing/providers";
 
 export interface Personalization {
   line: string | null;
@@ -72,11 +73,12 @@ export async function personalizeFromUrl(rawUrl: string, context?: { company?: s
   const url = normalizeUrl(rawUrl);
   if (!url || !aiAvailable()) return { line: null, basis: null, source: "none" };
   const domain = domainOf(url);
-  const [website, hiring] = await Promise.all([
+  const [website, hiring, reviews] = await Promise.all([
     gatherWebsiteText(url),
     domain ? apolloHiringSignal(domain) : Promise.resolve(null),
+    context?.company ? googleReviewSignal(context.company) : Promise.resolve(null),
   ]);
-  if (!website && !hiring) return { line: null, basis: null, source: "none" };
+  if (!website && !hiring && !reviews) return { line: null, basis: null, source: "none" };
   try {
     const out = await complete({
       system:
@@ -86,6 +88,7 @@ export async function personalizeFromUrl(rawUrl: string, context?: { company?: s
         context?.vertical ? `Vertical: ${context.vertical}` : "",
         website ? `Website text (homepage + about/services, truncated):\n"""${website}"""` : "",
         hiring ? `Public signal: ${hiring}` : "",
+        reviews ? `Public signal: ${reviews}` : "",
         `Write a single opener line that proves we actually looked — prefer the most specific, verifiable detail. Return ONLY JSON: {"line":"...","basis":"what it drew from"}`,
       ].filter(Boolean).join("\n\n"),
       maxTokens: 220,

@@ -52,6 +52,31 @@ function firstEmail(r: Record<string, unknown>): string | undefined {
   return undefined;
 }
 
+/**
+ * Google-review signal for personalization — a real "you're clearly busy" fact (rating +
+ * review count) via Outscraper. PAID per call, so it only fires when Outscraper is connected;
+ * returns null otherwise / on error / on thin data. An optional personalization signal.
+ */
+export async function googleReviewSignal(company: string, location?: string): Promise<string | null> {
+  if (!integrations.outscraper || !company.trim()) return null;
+  try {
+    const query = [company.trim(), location].filter(Boolean).join(", ");
+    const url = `https://api.app.outscraper.com/maps/search-v3?query=${encodeURIComponent(query)}&limit=1&async=false`;
+    const res = await httpJson<{ data?: Array<Array<Record<string, unknown>>> }>("outscraper", url, {
+      headers: { "X-API-KEY": process.env.OUTSCRAPER_API_KEY! },
+      timeoutMs: 60000,
+    });
+    const place = res.data?.[0]?.[0];
+    if (!place) return null;
+    const rating = Number(place.rating);
+    const reviews = Number(place.reviews ?? place.reviews_count);
+    if (!Number.isFinite(rating) || rating <= 0 || !Number.isFinite(reviews) || reviews < 5) return null;
+    return `Rated ${rating}★ across ${reviews.toLocaleString()} Google reviews`;
+  } catch {
+    return null;
+  }
+}
+
 /** Findymail — find a deliverable email for a business/owner from name + domain. */
 export async function findymailEnrich(lead: SourcedLead): Promise<SourcedLead> {
   if (!integrations.findymail || !lead.domain) return lead;
