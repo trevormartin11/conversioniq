@@ -482,6 +482,33 @@ export function getOpenDemoByEmail(email: string): Demo | undefined {
     .sort((a, b) => (b.scheduledAt > a.scheduledAt ? 1 : -1))[0];
 }
 
+/** Seed a new campaign's sequence from authored steps (e.g. the launch wizard) — one "A" variant
+ *  per step. Idempotent by deterministic id, so re-seeding overwrites rather than duplicates. */
+export async function seedCampaignVariants(
+  campaignId: string,
+  steps: { step: number; subject: string; body: string }[],
+  actor = "system",
+): Promise<number> {
+  let n = 0;
+  for (const st of steps) {
+    const subject = (st.subject ?? "").trim();
+    const body = (st.body ?? "").trim();
+    if (!subject && !body) continue;
+    const id = `sv_${campaignId}_${st.step}_A`;
+    const variant: SequenceVariant = { id, campaignId, step: st.step, variant: "A", subject, body, sent: 0, opens: 0, replies: 0, positives: 0, approved: true };
+    const idx = db().variants.findIndex((v) => v.id === id);
+    if (idx >= 0) db().variants[idx] = variant;
+    else db().variants.push(variant);
+    await liveUpsert("sequence_variants", {
+      id, campaign_id: campaignId, step: st.step, variant: "A",
+      subject, body, sent: 0, opens: 0, replies: 0, positives: 0, approved: true,
+    });
+    n++;
+  }
+  if (n) await pushAudit(actor, "campaign.sequence_seeded", "campaign", campaignId, { steps: n });
+  return n;
+}
+
 // --- campaign copy (inline sequence editing) --------------------------------
 export async function updateVariant(id: string, patch: { subject?: string; body?: string }, actor = "system"): Promise<SequenceVariant | null> {
   const v = db().variants.find((x) => x.id === id);

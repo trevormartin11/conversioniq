@@ -2,7 +2,7 @@
 
 import { ensureData, getCampaigns, getReplies, getVariants } from "@/lib/data/store";
 import { deriveLearnings } from "@/lib/ai/learnings";
-import { generateSequence, type GeneratedStep } from "@/lib/ai/copy";
+import { generateSequence, rewriteCopy, type GeneratedStep } from "@/lib/ai/copy";
 import { proposeVerticals, suggestProblems, suggestTitles, suggestVerticalsForProblem } from "@/lib/ai/strategy";
 
 /** Preview a generated sequence for the launch wizard's Copy step. */
@@ -43,4 +43,10 @@ export async function suggestProblemsAction(vertical: string): Promise<{ problem
 /** Suggest buyer titles/roles that own the problem in a vertical. */
 export async function suggestTitlesAction(vertical: string, problem?: string): Promise<{ titles: string[] }> {
   return { titles: (await suggestTitles(vertical, problem)).titles };
+}
+
+/** AI rewrite of one in-progress sequence step by instruction — returns the new draft (nothing saved). */
+export async function rewriteSequenceStepAction(subject: string, body: string, instruction: string) {
+  const out = await rewriteCopy({ subject, body, instruction: instruction.trim() || "Tighten and improve this." });
+  return { ok: true as const, subject: out.subject, body: out.body, source: out.source };
 }

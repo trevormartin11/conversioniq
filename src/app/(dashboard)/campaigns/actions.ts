@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { getCurrentUser } from "@/lib/auth";
-import { addCampaign, cloneCampaign, ensureData, getCampaign, getInboxes, setCampaignStatus } from "@/lib/data/store";
+import { addCampaign, cloneCampaign, ensureData, getCampaign, getInboxes, seedCampaignVariants, setCampaignStatus } from "@/lib/data/store";
 import { activateCampaign, pauseCampaign } from "@/lib/integrations/instantly";
 import { appConfig, integrations } from "@/lib/config";
 
@@ -59,6 +59,8 @@ export async function createCampaignAction(input: {
   vertical: string;
   personaId: string;
   dailyCap: number;
+  /** Optional authored sequence (from the launch wizard) — persisted with the new draft campaign. */
+  steps?: { step: number; subject: string; body: string }[];
 }) {
   await ensureData();
   const user = await getCurrentUser();
@@ -72,6 +74,10 @@ export async function createCampaignAction(input: {
     },
     user.name,
   );
+  // Save the wizard's (possibly AI-edited) sequence so the work isn't lost. Non-fatal if it fails.
+  if (input.steps?.length) {
+    try { await seedCampaignVariants(campaign.id, input.steps, user.name); } catch { /* campaign still created */ }
+  }
   revalidatePath("/campaigns");
   revalidatePath("/");
   return { ok: true, id: campaign.id };

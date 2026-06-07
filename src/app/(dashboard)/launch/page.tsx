@@ -4,7 +4,7 @@ import { LaunchWizard } from "@/components/launch/launch-wizard";
 import { ensureData, getCampaigns, getPersonas, getReplies, getVariants } from "@/lib/data/store";
 import { proposeVerticals } from "@/lib/ai/strategy";
 import { deriveLearnings } from "@/lib/ai/learnings";
-import { appConfig } from "@/lib/config";
+import { appConfig, integrations } from "@/lib/config";
 
 export const dynamic = "force-dynamic";
 
@@ -28,6 +28,7 @@ export default async function LaunchPage() {
         suggestions={suggestions}
         dailyGoal={appConfig.goals.demosPerDay}
         monthlyBudget={appConfig.goals.monthlyBudgetUsd}
+        aiOn={integrations.anthropic}
       />
     </div>
   );
