@@ -1,7 +1,7 @@
 import Link from "next/link";
-import { Flame, Inbox, ShieldAlert, type LucideIcon } from "lucide-react";
+import { Flame, Inbox, Megaphone, ShieldAlert, type LucideIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { Card, CardBody, SectionHeader } from "@/components/ui/card";
+import { Card, CardBody, Empty, SectionHeader } from "@/components/ui/card";
 import { Stat } from "@/components/ui/stat";
 import { HealthBadge } from "@/components/ui/badge";
 import { LabeledBar, Sparkline } from "@/components/ui/charts";
@@ -137,26 +137,34 @@ export default async function CommandCenter() {
         <Card>
           <CardBody>
             <SectionHeader title="Replies by type" subtitle="All inboxes & campaigns" />
-            <div className="space-y-2">
-              {Object.entries(s.replyClassCounts)
-                .sort((a, b) => b[1] - a[1])
-                .map(([cls, count]) => (
-                  <LabeledBar
-                    key={cls}
-                    label={titleCase(cls)}
-                    value={count}
-                    max={maxClass}
-                    tone={cls === "interested" ? "ok" : cls === "negative" || cls === "unsubscribe" ? "bad" : cls === "objection" ? "warn" : "brand"}
-                  />
-                ))}
-            </div>
+            {Object.keys(s.replyClassCounts).length === 0 ? (
+              <p className="py-2 text-sm text-slate-500">No replies yet — classified replies break down here as they arrive.</p>
+            ) : (
+              <div className="space-y-2">
+                {Object.entries(s.replyClassCounts)
+                  .sort((a, b) => b[1] - a[1])
+                  .map(([cls, count]) => (
+                    <LabeledBar
+                      key={cls}
+                      label={titleCase(cls)}
+                      value={count}
+                      max={maxClass}
+                      tone={cls === "interested" ? "ok" : cls === "negative" || cls === "unsubscribe" ? "bad" : cls === "objection" ? "warn" : "brand"}
+                    />
+                  ))}
+              </div>
+            )}
           </CardBody>
         </Card>
 
         <Card>
           <CardBody>
-            <SectionHeader title="14-day trend" subtitle="Med Spa — sends vs positive replies" />
-            <Sparkline data={s.trend.map((t) => t.sends)} />
+            <SectionHeader title="14-day trend" subtitle="Sends vs positive replies, all campaigns" />
+            {s.trend.some((t) => t.sends > 0) ? (
+              <Sparkline data={s.trend.map((t) => t.sends)} />
+            ) : (
+              <p className="py-2 text-sm text-slate-500">No sends in the last 14 days yet — the trend line fills in once sending starts.</p>
+            )}
             <div className="mt-3 grid grid-cols-3 gap-2 text-center">
               <MiniStat label="Sends" value={num(s.trend.reduce((a, t) => a + t.sends, 0))} />
               <MiniStat label="Replies" value={num(s.trend.reduce((a, t) => a + t.replies, 0))} />
@@ -169,11 +177,15 @@ export default async function CommandCenter() {
       {/* Campaign cards */}
       <section>
         <SectionHeader title="Campaigns" subtitle="Per-cell health" action={<Link href="/campaigns" className="text-xs text-brand-400 hover:underline">Manage →</Link>} />
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          {s.cards.map((c) => (
-            <CampaignCard key={c.id} card={c} />
-          ))}
-        </div>
+        {s.cards.length === 0 ? (
+          <Empty icon={Megaphone} title="No campaigns yet">Build your first campaign in the launch wizard — it&apos;ll show here with its health and funnel.</Empty>
+        ) : (
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            {s.cards.map((c) => (
+              <CampaignCard key={c.id} card={c} />
+            ))}
+          </div>
+        )}
       </section>
 
       {/* Deliverability glance */}
