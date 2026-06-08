@@ -8,6 +8,7 @@
 import { integrations } from "@/lib/config";
 import { httpJson, NotConfiguredError } from "./http";
 import { stripHtml } from "@/lib/utils";
+import { OPTIMAL_DAYS } from "@/lib/send-timing";
 
 const BASE = "https://api.instantly.ai/api/v2";
 
@@ -232,9 +233,9 @@ export async function createInstantlyCampaign(input: {
     daily_limit: input.dailyLimit,
     campaign_schedule: {
       schedules: [{
-        name: "weekdays",
+        name: "optimal",
         timing: { from: "08:00", to: "17:00" },
-        days: { "1": true, "2": true, "3": true, "4": true, "5": true },
+        days: OPTIMAL_DAYS, // mid-week only (Tue/Wed/Thu) — the day-of-week guarantee; step delays are just min spacing
         timezone: "America/Chicago",
       }],
     },
@@ -360,7 +361,7 @@ export async function updateInstantlyCampaignSchedule(
     headers: headers(),
     body: JSON.stringify({
       campaign_schedule: {
-        schedules: [{ name: "optimal", timing: { from: opts.from, to: opts.to }, days: opts.days ?? { "2": true, "3": true, "4": true }, timezone: opts.timezone }],
+        schedules: [{ name: "optimal", timing: { from: opts.from, to: opts.to }, days: opts.days ?? OPTIMAL_DAYS, timezone: opts.timezone }],
       },
     }),
   });
