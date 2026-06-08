@@ -2,9 +2,20 @@
 
 import { revalidatePath } from "next/cache";
 import { getCurrentUser } from "@/lib/auth";
-import { addCampaign, cloneCampaign, deleteCampaign, ensureData, getCampaign, getInboxes, seedCampaignVariants, setCampaignStatus } from "@/lib/data/store";
-import { activateCampaign, deleteInstantlyCampaign, pauseCampaign } from "@/lib/integrations/instantly";
+import { addCampaign, cloneCampaign, deleteCampaign, ensureData, getCampaign, getInboxes, getLeads, getVariants, pushAudit, reassignCampaignLeads, seedCampaignVariants, setCampaignStatus } from "@/lib/data/store";
+import { activateCampaign, addLeadsToCampaign, createInstantlyCampaign, deleteInstantlyCampaign, pauseCampaign } from "@/lib/integrations/instantly";
+import { syncCampaigns } from "@/lib/sync/campaigns";
+import { launchBlocker } from "@/lib/campaigns/launch-gate";
 import { appConfig, integrations } from "@/lib/config";
+
+/** First variant per step, ordered — the sequence to replicate into Instantly on push. */
+function sequenceFor(campaignId: string): { subject: string; body: string }[] {
+  const byStep = new Map<number, { subject: string; body: string }>();
+  for (const v of getVariants().filter((v) => v.campaignId === campaignId).sort((a, b) => a.step - b.step || a.variant.localeCompare(b.variant))) {
+    if (!byStep.has(v.step)) byStep.set(v.step, { subject: v.subject, body: v.body });
+  }
+  return [...byStep.keys()].sort((a, b) => a - b).map((k) => byStep.get(k)!);
+}
 
 function revalidate() {
   revalidatePath("/campaigns");
@@ -29,13 +40,12 @@ export async function launchCampaignAction(id: string, override = false) {
   const user = await getCurrentUser();
   const c = getCampaign(id);
   if (c?.status === "active") return { ok: true as const };
-  // Deliverability gate: never start sending from under-warmed / inactive inboxes — that burns the fleet.
-  if (c && !override) {
-    const gate = appConfig.deliverability.warmupGate;
-    const unfit = getInboxes().filter((i) => c.inboxIds.includes(i.id) && (i.status !== "active" || i.warmupScore < gate));
-    if (unfit.length) {
-      const names = unfit.slice(0, 3).map((i) => i.email).join(", ");
-      return { ok: false as const, blocked: "warmup" as const, error: `${unfit.length} assigned inbox${unfit.length > 1 ? "es are" : " is"} under warmup ${gate} or not active (${names}${unfit.length > 3 ? "…" : ""}). Launching now risks the fleet.` };
+  // Gate: a campaign may only go active if it can actually send (linked + inboxes) and isn't sending
+  // from under-warmed inboxes. `override` forgives ONLY the warmup warning — not the can't-send blocks.
+  if (c) {
+    const block = launchBlocker(c, { instantlyConnected: integrations.instantly, warmupGate: appConfig.deliverability.warmupGate, inboxes: getInboxes() });
+    if (block && !(override && block.reason === "warmup")) {
+      return { ok: false as const, blocked: block.reason, error: block.message };
     }
   }
   if (c?.instantlyCampaignId && integrations.instantly) {
@@ -95,4 +105,47 @@ export async function createCampaignAction(input: {
   revalidatePath("/campaigns");
   revalidatePath("/");
   return { ok: true, id: campaign.id };
+}
+
+/**
+ * Push a hub draft to Instantly so it can actually send: create the Instantly campaign from the draft's
+ * sequence + chosen inboxes, let the sync pull it back as the canonical `c_<instantlyId>` row, carry over
+ * any leads already on the draft, then retire the staging draft. Returns the new campaign id to navigate to.
+ * The created Instantly campaign is a DRAFT — it never auto-launches.
+ */
+export async function pushCampaignToInstantlyAction(id: string, inboxIds: string[]) {
+  await ensureData();
+  const user = await getCurrentUser();
+  if (!integrations.instantly) return { ok: false as const, error: "Instantly isn't connected." };
+  const c = getCampaign(id);
+  if (!c) return { ok: false as const, error: "Campaign not found." };
+  if (c.instantlyCampaignId) return { ok: false as const, error: "This campaign is already on Instantly." };
+  const steps = sequenceFor(id);
+  if (!steps.length) return { ok: false as const, error: "Add sequence copy before pushing to Instantly." };
+  const chosen = getInboxes().filter((i) => inboxIds.includes(i.id));
+  if (!chosen.length) return { ok: false as const, error: "Select at least one sending inbox." };
+
+  try {
+    const { id: instId } = await createInstantlyCampaign({ name: c.name, steps, inboxEmails: chosen.map((i) => i.email), dailyLimit: c.dailyCap });
+    if (!instId) return { ok: false as const, error: "Instantly did not return a campaign id." };
+    await syncCampaigns(); // creates the canonical c_<instId> row (draft) with sequence + inbox_ids
+    const newId = `c_${instId}`;
+
+    // Carry over any leads already attached to the staging draft (best-effort into Instantly; always re-attribute).
+    const draftLeads = getLeads().filter((l) => l.campaignId === id);
+    if (draftLeads.length) {
+      try {
+        await addLeadsToCampaign(instId, draftLeads.map((l) => ({ email: l.email, first_name: l.firstName, last_name: l.lastName, company_name: l.company, phone: l.phone ?? undefined })));
+      } catch { /* non-fatal — leads remain re-loadable from the Leads page */ }
+      await reassignCampaignLeads(id, newId, user.name);
+    }
+
+    await deleteCampaign(id, user.name); // retire the staging draft; the canonical row is c_<instId>
+    await pushAudit(user.name, "campaign.pushed_to_instantly", "campaign", newId, { from: id, inboxes: chosen.length, leads: draftLeads.length });
+    revalidate();
+    revalidatePath(`/campaigns/${newId}`);
+    return { ok: true as const, id: newId, leads: draftLeads.length };
+  } catch (e) {
+    return { ok: false as const, error: (e as Error).message };
+  }
 }

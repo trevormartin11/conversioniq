@@ -6,6 +6,7 @@ import { Card, CardBody, PageHeader, SectionHeader } from "@/components/ui/card"
 import { HealthBadge, Tag } from "@/components/ui/badge";
 import { CampaignActions } from "@/components/campaigns/campaign-actions";
 import { InstantlySync } from "@/components/campaigns/instantly-sync";
+import { PushToInstantly } from "@/components/campaigns/push-to-instantly";
 import { TimezoneSplit } from "@/components/campaigns/timezone-split";
 import { EditableVariant } from "@/components/campaigns/editable-variant";
 import { PersonalizationLab } from "@/components/campaigns/personalization-lab";
@@ -13,7 +14,7 @@ import { campaignCards, campaignCapacity } from "@/lib/data/queries";
 import { suggestCopy } from "@/lib/ai/copy";
 import { ensureData, getCampaign, getInboxes, getPersonas, getVariants } from "@/lib/data/store";
 import { campaignHasLeads, getInstantlyCampaign, type InstantlyCampaignView, type InstantlyStepView } from "@/lib/integrations/instantly";
-import { integrations } from "@/lib/config";
+import { appConfig, integrations } from "@/lib/config";
 import { num, pct, rate, titleCase } from "@/lib/format";
 import type { SequenceVariant } from "@/lib/data/types";
 
@@ -36,6 +37,12 @@ export default async function CampaignDetail({ params }: { params: Promise<{ id:
 
   const persona = getPersonas().find((p) => p.id === c.personaId);
   const inboxes = getInboxes().filter((i) => c.inboxIds.includes(i.id));
+  // Candidate sending inboxes for an un-pushed draft (any non-paused inbox; "ready" = active + warmed).
+  const warmupGate = appConfig.deliverability.warmupGate;
+  const availableInboxes = getInboxes()
+    .filter((i) => i.status !== "paused")
+    .map((i) => ({ id: i.id, email: i.email, status: i.status, warmupScore: i.warmupScore, ready: i.status === "active" && i.warmupScore >= warmupGate }))
+    .sort((a, b) => Number(b.ready) - Number(a.ready) || b.warmupScore - a.warmupScore);
   const synced = getVariants().filter((v) => v.campaignId === id);
   const card = campaignCards().find((x) => x.id === id);
   const cap = campaignCapacity(id);
@@ -68,9 +75,11 @@ export default async function CampaignDetail({ params }: { params: Promise<{ id:
       <Card>
         <CardBody className="flex flex-wrap items-center justify-between gap-3">
           <div className="text-sm text-slate-300">
-            {c.status === "draft" || c.status === "paused"
-              ? "Pre-staged and ready. Launch starts sending on the cadence below."
-              : "Live — sending on the cadence below."}
+            {c.status === "active"
+              ? "Live — sending on the cadence below."
+              : c.instantlyCampaignId || !integrations.instantly
+                ? "Pre-staged and ready. Launch starts sending on the cadence below."
+                : "Draft — assign inboxes and push to Instantly below to enable sending."}
           </div>
           <CampaignActions id={c.id} status={c.status} />
         </CardBody>
@@ -88,6 +97,14 @@ export default async function CampaignDetail({ params }: { params: Promise<{ id:
           </CardBody>
         </Card>
       </section>
+
+      {/* Push to Instantly — for hub drafts not yet linked (this is what enables sending) */}
+      {integrations.instantly && !c.instantlyCampaignId && (
+        <section>
+          <SectionHeader title="Push to Instantly" subtitle="Make this draft able to send — assign inboxes and create it in Instantly (as a draft, never auto-launched)." />
+          <Card><CardBody><PushToInstantly campaignId={c.id} inboxes={availableInboxes} /></CardBody></Card>
+        </section>
+      )}
 
       {/* Sync to Instantly (beta) — only when linked to a live campaign */}
       {c.instantlyCampaignId && integrations.instantly && (
