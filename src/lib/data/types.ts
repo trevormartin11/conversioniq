@@ -452,4 +452,49 @@ export interface Dataset {
   consent: ConsentRecord[];
   channelAccounts: ChannelAccount[];
   outreach: OutreachMessage[];
+  landingPages: LandingPage[];
+}
+
+// --- per-vertical landing pages (auto-generated microsites) ------------------
+export const LANDING_STATUSES = ["draft", "approved", "published"] as const;
+export type LandingStatus = (typeof LANDING_STATUSES)[number];
+
+export interface LandingFeature {
+  title: string;
+  body: string;
+}
+/** Structured landing-page copy — a fixed on-brand template renders this (never raw HTML). */
+export interface LandingContent {
+  vertical: string;
+  seoTitle: string;
+  seoDescription: string;
+  hero: { eyebrow: string; headline: string; subhead: string; primaryCta: string; secondaryCta: string };
+  problem: { heading: string; body: string; bullets: string[] };
+  features: LandingFeature[];
+  videoHeading: string;
+  videoCaption: string;
+  trust: { heading: string; points: string[] };
+  cta: { heading: string; body: string; bookCta: string };
+  formIntro: string;
+  source: "ai" | "rules";
+}
+
+/** One auto-generated microsite per campaign — lives on the campaign's single sending domain. */
+export interface LandingPage {
+  id: string;
+  campaignId: string | null;
+  vertical: string;
+  domain: string | null; // the campaign's domain this page publishes to
+  status: LandingStatus;
+  content: LandingContent;
+  schedulerUrl: string | null; // Cal.com booking link (config)
+  videoUrl: string | null; // YouTube features video (config)
+  publishedUrl: string | null;
+  source: "ai" | "rules";
+  createdAt: string;
+  updatedAt: string;
+  approvedBy: string | null;
+  approvedAt: string | null;
+  publishedAt: string | null;
+  note: string | null;
 }

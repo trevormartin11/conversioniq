@@ -34,10 +34,13 @@ import type {
   SequenceVariant,
   SuppressionEntry,
   TenDlcStatus,
+  LandingContent,
+  LandingPage,
 } from "./types";
 import { capRemaining, findConsent, GATE_REASONS, normalizeHandle, sendGate } from "@/lib/channels/policy";
 import { pushDemoDeal } from "@/lib/integrations/zoho-civ";
 import { sendSms } from "@/lib/integrations/twilio";
+import { generateLandingContent } from "@/lib/ai/landing";
 import { buildSeed } from "./seed";
 import { loadAutomationLevel, loadAssumptions, loadDatasetLive } from "./live";
 import { supabaseAdmin } from "./supabase";
@@ -862,4 +865,97 @@ export async function removeChannelAccount(id: string, actor = "system"): Promis
   await liveDeleteRow("channel_accounts", id);
   await pushAudit(actor, "channel_account.removed", "channel_account", id, {});
   return true;
+}
+
+// --- landing pages (auto-generated per-vertical microsites) -----------------
+export const getLandingPages = () => db().landingPages;
+export const getLandingPage = (campaignId: string) => db().landingPages.find((p) => p.campaignId === campaignId) ?? null;
+
+function landingRow(p: LandingPage): Record<string, unknown> {
+  return {
+    id: p.id, campaign_id: p.campaignId, vertical: p.vertical, domain: p.domain, status: p.status,
+    content: p.content, scheduler_url: p.schedulerUrl, video_url: p.videoUrl, published_url: p.publishedUrl,
+    source: p.source, created_at: p.createdAt, updated_at: p.updatedAt, approved_by: p.approvedBy,
+    approved_at: p.approvedAt, published_at: p.publishedAt, note: p.note,
+  };
+}
+
+/** Generate (or regenerate) a campaign's landing-page copy from its vertical + sequence. Always lands in draft (needs sign-off); preserves any domain/scheduler/video config. */
+export async function generateLandingPage(campaignId: string, actor = "system"): Promise<LandingPage | null> {
+  const c = getCampaign(campaignId);
+  if (!c) return null;
+  const firstBody = getVariants().filter((v) => v.campaignId === campaignId).sort((a, b) => a.step - b.step)[0]?.body ?? "";
+  const lines = firstBody.replace(/\{\{[^}]+\}\}/g, "").split("\n").map((l) => l.trim()).filter(Boolean);
+  const problem = lines.find((l) => l.length > 40); // first substantive line = the pain to lead with
+  const content = await generateLandingContent({ vertical: c.vertical, problem, brief: c.name });
+  const now = new Date().toISOString();
+  const existing = getLandingPage(campaignId);
+  const page: LandingPage = {
+    id: existing?.id ?? `lp_${Math.random().toString(36).slice(2, 9)}`,
+    campaignId,
+    vertical: c.vertical,
+    domain: existing?.domain ?? null,
+    status: "draft",
+    content,
+    schedulerUrl: existing?.schedulerUrl ?? null,
+    videoUrl: existing?.videoUrl ?? null,
+    publishedUrl: existing?.publishedUrl ?? null,
+    source: content.source,
+    createdAt: existing?.createdAt ?? now,
+    updatedAt: now,
+    approvedBy: null,
+    approvedAt: null,
+    publishedAt: existing?.publishedAt ?? null,
+    note: existing?.note ?? null,
+  };
+  const i = db().landingPages.findIndex((p) => p.campaignId === campaignId);
+  if (i >= 0) db().landingPages[i] = page;
+  else db().landingPages.unshift(page);
+  await liveUpsert("landing_pages", landingRow(page));
+  await pushAudit(actor, "landing.generated", "landing_page", page.id, { campaignId, vertical: c.vertical, source: content.source });
+  return page;
+}
+
+/** Save operator-edited copy. Edited copy drops back to draft (re-sign-off required). */
+export async function updateLandingContent(campaignId: string, content: LandingContent, actor = "system"): Promise<LandingPage | null> {
+  const p = getLandingPage(campaignId);
+  if (!p) return null;
+  p.content = content;
+  p.status = "draft";
+  p.approvedBy = null;
+  p.approvedAt = null;
+  p.updatedAt = new Date().toISOString();
+  await liveUpsert("landing_pages", { id: p.id, content: p.content, status: p.status, approved_by: null, approved_at: null, updated_at: p.updatedAt });
+  await pushAudit(actor, "landing.edited", "landing_page", p.id, { campaignId });
+  return p;
+}
+
+/** Sign off on the page — ready to publish (Phase 2 does the actual hosting). */
+export async function approveLandingPage(campaignId: string, actor: string): Promise<LandingPage | null> {
+  const p = getLandingPage(campaignId);
+  if (!p) return null;
+  p.status = "approved";
+  p.approvedBy = actor;
+  p.approvedAt = new Date().toISOString();
+  p.updatedAt = p.approvedAt;
+  await liveUpsert("landing_pages", { id: p.id, status: p.status, approved_by: actor, approved_at: p.approvedAt, updated_at: p.updatedAt });
+  await pushAudit(actor, "landing.approved", "landing_page", p.id, { campaignId });
+  return p;
+}
+
+/** Set the page's domain + scheduler/video config (config values, not generated). */
+export async function setLandingConfig(
+  campaignId: string,
+  cfg: { domain?: string | null; schedulerUrl?: string | null; videoUrl?: string | null },
+  actor = "system",
+): Promise<LandingPage | null> {
+  const p = getLandingPage(campaignId);
+  if (!p) return null;
+  if (cfg.domain !== undefined) p.domain = cfg.domain;
+  if (cfg.schedulerUrl !== undefined) p.schedulerUrl = cfg.schedulerUrl;
+  if (cfg.videoUrl !== undefined) p.videoUrl = cfg.videoUrl;
+  p.updatedAt = new Date().toISOString();
+  await liveUpsert("landing_pages", { id: p.id, domain: p.domain, scheduler_url: p.schedulerUrl, video_url: p.videoUrl, updated_at: p.updatedAt });
+  await pushAudit(actor, "landing.config", "landing_page", p.id, { ...cfg });
+  return p;
 }

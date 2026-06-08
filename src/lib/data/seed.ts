@@ -416,5 +416,6 @@ export function buildSeed(): Dataset {
     users, personas, domains, inboxes, campaigns, leads, replies,
     suppression, creditMeters, creditRequests, audit, jobs, demos,
     variants, metrics, alerts, costs, consent, channelAccounts, outreach,
+    landingPages: [],
   };
 }

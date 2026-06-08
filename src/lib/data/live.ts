@@ -32,7 +32,7 @@ export async function loadDatasetLive(): Promise<Dataset> {
   const [
     users, personas, domains, inboxes, campaigns, leads, replies, suppression,
     creditMeters, creditRequests, audit, jobs, demos, variants, metrics, costs,
-    consent, channelAccounts, outreach,
+    consent, channelAccounts, outreach, landingPages,
   ] = await Promise.all([
     fetchAll("users"), fetchAll("personas"), fetchAll("domains"), fetchAll("inboxes"),
     fetchAll("campaigns"), fetchAll("leads"), fetchAll("replies"), fetchAll("suppression"),
@@ -40,6 +40,7 @@ export async function loadDatasetLive(): Promise<Dataset> {
     fetchAll("job_runs"), fetchAll("demos"), fetchAll("sequence_variants"),
     fetchAll("daily_metrics"), fetchAll("costs"),
     fetchAll("consent_records"), fetchAll("channel_accounts"), fetchAll("outreach_messages"),
+    fetchAll("landing_pages"),
   ]);
 
   return {
@@ -63,6 +64,7 @@ export async function loadDatasetLive(): Promise<Dataset> {
     consent: consent.map((r) => ({ id: s(r.id), leadId: sn(r.lead_id), channel: s(r.channel) as Dataset["consent"][number]["channel"], handle: s(r.handle), status: (s(r.status) || "pending") as Dataset["consent"][number]["status"], source: (s(r.source) || "manual") as Dataset["consent"][number]["source"], proof: sn(r.proof), capturedAt: s(r.captured_at), updatedAt: s(r.updated_at) || s(r.captured_at), note: sn(r.note) })),
     channelAccounts: channelAccounts.map((r) => ({ id: s(r.id), channel: s(r.channel) as Dataset["channelAccounts"][number]["channel"], label: s(r.label), identifier: s(r.identifier), status: (s(r.status) || "pending") as Dataset["channelAccounts"][number]["status"], dailyCap: num(r.daily_cap), sentToday: num(r.sent_today), tenDlc: (s(r.ten_dlc) || "n/a") as Dataset["channelAccounts"][number]["tenDlc"], provider: s(r.provider), note: sn(r.note) })),
     outreach: outreach.map((r) => ({ id: s(r.id), channel: s(r.channel) as Dataset["outreach"][number]["channel"], leadId: sn(r.lead_id), campaignId: sn(r.campaign_id), accountId: sn(r.account_id), toName: s(r.to_name), toHandle: s(r.to_handle), body: s(r.body), status: (s(r.status) || "draft") as Dataset["outreach"][number]["status"], source: (s(r.source) || "manual") as Dataset["outreach"][number]["source"], consentId: sn(r.consent_id), profileUrl: sn(r.profile_url), rationale: sn(r.rationale), createdAt: s(r.created_at), scheduledAt: sn(r.scheduled_at), sentAt: sn(r.sent_at), approvedBy: sn(r.approved_by), sentBy: sn(r.sent_by), note: sn(r.note) })),
+    landingPages: landingPages.map((r) => ({ id: s(r.id), campaignId: sn(r.campaign_id), vertical: s(r.vertical), domain: sn(r.domain), status: (s(r.status) || "draft") as Dataset["landingPages"][number]["status"], content: (r.content ?? {}) as Dataset["landingPages"][number]["content"], schedulerUrl: sn(r.scheduler_url), videoUrl: sn(r.video_url), publishedUrl: sn(r.published_url), source: (s(r.source) || "rules") as "ai" | "rules", createdAt: s(r.created_at), updatedAt: s(r.updated_at) || s(r.created_at), approvedBy: sn(r.approved_by), approvedAt: sn(r.approved_at), publishedAt: sn(r.published_at), note: sn(r.note) })),
   };
 }
 
