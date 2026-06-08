@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { checkConnections } from "@/lib/integrations/healthcheck";
+import { cronAuthorized } from "@/lib/api-auth";
 
 /**
  * Live integration self-test — actually pings each configured provider (read-only,
@@ -10,12 +11,8 @@ export const dynamic = "force-dynamic";
 export const maxDuration = 30;
 
 export async function GET(req: NextRequest) {
-  const secret = process.env.SYNC_SECRET ?? process.env.CRON_SECRET;
-  if (secret) {
-    const provided =
-      req.headers.get("authorization")?.replace(/^Bearer\s+/i, "") ?? req.nextUrl.searchParams.get("secret");
-    if (provided !== secret) return NextResponse.json({ ok: false, error: "unauthorized" }, { status: 401 });
-  }
+  const denied = cronAuthorized(req);
+  if (denied) return denied;
   const results = await checkConnections();
   return NextResponse.json({
     ok: results.every((r) => r.ok !== false),

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { ensureData, getDemoByCivDealId, getOpenDemoByEmail, recordDemoOutcome } from "@/lib/data/store";
 import { classifyStage, mapLostReason } from "@/lib/outcome";
+import { webhookAuthorized } from "@/lib/api-auth";
 
 /**
  * Inbound webhook from ConversionIQ's Zoho org. A workflow there fires this when a
@@ -9,11 +10,8 @@ import { classifyStage, mapLostReason } from "@/lib/outcome";
  * your pipeline via ZOHO_CIQ_WON_STAGE / ZOHO_CIQ_LOST_STAGE.
  */
 export async function POST(req: NextRequest) {
-  const secret = process.env.CIQ_ZOHO_WEBHOOK_SECRET;
-  if (secret) {
-    const provided = req.headers.get("x-webhook-secret") || req.nextUrl.searchParams.get("secret");
-    if (provided !== secret) return NextResponse.json({ ok: false, error: "unauthorized" }, { status: 401 });
-  }
+  const denied = webhookAuthorized(req, "CIQ_ZOHO_WEBHOOK_SECRET");
+  if (denied) return denied;
 
   let payload: Record<string, unknown> = {};
   try {

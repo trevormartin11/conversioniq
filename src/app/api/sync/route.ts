@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { integrations } from "@/lib/config";
+import { cronAuthorized } from "@/lib/api-auth";
 import { runAllSyncs } from "@/lib/sync";
 
 export const dynamic = "force-dynamic";
@@ -11,13 +12,9 @@ export const maxDuration = 60;
  * reply sync, or hit it from the dashboard's "Sync now".
  */
 async function run(req: NextRequest) {
-  // Accept either SYNC_SECRET (manual) or CRON_SECRET (Vercel Cron auto-bearer).
-  const auth = req.headers.get("authorization");
-  const ok = (s?: string) => !!s && auth === `Bearer ${s}`;
-  const gated = process.env.SYNC_SECRET || process.env.CRON_SECRET;
-  if (gated && !ok(process.env.SYNC_SECRET) && !ok(process.env.CRON_SECRET)) {
-    return NextResponse.json({ ok: false, error: "unauthorized" }, { status: 401 });
-  }
+  // Accept either SYNC_SECRET (manual) or CRON_SECRET (Vercel Cron auto-bearer); fail-closed in prod.
+  const denied = cronAuthorized(req);
+  if (denied) return denied;
   if (!integrations.supabase) {
     return NextResponse.json({ ok: false, error: "supabase not configured" }, { status: 400 });
   }

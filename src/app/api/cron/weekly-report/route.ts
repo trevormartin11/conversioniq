@@ -1,18 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { sendWeeklyReport } from "@/lib/jobs/digest";
+import { cronAuthorized } from "@/lib/api-auth";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
-function authorized(req: NextRequest) {
-  const auth = req.headers.get("authorization");
-  const ok = (s?: string) => !!s && auth === `Bearer ${s}`;
-  const gated = process.env.SYNC_SECRET || process.env.CRON_SECRET;
-  return !gated || ok(process.env.SYNC_SECRET) || ok(process.env.CRON_SECRET);
-}
-
 async function run(req: NextRequest) {
-  if (!authorized(req)) return NextResponse.json({ ok: false, error: "unauthorized" }, { status: 401 });
+  const denied = cronAuthorized(req);
+  if (denied) return denied;
   try {
     return NextResponse.json({ ok: true, ...(await sendWeeklyReport()) });
   } catch (e) {

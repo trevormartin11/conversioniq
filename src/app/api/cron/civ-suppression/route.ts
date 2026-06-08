@@ -1,19 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import { syncCivCustomers } from "@/lib/jobs/civ-suppression";
 import { integrations } from "@/lib/config";
+import { cronAuthorized } from "@/lib/api-auth";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
-function authorized(req: NextRequest) {
-  const auth = req.headers.get("authorization");
-  const ok = (s?: string) => !!s && auth === `Bearer ${s}`;
-  const gated = process.env.SYNC_SECRET || process.env.CRON_SECRET;
-  return !gated || ok(process.env.SYNC_SECRET) || ok(process.env.CRON_SECRET);
-}
-
 async function run(req: NextRequest) {
-  if (!authorized(req)) return NextResponse.json({ ok: false, error: "unauthorized" }, { status: 401 });
+  const denied = cronAuthorized(req);
+  if (denied) return denied;
   if (!integrations.supabase) return NextResponse.json({ ok: false, error: "supabase not configured" }, { status: 400 });
   try {
     return NextResponse.json({ ok: true, ...(await syncCivCustomers()) });
