@@ -2,7 +2,7 @@ import { Card, CardBody, PageHeader, SectionHeader } from "@/components/ui/card"
 import { Stat } from "@/components/ui/stat";
 import { Tag } from "@/components/ui/badge";
 import { SuppressionTools } from "@/components/leads/suppression-tools";
-import { SourcingPlanner } from "@/components/leads/sourcing-planner";
+import { AddLeadsToCampaign } from "@/components/leads/add-leads-to-campaign";
 import { Progress } from "@/components/ui/charts";
 import { Lock } from "lucide-react";
 import { ensureData, getCampaigns, getLeads, getSuppression } from "@/lib/data/store";
@@ -24,7 +24,7 @@ export default async function LeadsPage({ searchParams }: { searchParams: Promis
   const demosPerMonth = appConfig.goals.demosPerDay * 30;
   const maxCostPerDemo = appConfig.goals.monthlyBudgetUsd / demosPerMonth;
   const maxCostPerLead = maxCostPerDemo * 0.01;
-  const campaignOptions = getCampaigns().map((c) => ({ id: c.id, name: c.name, status: c.status, hasInstantly: !!c.instantlyCampaignId }));
+  const campaignOptions = getCampaigns().map((c) => ({ id: c.id, name: c.name, status: c.status, hasInstantly: !!c.instantlyCampaignId, vertical: c.vertical }));
 
   const byReason = {} as Record<SuppressionReason, number>;
   for (const s of suppression) byReason[s.reason] = (byReason[s.reason] ?? 0) + 1;
@@ -40,7 +40,7 @@ export default async function LeadsPage({ searchParams }: { searchParams: Promis
 
   return (
     <div className="space-y-6">
-      <PageHeader title="Leads & Suppression" subtitle="Master lead table (from Zoho) + the global suppression universe, enforced at load time." />
+      <PageHeader title="Leads & Sourcing" subtitle="Find, identify, and load leads into your campaigns — over the global suppression universe, enforced at load time." />
 
       {/* Universe stats */}
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
@@ -50,41 +50,16 @@ export default async function LeadsPage({ searchParams }: { searchParams: Promis
         <Stat label="Bounced" value={num(byReason.bounced ?? 0)} />
       </div>
 
-      {/* Tools */}
-      <SuppressionTools initialCheck={check} />
-
-      {/* Lead sourcing — the smart router: vertical -> cheapest source with coverage -> verify -> dedupe */}
+      {/* THE job: load leads into a campaign — source new (auto-targeted) or paste/CSV a list */}
       <section>
-        <SectionHeader title="Source new leads" subtitle="Discover → Enrich → Verify → Dedupe → Load. The router picks the cheapest source that covers your target (Maps for local, B2B database for enterprise), prices it, then verifies + dedupes before load." />
-        <div className="mb-3 grid grid-cols-3 gap-3">
-          <Stat label="Max cost / demo" value={`$${maxCostPerDemo.toFixed(2)}`} />
-          <Stat label="Max cost / lead" value={`~$${maxCostPerLead.toFixed(2)}`} sub="at 1% lead→demo" />
-          <Stat label="Monthly budget" value={`$${num(appConfig.goals.monthlyBudgetUsd)}`} />
-        </div>
-        <SourcingPlanner campaigns={campaignOptions} />
+        <SectionHeader title="Add leads to a campaign" subtitle="Pick a campaign, then source new leads (router picks the cheapest covering source → verify → dedupe) or paste an existing list. Both persist → Zoho → Instantly." />
+        <AddLeadsToCampaign campaigns={campaignOptions} />
       </section>
 
-      {/* Credit visibility — what's left to spend on sourcing + enrichment (folded in from Credit Guard) */}
+      {/* Supporting: check the universe / dedupe a list before it ever enters a campaign */}
       <section>
-        <SectionHeader title="Credits" subtitle="What's left to spend on sourcing & enrichment. CIQ credits are gated — never auto-spent." />
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-          {meters.map((m) => (
-            <Card key={m.provider}>
-              <CardBody>
-                <div className="flex items-start justify-between gap-2">
-                  <p className="text-sm font-semibold text-slate-100">{m.label}</p>
-                  {m.gated && <span className="chip bg-bad/15 text-bad"><Lock className="h-3 w-3" /> Gated</span>}
-                </div>
-                <div className="mt-2 flex items-end justify-between">
-                  <span className="text-xl font-semibold tabular-nums text-slate-100">{num(m.remaining)}</span>
-                  <span className="text-[11px] text-slate-500">{num(m.used)}/{num(m.total)} · {pct(m.pctUsed, 0)}</span>
-                </div>
-                <div className="mt-2"><Progress value={m.pctUsed} tone={m.pctUsed > 0.85 ? "bad" : m.pctUsed > 0.6 ? "warn" : "ok"} /></div>
-                {m.resetsAt && <p className="mt-1 text-[10px] text-slate-500">Resets {ago(m.resetsAt)}</p>}
-              </CardBody>
-            </Card>
-          ))}
-        </div>
+        <SectionHeader title="Check & dedupe" subtitle="Look up a contact, or pre-screen a list against the contacted + DNC universe." />
+        <SuppressionTools initialCheck={check} />
       </section>
 
       {/* Lead table */}
@@ -145,6 +120,34 @@ export default async function LeadsPage({ searchParams }: { searchParams: Promis
             </div>
           </CardBody>
         </Card>
+      </section>
+
+      {/* Credit visibility — what's left to spend on sourcing + enrichment */}
+      <section>
+        <SectionHeader title="Credits & budget" subtitle="What's left to spend on sourcing & enrichment. CIQ credits are gated — never auto-spent." />
+        <div className="mb-3 grid grid-cols-3 gap-3">
+          <Stat label="Max cost / demo" value={`$${maxCostPerDemo.toFixed(2)}`} />
+          <Stat label="Max cost / lead" value={`~$${maxCostPerLead.toFixed(2)}`} sub="at 1% lead→demo" />
+          <Stat label="Monthly budget" value={`$${num(appConfig.goals.monthlyBudgetUsd)}`} />
+        </div>
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          {meters.map((m) => (
+            <Card key={m.provider}>
+              <CardBody>
+                <div className="flex items-start justify-between gap-2">
+                  <p className="text-sm font-semibold text-slate-100">{m.label}</p>
+                  {m.gated && <span className="chip bg-bad/15 text-bad"><Lock className="h-3 w-3" /> Gated</span>}
+                </div>
+                <div className="mt-2 flex items-end justify-between">
+                  <span className="text-xl font-semibold tabular-nums text-slate-100">{num(m.remaining)}</span>
+                  <span className="text-[11px] text-slate-500">{num(m.used)}/{num(m.total)} · {pct(m.pctUsed, 0)}</span>
+                </div>
+                <div className="mt-2"><Progress value={m.pctUsed} tone={m.pctUsed > 0.85 ? "bad" : m.pctUsed > 0.6 ? "warn" : "ok"} /></div>
+                {m.resetsAt && <p className="mt-1 text-[10px] text-slate-500">Resets {ago(m.resetsAt)}</p>}
+              </CardBody>
+            </Card>
+          ))}
+        </div>
       </section>
     </div>
   );
