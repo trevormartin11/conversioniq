@@ -9,25 +9,7 @@
  */
 import { aiAvailable, complete } from "@/lib/integrations/anthropic";
 import { voiceSystemPrompt } from "./voice";
-
-export interface LandingFeature {
-  title: string;
-  body: string;
-}
-export interface LandingContent {
-  vertical: string;
-  seoTitle: string;
-  seoDescription: string;
-  hero: { eyebrow: string; headline: string; subhead: string; primaryCta: string; secondaryCta: string };
-  problem: { heading: string; body: string; bullets: string[] };
-  features: LandingFeature[];
-  videoHeading: string;
-  videoCaption: string;
-  trust: { heading: string; points: string[] };
-  cta: { heading: string; body: string; bookCta: string };
-  formIntro: string;
-  source: "ai" | "rules";
-}
+import type { LandingContent } from "@/lib/data/types";
 
 /** Deterministic, vertical-aware fallback — always returns a complete, on-pitch page. */
 export function rulesLanding(vertical: string, problem?: string): LandingContent {
