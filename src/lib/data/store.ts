@@ -42,7 +42,7 @@ import { pushDemoDeal } from "@/lib/integrations/zoho-civ";
 import { sendSms } from "@/lib/integrations/twilio";
 import { generateLandingContent } from "@/lib/ai/landing";
 import { buildSeed } from "./seed";
-import { loadAutomationLevel, loadAssumptions, loadDatasetLive } from "./live";
+import { loadAutomationLevel, loadAssumptions, loadDatasetLive, loadIcp } from "./live";
 import { supabaseAdmin } from "./supabase";
 
 const LIVE = DATA_MODE === "live";
@@ -56,6 +56,7 @@ interface RuntimeState {
   data: Dataset | null;
   automationLevel: AutomationLevel;
   assumptions: { closeRate: number; monthlyMrr: number };
+  icp: string | null; // operator-edited ICP override; null → use the built-in default
 }
 const rt: RuntimeState = ((globalThis as unknown as { __ciqRuntime?: RuntimeState }).__ciqRuntime ??= {
   data: null,
@@ -64,6 +65,7 @@ const rt: RuntimeState = ((globalThis as unknown as { __ciqRuntime?: RuntimeStat
     closeRate: appConfig.projection.assumedCloseRate,
     monthlyMrr: appConfig.projection.assumedMonthlyMrr,
   },
+  icp: null,
 });
 
 function db(): Dataset {
@@ -75,6 +77,7 @@ const hydrateLive = cache(async () => {
   rt.data = await loadDatasetLive();
   rt.automationLevel = await loadAutomationLevel();
   rt.assumptions = await loadAssumptions();
+  rt.icp = await loadIcp();
 });
 
 /** Populate the in-memory dataset for this request (live: from Supabase). */
@@ -149,6 +152,16 @@ export async function setAssumptions(input: Partial<Assumptions>): Promise<Assum
   await liveUpsert("settings", { key: "assumed_monthly_mrr", value: String(monthlyMrr) }, "key");
   await pushAudit("system", "assumptions.changed", "settings", null, rt.assumptions);
   return rt.assumptions;
+}
+
+// --- ICP ("who we win with") — operator-edited, persisted, read by the strategy AI -----------
+/** The current ICP override, or null when none is set (callers fall back to the built-in default). */
+export const getIcp = (): string | null => rt.icp;
+export async function setIcp(text: string, actor = "system"): Promise<string | null> {
+  rt.icp = text.trim() || null; // empty clears the override → back to the default
+  await liveUpsert("settings", { key: "icp_fit", value: rt.icp ?? "" }, "key");
+  await pushAudit(actor, "icp.changed", "settings", null, { length: rt.icp?.length ?? 0 });
+  return rt.icp;
 }
 
 // --- audit ------------------------------------------------------------------
