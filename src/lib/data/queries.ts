@@ -15,7 +15,9 @@ import {
   getInboxes,
   getLeads,
   getMetrics,
+  getPersonas,
   getReplies,
+  getVariants,
 } from "./store";
 import type {
   Alert,
@@ -71,6 +73,61 @@ export function campaignCards(): CampaignCard[] {
       positiveRate: rate(positives, sent),
       bounceRate,
       health: campaignHealth(bounceRate, replyRate, c.status),
+    };
+  });
+}
+
+/** Richer per-campaign read model for the Campaigns board: the funnel card joined with leads/pace,
+ *  pipeline outcomes (demos + interested replies), and the assigned-inbox deliverability picture. */
+export interface CampaignBoardCard extends CampaignCard {
+  personaName: string;
+  steps: number;
+  dailyCap: number;
+  createdAt: string;
+  leadsLoaded: number;
+  leadsRemaining: number; // status "new" — loaded but not yet contacted
+  runwayDays: number | null; // days to work the remaining list at the daily cap
+  demos: number; // demos attributed to this campaign (via lead.campaignId)
+  demosWon: number; // status "closed"
+  interestedReplies: number; // classification interested | question
+  inboxCount: number;
+  warmupAvg: number; // 0–100 across assigned inboxes
+  inboxesUnderWarmup: number; // not active, or below the warmup gate
+}
+
+export function campaignBoard(): CampaignBoardCard[] {
+  const base = new Map(campaignCards().map((c) => [c.id, c]));
+  const personas = getPersonas();
+  const variants = getVariants();
+  const leads = getLeads();
+  const demos = getDemos();
+  const replies = getReplies();
+  const inboxes = getInboxes();
+  const gate = appConfig.deliverability.warmupGate;
+  // demo rows carry only a leadId — attribute each to its lead's campaign.
+  const leadCampaign = new Map(leads.map((l) => [l.id, l.campaignId]));
+
+  return getCampaigns().map((c) => {
+    const card = base.get(c.id)!;
+    const mine = leads.filter((l) => l.campaignId === c.id);
+    const remaining = mine.filter((l) => l.status === "new").length;
+    const myInboxes = inboxes.filter((i) => c.inboxIds.includes(i.id));
+    const myDemos = demos.filter((d) => leadCampaign.get(d.leadId) === c.id);
+    return {
+      ...card,
+      personaName: personas.find((p) => p.id === c.personaId)?.name ?? "—",
+      steps: new Set(variants.filter((v) => v.campaignId === c.id).map((v) => v.step)).size,
+      dailyCap: c.dailyCap,
+      createdAt: c.createdAt,
+      leadsLoaded: mine.length,
+      leadsRemaining: remaining,
+      runwayDays: remaining > 0 && c.dailyCap > 0 ? Math.ceil(remaining / c.dailyCap) : null,
+      demos: myDemos.length,
+      demosWon: myDemos.filter((d) => d.status === "closed").length,
+      interestedReplies: replies.filter((r) => r.campaignId === c.id && (r.classification === "interested" || r.classification === "question")).length,
+      inboxCount: myInboxes.length,
+      warmupAvg: myInboxes.length ? Math.round(myInboxes.reduce((s, i) => s + i.warmupScore, 0) / myInboxes.length) : 0,
+      inboxesUnderWarmup: myInboxes.filter((i) => i.status !== "active" || i.warmupScore < gate).length,
     };
   });
 }

@@ -1,29 +1,29 @@
 import Link from "next/link";
-import { ChevronRight, Plus } from "lucide-react";
-import { Card, CardBody, PageHeader } from "@/components/ui/card";
-import { HealthBadge, Tag } from "@/components/ui/badge";
-import { CampaignActions } from "@/components/campaigns/campaign-actions";
-import { campaignCards } from "@/lib/data/queries";
-import { ensureData, getCampaigns, getPersonas, getVariants } from "@/lib/data/store";
-import { num, pct, titleCase } from "@/lib/format";
+import { Plus, Rocket } from "lucide-react";
+import { Empty, PageHeader, SectionHeader } from "@/components/ui/card";
+import { CampaignBoardCard } from "@/components/campaigns/campaign-board-card";
+import { campaignBoard } from "@/lib/data/queries";
+import { ensureData } from "@/lib/data/store";
 
 export const dynamic = "force-dynamic";
 
+// Board groups in operator priority order — Active first, then what's queued, then the rest.
+const GROUPS: { key: string; label: string; sub: string }[] = [
+  { key: "active", label: "Active", sub: "Sending now" },
+  { key: "draft", label: "Staged", sub: "Built — launch once inboxes are warm" },
+  { key: "paused", label: "Paused", sub: "Held — review before resuming" },
+  { key: "completed", label: "Completed", sub: "Wrapped up" },
+];
+
 export default async function CampaignsPage() {
   await ensureData();
-  const campaigns = getCampaigns();
-  const cards = campaignCards();
-  const personas = getPersonas();
-  const variants = getVariants();
-  const cardFor = (id: string) => cards.find((c) => c.id === id);
-  const personaName = (id: string) => personas.find((p) => p.id === id)?.name ?? "—";
-  const stepsOf = (id: string) => new Set(variants.filter((v) => v.campaignId === id).map((v) => v.step)).size;
+  const board = campaignBoard();
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-6">
       <PageHeader
         title="Campaigns"
-        subtitle="Parallel cells by vertical."
+        subtitle="Parallel cells by vertical — leads, funnel, pipeline & sending health at a glance."
         action={
           <Link
             href="/launch"
@@ -34,51 +34,26 @@ export default async function CampaignsPage() {
         }
       />
 
-      <div className="space-y-3">
-        {campaigns.map((c) => {
-          const card = cardFor(c.id);
+      {board.length === 0 ? (
+        <Empty icon={Rocket} title="No campaigns yet">
+          Build your first sequence in the launch wizard — pick a vertical, draft the touches, and save it as a draft.
+        </Empty>
+      ) : (
+        GROUPS.map((g) => {
+          const cards = board.filter((c) => c.status === g.key);
+          if (cards.length === 0) return null;
           return (
-            <Card key={c.id}>
-              <CardBody>
-                <div className="flex items-start justify-between gap-3">
-                  <div>
-                    <Link href={`/campaigns/${c.id}`} className="text-sm font-semibold text-slate-100 hover:text-brand-300">{c.name}</Link>
-                    <p className="text-xs text-slate-500">{c.vertical} · {personaName(c.personaId)}{stepsOf(c.id) > 0 ? ` · ${stepsOf(c.id)}-step sequence` : ""} · cap {num(c.dailyCap)}/day</p>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Tag tone={c.status === "active" ? "ok" : c.status === "draft" ? "warn" : "slate"}>{titleCase(c.status)}</Tag>
-                    {card && <HealthBadge health={card.health} />}
-                  </div>
-                </div>
-                {card && card.sent > 0 && (
-                  <div className="mt-3 grid grid-cols-3 gap-3 text-xs sm:grid-cols-5">
-                    <Mini label="Sent" value={num(card.sent)} />
-                    <Mini label="Open" value={pct(card.openRate)} />
-                    <Mini label="Reply" value={pct(card.replyRate, 1)} />
-                    <Mini label="Positive" value={pct(card.positiveRate, 1)} />
-                    <Mini label="Bounce" value={pct(card.bounceRate, 1)} />
-                  </div>
-                )}
-                <div className="mt-3 flex items-center justify-between gap-2">
-                  <CampaignActions id={c.id} status={c.status} />
-                  <Link href={`/campaigns/${c.id}`} className="inline-flex shrink-0 items-center gap-1 text-xs font-medium text-brand-400 hover:text-brand-300">
-                    View sequence <ChevronRight className="h-3.5 w-3.5" />
-                  </Link>
-                </div>
-              </CardBody>
-            </Card>
+            <section key={g.key}>
+              <SectionHeader title={`${g.label} · ${cards.length}`} subtitle={g.sub} />
+              <div className="space-y-3">
+                {cards.map((c) => (
+                  <CampaignBoardCard key={c.id} c={c} />
+                ))}
+              </div>
+            </section>
           );
-        })}
-      </div>
-    </div>
-  );
-}
-
-function Mini({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="rounded-lg bg-ink-800/60 p-2 text-center">
-      <div className="text-sm font-semibold tabular-nums text-slate-100">{value}</div>
-      <div className="text-[10px] uppercase tracking-wide text-slate-500">{label}</div>
+        })
+      )}
     </div>
   );
 }
