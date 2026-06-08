@@ -2,8 +2,8 @@
 
 import { revalidatePath } from "next/cache";
 import { getCurrentUser } from "@/lib/auth";
-import { addCampaign, cloneCampaign, ensureData, getCampaign, getInboxes, seedCampaignVariants, setCampaignStatus } from "@/lib/data/store";
-import { activateCampaign, pauseCampaign } from "@/lib/integrations/instantly";
+import { addCampaign, cloneCampaign, deleteCampaign, ensureData, getCampaign, getInboxes, seedCampaignVariants, setCampaignStatus } from "@/lib/data/store";
+import { activateCampaign, deleteInstantlyCampaign, pauseCampaign } from "@/lib/integrations/instantly";
 import { appConfig, integrations } from "@/lib/config";
 
 function revalidate() {
@@ -52,6 +52,20 @@ export async function cloneCampaignAction(id: string) {
   const c = await cloneCampaign(id, user.name);
   revalidate();
   return { ok: !!c, id: c?.id };
+}
+
+export async function deleteCampaignAction(id: string) {
+  await ensureData();
+  const user = await getCurrentUser();
+  const c = getCampaign(id);
+  if (!c) return { ok: false as const, error: "Campaign not found." };
+  // Delete the linked Instantly campaign first — otherwise the next sync would just re-create the hub row.
+  if (c.instantlyCampaignId && integrations.instantly) {
+    try { await deleteInstantlyCampaign(c.instantlyCampaignId); } catch (e) { return { ok: false as const, error: `Couldn't delete in Instantly: ${(e as Error).message}` }; }
+  }
+  await deleteCampaign(id, user.name);
+  revalidate();
+  return { ok: true as const };
 }
 
 export async function createCampaignAction(input: {
