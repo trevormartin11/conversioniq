@@ -1,7 +1,7 @@
 /** Lead-sourcing engine — shared types. */
 
 export type SourceLane = "maps" | "b2b_database";
-export type SourceProvider = "outscraper" | "lusha" | "apollo";
+export type SourceProvider = "outscraper" | "lusha" | "apollo" | "import";
 
 export type SizeBand = "local_smb" | "mid_market" | "enterprise";
 

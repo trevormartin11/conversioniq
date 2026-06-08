@@ -9,7 +9,7 @@ import { toast } from "@/components/ui/toast";
 import { loadLeadsIntoCampaignAction, planSourcingAction, runSourcingAction } from "@/app/(dashboard)/leads/actions";
 import type { SizeBand, SourcingPlan } from "@/lib/sourcing/types";
 
-export interface PlannerCampaign { id: string; name: string; status: string; hasInstantly: boolean }
+export interface PlannerCampaign { id: string; name: string; status: string; hasInstantly: boolean; vertical: string }
 
 const BANDS: { v: "" | SizeBand; label: string }[] = [
   { v: "", label: "Auto-detect" },
@@ -28,8 +28,18 @@ const PRESETS: { label: string; vertical: string; geo: string; band: SizeBand; c
   { label: "Auto", vertical: "Auto dealerships", geo: "United States", band: "local_smb", count: 600 },
 ];
 
-export function SourcingPlanner({ campaigns }: { campaigns: PlannerCampaign[] }) {
-  const [vertical, setVertical] = useState("");
+export function SourcingPlanner({
+  campaigns,
+  initialVertical,
+  lockCampaign,
+}: {
+  campaigns: PlannerCampaign[];
+  /** Prefill the vertical (used when launched from a chosen campaign). */
+  initialVertical?: string;
+  /** When set, sourced leads load into THIS campaign — the campaign picker is hidden. */
+  lockCampaign?: PlannerCampaign;
+}) {
+  const [vertical, setVertical] = useState(initialVertical ?? "");
   const [geo, setGeo] = useState("");
   const [band, setBand] = useState<"" | SizeBand>("");
   const [count, setCount] = useState(500);
@@ -38,7 +48,7 @@ export function SourcingPlanner({ campaigns }: { campaigns: PlannerCampaign[] })
   const [planning, startPlan] = useTransition();
   const [result, setResult] = useState<Awaited<ReturnType<typeof runSourcingAction>> | null>(null);
   const [running, startRun] = useTransition();
-  const [loadCampaignId, setLoadCampaignId] = useState("");
+  const [loadCampaignId, setLoadCampaignId] = useState(lockCampaign?.id ?? "");
   const [loadResult, setLoadResult] = useState<Awaited<ReturnType<typeof loadLeadsIntoCampaignAction>> | null>(null);
   const [loading, startLoad] = useTransition();
 
@@ -202,19 +212,25 @@ export function SourcingPlanner({ campaigns }: { campaigns: PlannerCampaign[] })
         {result?.ok && (result.leads?.length ?? 0) > 0 && (
           <div className="space-y-2 rounded-xl border border-brand-500/20 bg-brand-500/[0.04] p-3">
             <p className="text-xs font-medium text-slate-300">
-              Load {result.leads.length} deliverable lead{result.leads.length === 1 ? "" : "s"} → Zoho (canonical) + campaign
+              Load {result.leads.length} deliverable lead{result.leads.length === 1 ? "" : "s"} → Zoho (canonical) + {lockCampaign ? lockCampaign.name : "campaign"}
             </p>
             <div className="flex flex-wrap items-center gap-2">
-              <select
-                value={loadCampaignId}
-                onChange={(e) => setLoadCampaignId(e.target.value)}
-                className="h-9 min-w-[12rem] flex-1 rounded-lg border border-white/10 bg-ink-950 px-3 text-sm text-slate-200 focus:border-brand-500 focus:outline-none"
-              >
-                <option value="">Select a campaign…</option>
-                {campaigns.map((c) => (
-                  <option key={c.id} value={c.id}>{c.name}{c.hasInstantly ? "" : " · draft (Zoho only)"}</option>
-                ))}
-              </select>
+              {lockCampaign ? (
+                <span className="flex h-9 flex-1 items-center rounded-lg border border-white/10 bg-ink-950 px-3 text-sm text-slate-300">
+                  {lockCampaign.name}{lockCampaign.hasInstantly ? "" : " · draft (Zoho only)"}
+                </span>
+              ) : (
+                <select
+                  value={loadCampaignId}
+                  onChange={(e) => setLoadCampaignId(e.target.value)}
+                  className="h-9 min-w-[12rem] flex-1 rounded-lg border border-white/10 bg-ink-950 px-3 text-sm text-slate-200 focus:border-brand-500 focus:outline-none"
+                >
+                  <option value="">Select a campaign…</option>
+                  {campaigns.map((c) => (
+                    <option key={c.id} value={c.id}>{c.name}{c.hasInstantly ? "" : " · draft (Zoho only)"}</option>
+                  ))}
+                </select>
+              )}
               <Button variant="primary" onClick={doLoad} disabled={loading || !loadCampaignId}>
                 <Upload className="h-4 w-4" /> {loading ? "Loading…" : "Load"}
               </Button>
