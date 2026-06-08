@@ -4,6 +4,7 @@ import { useEffect, useState, useTransition } from "react";
 import { Search, ShieldCheck, ShieldX, Upload } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Tag } from "@/components/ui/badge";
+import { toast } from "@/components/ui/toast";
 import { titleCase } from "@/lib/format";
 import { checkTouchedAction, dedupeListAction } from "@/app/(dashboard)/leads/actions";
 
@@ -17,7 +18,13 @@ export function SuppressionTools({ initialCheck }: { initialCheck?: string }) {
   const [q, setQ] = useState(initialCheck ?? "");
   const [result, setResult] = useState<CheckResult | null>(null);
   function runCheck(value: string) {
-    startTransition(async () => setResult(await checkTouchedAction(value)));
+    startTransition(async () => {
+      try {
+        setResult(await checkTouchedAction(value));
+      } catch {
+        toast.error("Couldn't run the check — try again.");
+      }
+    });
   }
   function check() {
     runCheck(q);
@@ -31,7 +38,13 @@ export function SuppressionTools({ initialCheck }: { initialCheck?: string }) {
   const [list, setList] = useState("");
   const [dedupe, setDedupe] = useState<DedupeResult | null>(null);
   function runDedupe() {
-    startTransition(async () => setDedupe(await dedupeListAction(list)));
+    startTransition(async () => {
+      try {
+        setDedupe(await dedupeListAction(list));
+      } catch {
+        toast.error("Couldn't dedupe the list — try again.");
+      }
+    });
   }
 
   return (
