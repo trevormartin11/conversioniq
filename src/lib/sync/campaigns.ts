@@ -62,17 +62,19 @@ export async function syncCampaigns() {
   const campaignsWritten = await chunkedUpsert("campaigns", campRows);
   const variantsWritten = variantRows.length ? await chunkedUpsert("sequence_variants", variantRows) : 0;
 
-  // Reconcile deletions. The sync is the source of truth for Instantly-sourced campaigns, so a hub
-  // campaign that came from Instantly but is no longer in the live list was deleted there — prune it
-  // (and its variants) so deletions propagate. Hub-native drafts (list_version != 'instantly') are
-  // left alone. Guard: only prune when the fetch actually returned campaigns, so a transient empty
-  // Instantly response can never wipe the hub.
+  // Reconcile deletions. The sync is the source of truth for genuinely Instantly-synced campaigns, so a
+  // hub campaign that has an instantly_campaign_id no longer in the live list was deleted there — prune it
+  // (and its variants) so deletions propagate. Scope strictly to rows WITH an instantly_campaign_id: that
+  // leaves hub-native drafts AND clones (which inherit list_version='instantly' but have a null
+  // instantly_campaign_id until launched) untouched — otherwise a fresh clone would be pruned on next sync.
+  // Guard: only prune when the fetch actually returned campaigns, so a transient empty Instantly response
+  // can never wipe the hub.
   const db = supabaseAdmin();
   let pruned = 0;
   if (campRows.length > 0) {
     const liveIds = new Set(campRows.map((r) => r.id as string));
-    const { data: existing } = await db.from("campaigns").select("id").eq("list_version", "instantly");
-    const stale = (existing ?? []).map((r) => r.id as string).filter((id) => id !== "c_medspa" && !liveIds.has(id));
+    const { data: existing } = await db.from("campaigns").select("id").not("instantly_campaign_id", "is", null);
+    const stale = (existing ?? []).map((r) => r.id as string).filter((id) => !liveIds.has(id));
     if (stale.length) {
       await db.from("sequence_variants").delete().in("campaign_id", stale);
       await db.from("campaigns").delete().in("id", stale);

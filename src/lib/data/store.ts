@@ -373,6 +373,21 @@ export async function cloneCampaign(id: string, actor: string): Promise<Campaign
   return clone;
 }
 
+/** Permanently remove a campaign and its sequence variants from the hub. Caller is responsible for
+ *  any external cleanup (e.g. deleting the linked Instantly campaign) before invoking this. */
+export async function deleteCampaign(id: string, actor: string): Promise<Campaign | null> {
+  const c = getCampaign(id);
+  if (!c) return null;
+  db().campaigns = db().campaigns.filter((x) => x.id !== id);
+  db().variants = db().variants.filter((v) => v.campaignId !== id);
+  if (LIVE) {
+    await supabaseAdmin().from("sequence_variants").delete().eq("campaign_id", id);
+    await supabaseAdmin().from("campaigns").delete().eq("id", id);
+  }
+  await pushAudit(actor, "campaign.deleted", "campaign", id, { name: c.name });
+  return c;
+}
+
 // --- leads (sourced -> persisted with attribution at source) ----------------
 export type NewLead = Omit<Lead, "id" | "createdAt">;
 
