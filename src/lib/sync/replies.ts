@@ -1,10 +1,11 @@
 /** Sync Instantly unibox replies into the hub DB (classify + draft + auto-handle). */
-import { listAllEmails } from "@/lib/integrations/instantly";
+import { listAllEmails, replyToEmail } from "@/lib/integrations/instantly";
 import { chunkedUpsert, supabaseAdmin } from "@/lib/data/supabase";
 import { classifyReply } from "@/lib/ai/classify";
 import { sendTelegram } from "@/lib/integrations/telegram";
 import { loadAutomationLevel } from "@/lib/data/live";
 import { decideReply } from "@/lib/replies/decide";
+import { integrations } from "@/lib/config";
 import { stripHtml } from "@/lib/utils";
 import type { ReplyClass } from "@/lib/data/types";
 
@@ -51,6 +52,7 @@ export async function syncReplies(limit = 1000) {
   const rows: Record<string, unknown>[] = [];
   const suppressions: Record<string, unknown>[] = [];
   let hotPings = 0;
+  let autoSent = 0;
 
   for (const e of replies) {
     const id = `i_${e.id}`;
@@ -62,7 +64,7 @@ export async function syncReplies(limit = 1000) {
     const lead = leadByEmail.get(from);
     const fromName = (lead?.first_name ?? "").trim() || from;
 
-    const { aiDraft, draftSource, status, suppress, hot } = await decideReply({
+    const decision = await decideReply({
       classification: cls,
       confidence,
       text,
@@ -70,6 +72,26 @@ export async function syncReplies(limit = 1000) {
       lead: lead ? { firstName: lead.first_name, company: lead.company, vertical: lead.vertical, title: lead.title } : null,
       level,
     });
+    const { aiDraft, draftSource, suppress, hot } = decision;
+    let status = decision.status;
+
+    // Auto-handled replies must ACTUALLY send. Only keep "auto_sent" if the send succeeds — otherwise
+    // fall back to "pending" so a human handles it. (Previously the row was marked sent but no email
+    // ever went out: the prospect got silence while the queue showed it handled.)
+    if (status === "auto_sent") {
+      const subject = (e.subject ?? "").toLowerCase().startsWith("re:") ? (e.subject ?? "") : `Re: ${e.subject ?? ""}`.trim();
+      if (integrations.instantly && e.eaccount && aiDraft?.trim()) {
+        try {
+          await replyToEmail({ replyToUuid: e.id, eaccount: e.eaccount, subject, bodyText: aiDraft });
+          autoSent++;
+        } catch {
+          status = "pending"; // send failed — don't claim it was sent
+        }
+      } else {
+        status = "pending"; // no live sender / no draft — never report sent without sending
+      }
+    }
+
     const handled = status !== "pending";
     const now = new Date().toISOString();
     rows.push({
@@ -99,5 +121,5 @@ export async function syncReplies(limit = 1000) {
 
   const written = rows.length ? await chunkedUpsert("replies", rows) : 0;
   if (suppressions.length) await chunkedUpsert("suppression", suppressions);
-  return { replies: replies.length, new: written, hotPings };
+  return { replies: replies.length, new: written, hotPings, autoSent };
 }
