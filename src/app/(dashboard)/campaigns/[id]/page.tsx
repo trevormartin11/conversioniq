@@ -76,6 +76,19 @@ export default async function CampaignDetail({ params }: { params: Promise<{ id:
         </CardBody>
       </Card>
 
+      {/* Landing page (per-vertical microsite) */}
+      <section>
+        <SectionHeader title="Landing page" subtitle="Auto-generate this vertical's microsite from the campaign copy — review, sign off, then publish to its domain." />
+        <Card>
+          <CardBody className="flex flex-wrap items-center justify-between gap-2 py-3">
+            <span className="text-sm text-slate-400">Problem → features → video → book-a-demo, in your brand — generated from this campaign.</span>
+            <Link href={`/campaigns/${c.id}/landing`} className="inline-flex items-center gap-1.5 rounded-lg border border-ink-700 bg-ink-850 px-3 py-2 text-sm text-slate-200 transition-colors hover:border-brand-500/40">
+              Open landing page →
+            </Link>
+          </CardBody>
+        </Card>
+      </section>
+
       {/* Sync to Instantly (beta) — only when linked to a live campaign */}
       {c.instantlyCampaignId && integrations.instantly && (
         <section>

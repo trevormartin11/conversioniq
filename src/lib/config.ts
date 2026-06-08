@@ -105,4 +105,10 @@ export const appConfig = {
   ai: {
     softMonthlyBudgetUsd: Number(process.env.AI_SOFT_BUDGET_USD) || 50,
   },
+  /** Per-vertical landing-page microsites. Public config (not secrets) — env-overridable defaults
+   *  every generated page inherits for its scheduler + features video. */
+  landing: {
+    schedulerUrl: process.env.LANDING_SCHEDULER_URL || "https://calendly.com/trevor-martin-conversioniq/conversioniq-demo",
+    videoUrl: process.env.LANDING_VIDEO_URL || "https://www.youtube.com/watch?v=AYgqHOaLBm0",
+  },
 } as const;
