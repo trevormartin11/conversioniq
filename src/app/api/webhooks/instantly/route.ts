@@ -5,6 +5,7 @@ import { addSuppression, ensureData, isSuppressed, recordInboxBounce } from "@/l
 import { addToBlocklist } from "@/lib/integrations/instantly";
 import { sendTelegram } from "@/lib/integrations/telegram";
 import { syncReplies } from "@/lib/sync/replies";
+import { webhookAuthorized } from "@/lib/api-auth";
 
 export const maxDuration = 60;
 
@@ -14,11 +15,8 @@ export const maxDuration = 60;
  * secret. Replies are classified immediately; hot ones ping Telegram.
  */
 export async function POST(req: NextRequest) {
-  const secret = process.env.INSTANTLY_WEBHOOK_SECRET;
-  if (secret) {
-    const provided = req.headers.get("x-webhook-secret") || req.nextUrl.searchParams.get("secret");
-    if (provided !== secret) return NextResponse.json({ ok: false, error: "unauthorized" }, { status: 401 });
-  }
+  const denied = webhookAuthorized(req, "INSTANTLY_WEBHOOK_SECRET");
+  if (denied) return denied;
 
   let payload: Record<string, unknown> = {};
   try {

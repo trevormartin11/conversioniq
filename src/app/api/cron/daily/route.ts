@@ -4,16 +4,10 @@ import { enforceDeliverability } from "@/lib/jobs/deliverability";
 import { verifyAllDomains } from "@/lib/jobs/domain-auth";
 import { sendDailyBrief } from "@/lib/jobs/digest";
 import { integrations } from "@/lib/config";
+import { cronAuthorized } from "@/lib/api-auth";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
-
-function authorized(req: NextRequest) {
-  const auth = req.headers.get("authorization");
-  const ok = (s?: string) => !!s && auth === `Bearer ${s}`;
-  const gated = process.env.SYNC_SECRET || process.env.CRON_SECRET;
-  return !gated || ok(process.env.SYNC_SECRET) || ok(process.env.CRON_SECRET);
-}
 
 /**
  * Combined daily maintenance (Hobby-friendly: one cron). Runs the full sync,
@@ -22,7 +16,8 @@ function authorized(req: NextRequest) {
  * manual runs or a Pro plan with more frequent schedules.
  */
 async function run(req: NextRequest) {
-  if (!authorized(req)) return NextResponse.json({ ok: false, error: "unauthorized" }, { status: 401 });
+  const denied = cronAuthorized(req);
+  if (denied) return denied;
   const result: Record<string, unknown> = {};
   if (integrations.supabase) {
     try { result.sync = await runAllSyncs(); } catch (e) { result.syncError = (e as Error).message; }
