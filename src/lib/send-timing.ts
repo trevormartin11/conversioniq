@@ -41,6 +41,15 @@ export function leadTimezone(lead: Pick<Lead, "phone">): Tz {
 /** Best-practice cold-email window in the recipient's local time. Conservative + B2B-friendly. */
 export const OPTIMAL_WINDOW = { label: "Tue–Thu · 8:00–9:30am local", startHour: 8, endHour: 9, endMinute: 30 } as const;
 
+/**
+ * The days a cold campaign may send — mid-week only (Tue/Wed/Thu), where reply rates peak and
+ * Mon/Fri inbox noise is avoided. Instantly's schedule.days map uses 1=Mon … 7=Sun. This is the
+ * single source of truth for day-of-week: step delays only set the MINIMUM spacing between touches,
+ * while the schedule is what guarantees a touch lands on an allowed day (Instantly holds anything
+ * that comes due on an off day until the next enabled one).
+ */
+export const OPTIMAL_DAYS: Record<string, boolean> = { "2": true, "3": true, "4": true };
+
 const pad = (n: number) => String(n).padStart(2, "0");
 
 /** Translate the local optimal window to the server's UTC time, for ops visibility. */

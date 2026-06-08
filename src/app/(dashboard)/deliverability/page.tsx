@@ -5,6 +5,7 @@ import { Progress } from "@/components/ui/charts";
 import { deliverabilitySummary } from "@/lib/data/queries";
 import { PageHeader } from "@/components/ui/card";
 import { InboxActions } from "@/components/deliverability/inbox-actions";
+import { NormalizeSchedules } from "@/components/deliverability/normalize-schedules";
 import { ensureData, getDomains, getInboxes, getLeads, getPersonas } from "@/lib/data/store";
 import { bucketByTimezone, OPTIMAL_WINDOW } from "@/lib/send-timing";
 import { appConfig } from "@/lib/config";
@@ -57,7 +58,11 @@ export default async function DeliverabilityPage() {
 
       {/* Send timing — optimal local window per recipient timezone */}
       <section>
-        <SectionHeader title="Send timing" subtitle={`Fire in each recipient's local window — ${OPTIMAL_WINDOW.label}. Timezone is inferred from area code; sends bucket per timezone.`} />
+        <SectionHeader
+          title="Send timing"
+          subtitle={`Fire in each recipient's local window — ${OPTIMAL_WINDOW.label}. Timezone is inferred from area code; sends bucket per timezone.`}
+          action={<NormalizeSchedules />}
+        />
         {tzBuckets.length === 0 ? (
           <p className="text-sm text-slate-500">No leads loaded yet — timezone buckets appear once a list is in.</p>
         ) : (

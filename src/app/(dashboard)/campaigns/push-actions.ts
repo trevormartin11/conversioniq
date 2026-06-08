@@ -1,6 +1,6 @@
 "use server";
 
-import { ensureData, getCampaign, getInboxes, getLeads, getVariants } from "@/lib/data/store";
+import { ensureData, getCampaign, getCampaigns, getInboxes, getLeads, getVariants } from "@/lib/data/store";
 import {
   addLeadsToCampaign,
   createInstantlyCampaign,
@@ -9,7 +9,7 @@ import {
 } from "@/lib/integrations/instantly";
 import { integrations } from "@/lib/config";
 import { rewriteCopy } from "@/lib/ai/copy";
-import { INSTANTLY_TZ, TZ_LABEL, bucketByTimezone, leadTimezone, optimalWindowHHMM, type Tz } from "@/lib/send-timing";
+import { INSTANTLY_TZ, OPTIMAL_DAYS, TZ_LABEL, bucketByTimezone, leadTimezone, optimalWindowHHMM, type Tz } from "@/lib/send-timing";
 
 const PERSONALIZATION_TAG = "{{personalization}}";
 
@@ -121,11 +121,47 @@ export async function applyOptimalScheduleAction(campaignId: string): Promise<{ 
   const { from, to } = optimalWindowHHMM();
 
   try {
-    await updateInstantlyCampaignSchedule(c.instantlyCampaignId, { timezone, from, to });
+    await updateInstantlyCampaignSchedule(c.instantlyCampaignId, { timezone, from, to, days: OPTIMAL_DAYS });
     return { ok: true, timezone };
   } catch (e) {
     return { ok: false, error: (e as Error).message };
   }
+}
+
+/**
+ * Fleet-wide: set every live (Instantly-linked) campaign to the mid-week Tue/Wed/Thu schedule + optimal
+ * window, each in its dominant lead timezone. Operator-triggered + idempotent — re-running just re-asserts
+ * the same schedule. This is how existing campaigns adopt the standard (new ones get it at creation).
+ */
+export async function normalizeAllSchedulesAction(): Promise<{
+  ok: boolean;
+  applied: number;
+  failed: number;
+  results: { name: string; ok: boolean; timezone?: string; error?: string }[];
+}> {
+  await ensureData();
+  if (!integrations.instantly) return { ok: false, applied: 0, failed: 0, results: [{ name: "Instantly", ok: false, error: "Instantly isn't connected." }] };
+  const { from, to } = optimalWindowHHMM();
+  const live = getCampaigns().filter((c) => c.instantlyCampaignId);
+  const results: { name: string; ok: boolean; timezone?: string; error?: string }[] = [];
+  let applied = 0;
+  let failed = 0;
+  for (const c of live) {
+    const leads = getLeads().filter((l) => l.campaignId === c.id);
+    const dominant = bucketByTimezone(leads)
+      .filter((b) => b.tz !== "unknown")
+      .sort((a, b) => b.count - a.count)[0]?.tz as Exclude<Tz, "unknown"> | undefined;
+    const timezone = dominant ? INSTANTLY_TZ[dominant] : "America/Chicago";
+    try {
+      await updateInstantlyCampaignSchedule(c.instantlyCampaignId!, { timezone, from, to, days: OPTIMAL_DAYS });
+      applied++;
+      results.push({ name: c.name, ok: true, timezone });
+    } catch (e) {
+      failed++;
+      results.push({ name: c.name, ok: false, error: (e as Error).message });
+    }
+  }
+  return { ok: failed === 0 && applied > 0, applied, failed, results };
 }
 
 export interface TzSplitPlanRow {
