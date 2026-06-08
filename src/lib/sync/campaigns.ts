@@ -35,6 +35,11 @@ export async function syncCampaigns() {
   const campRows: Record<string, unknown>[] = [];
   const variantRows: Record<string, unknown>[] = [];
 
+  // Preserve the original created_at on re-sync — don't reset every campaign's age each run
+  // (it skews the Staged-board ordering and any age-based logic).
+  const { data: existingCamps } = await supabaseAdmin().from("campaigns").select("id, created_at");
+  const createdAtById = new Map((existingCamps ?? []).map((r: { id: string; created_at: string }) => [r.id, r.created_at]));
+
   for (const c of campaigns) {
     if (!c.id) continue;
     const cid = `c_${c.id}`;
@@ -43,7 +48,7 @@ export async function syncCampaigns() {
       persona_id: personaFor(c.name ?? ""), status: statusFor(c.status),
       instantly_campaign_id: c.id, list_version: "instantly",
       inbox_ids: (c.email_list ?? []).map((e) => `ib_${slug(e)}`),
-      daily_cap: c.daily_limit ?? 80, created_at: new Date().toISOString(),
+      daily_cap: c.daily_limit ?? 80, created_at: createdAtById.get(cid) ?? new Date().toISOString(),
     });
     const seqs = (c.sequences as Seq[]) ?? [];
     for (const seq of seqs) {

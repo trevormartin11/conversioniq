@@ -35,6 +35,7 @@ function Row({ demo }: { demo: DemoRow }) {
   const [busy, start] = useTransition();
   const [mrr, setMrr] = useState("");
   const [reason, setReason] = useState<DemoLostReason>("not_interested");
+  const [confirm, setConfirm] = useState<null | "won" | "lost">(null); // outcomes write revenue + a training signal — confirm first
   const terminal = demo.status === "closed" || demo.status === "lost";
   const hoursUntil = (new Date(demo.scheduledAt).getTime() - Date.now()) / 3.6e6;
   const dueSoon = demo.status === "booked" && !demo.reminderSentAt && hoursUntil > -2 && hoursUntil < 36;
@@ -81,7 +82,11 @@ function Row({ demo }: { demo: DemoRow }) {
               placeholder="MRR $"
               className="h-8 w-20 rounded-md border border-white/10 bg-ink-950 px-2 text-xs text-slate-200 focus:border-brand-500 focus:outline-none"
             />
-            <Button size="sm" variant="ok" disabled={busy || !Number(mrr)} onClick={() => run(() => recordDemoOutcomeAction(demo.id, "won", undefined, Number(mrr)), `Won — $${Number(mrr)}/mo`)}>Won</Button>
+            {confirm === "won" ? (
+              <Button size="sm" variant="ok" disabled={busy || !Number(mrr)} onClick={() => { run(() => recordDemoOutcomeAction(demo.id, "won", undefined, Number(mrr)), `Won — $${Number(mrr)}/mo`); setConfirm(null); }}>Confirm won</Button>
+            ) : (
+              <Button size="sm" variant="ok" disabled={busy || !Number(mrr)} onClick={() => setConfirm("won")}>Won</Button>
+            )}
             <select
               value={reason}
               onChange={(e) => setReason(e.target.value as DemoLostReason)}
@@ -91,7 +96,12 @@ function Row({ demo }: { demo: DemoRow }) {
             >
               {DEMO_LOST_REASONS.map((r) => <option key={r} value={r}>{REASON_LABEL[r]}</option>)}
             </select>
-            <Button size="sm" variant="ghost" disabled={busy} onClick={() => run(() => recordDemoOutcomeAction(demo.id, "lost", reason), `Lost — ${REASON_LABEL[reason]}`)}>Lost</Button>
+            {confirm === "lost" ? (
+              <Button size="sm" variant="danger" disabled={busy} onClick={() => { run(() => recordDemoOutcomeAction(demo.id, "lost", reason), `Lost — ${REASON_LABEL[reason]}`); setConfirm(null); }}>Confirm lost</Button>
+            ) : (
+              <Button size="sm" variant="ghost" disabled={busy} onClick={() => setConfirm("lost")}>Lost</Button>
+            )}
+            {confirm && <button type="button" onClick={() => setConfirm(null)} className="text-[11px] text-slate-500 hover:text-slate-300">cancel</button>}
           </>
         )}
       </div>
