@@ -75,6 +75,19 @@ export async function loadAutomationLevel(): Promise<AutomationLevel> {
   return (["approve_all", "auto_safe", "auto_all"].includes(lvl) ? lvl : "approve_all") as AutomationLevel;
 }
 
+/** The operator-edited ICP ("who we win with"), or null to fall back to the built-in default. */
+export async function loadIcp(): Promise<string | null> {
+  try {
+    const { data } = await supabaseAdmin().from("settings").select("value").eq("key", "icp_fit").maybeSingle();
+    const v = (data as { value?: unknown } | null)?.value;
+    // value may be stored JSON-encoded — strip only surrounding quotes, never internal ones.
+    const text = typeof v === "string" ? v.replace(/^"|"$/g, "").trim() : "";
+    return text || null;
+  } catch {
+    return null;
+  }
+}
+
 export async function loadAssumptions(): Promise<{ closeRate: number; monthlyMrr: number }> {
   const def = { closeRate: appConfig.projection.assumedCloseRate, monthlyMrr: appConfig.projection.assumedMonthlyMrr };
   try {

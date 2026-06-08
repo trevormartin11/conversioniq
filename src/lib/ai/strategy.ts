@@ -39,6 +39,7 @@ const CURATED: Omit<VerticalIdea, "source">[] = [
 export async function proposeVerticals(
   exclude: string[],
   learnings: Pick<Learning, "theme" | "insight">[],
+  icp: string = ICP_FIT,
 ): Promise<VerticalIdea[]> {
   const ex = new Set(exclude.map((s) => s.toLowerCase().trim()));
   const fromCurated = () => CURATED.filter((c) => !ex.has(c.vertical.toLowerCase())).slice(0, 5).map((c) => ({ ...c, source: "rules" as const }));
@@ -48,7 +49,7 @@ export async function proposeVerticals(
     const out = await complete({
       system: voiceSystemPrompt(),
       user: [
-        ICP_FIT,
+        icp,
         `Propose 5 target verticals we are NOT already running${exclude.length ? ` (exclude: ${exclude.join(", ")})` : ""}. Favor strong fit, but include one non-obvious wildcard with high upside.`,
         learnings.length ? `What we've learned so far:\n${learnings.map((l) => `- ${l.insight}`).join("\n")}` : "",
         `For each: vertical (specific, e.g. "Roofing contractors"), fit (1-10), why (one sentence tied to the fit criteria), angle (the one-line pain/hook to open the cold email with).`,
@@ -66,7 +67,7 @@ export async function proposeVerticals(
 }
 
 /** Given a vertical, propose the specific problems CIQ solves for it — each a felt, cold-open-ready sentence. */
-export async function suggestProblems(vertical: string): Promise<{ problems: string[]; source: "ai" | "rules" }> {
+export async function suggestProblems(vertical: string, icp: string = ICP_FIT): Promise<{ problems: string[]; source: "ai" | "rules" }> {
   const v = vertical.trim();
   const curated = () => {
     const hit = CURATED.find((c) => c.vertical.toLowerCase() === v.toLowerCase() || (v && c.vertical.toLowerCase().includes(v.toLowerCase().split(" ")[0])));
@@ -81,7 +82,7 @@ export async function suggestProblems(vertical: string): Promise<{ problems: str
     const out = await complete({
       system: voiceSystemPrompt(),
       user: [
-        ICP_FIT,
+        icp,
         `For the vertical "${v}", give the 3 most acute problems ConversionIQ solves — each one specific, felt sentence we could open a cold email with (the leak they actually feel). Concrete over generic; no preamble.`,
         `Return ONLY JSON: ["problem one","problem two","problem three"]`,
       ].join("\n\n"),
@@ -97,7 +98,7 @@ export async function suggestProblems(vertical: string): Promise<{ problems: str
 }
 
 /** Given a problem statement, propose verticals that feel it most acutely (+ fit + angle). */
-export async function suggestVerticalsForProblem(problem: string, exclude: string[] = []): Promise<VerticalIdea[]> {
+export async function suggestVerticalsForProblem(problem: string, exclude: string[] = [], icp: string = ICP_FIT): Promise<VerticalIdea[]> {
   const ex = new Set(exclude.map((s) => s.toLowerCase().trim()));
   const curated = () => CURATED.filter((c) => !ex.has(c.vertical.toLowerCase())).slice(0, 5).map((c) => ({ ...c, source: "rules" as const }));
   if (!problem.trim() || !aiAvailable()) return curated();
@@ -105,7 +106,7 @@ export async function suggestVerticalsForProblem(problem: string, exclude: strin
     const out = await complete({
       system: voiceSystemPrompt(),
       user: [
-        ICP_FIT,
+        icp,
         `We want to sell ConversionIQ by leading with this problem:\n"${problem.trim()}"`,
         `Propose 5 specific verticals that feel THIS problem most acutely and are a strong ICP fit${exclude.length ? ` (exclude: ${exclude.join(", ")})` : ""}.`,
         `For each: vertical, fit (1-10), why (one sentence), angle (one-line cold-open hook for that vertical, tied to the problem).`,

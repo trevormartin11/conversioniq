@@ -1,6 +1,6 @@
 "use server";
 
-import { ensureData, getCampaigns, getReplies, getVariants } from "@/lib/data/store";
+import { ensureData, getCampaigns, getIcp, getReplies, getVariants } from "@/lib/data/store";
 import { deriveLearnings } from "@/lib/ai/learnings";
 import { generateSequence, rewriteCopy, type GeneratedStep } from "@/lib/ai/copy";
 import { proposeVerticals, suggestProblems, suggestTitles, suggestVerticalsForProblem } from "@/lib/ai/strategy";
@@ -29,15 +29,17 @@ export async function suggestVerticalsAction(problem?: string): Promise<{ ideas:
   await ensureData();
   const running = Array.from(new Set(getCampaigns().map((c) => c.vertical)));
   const learnings = deriveLearnings(getVariants(), getReplies().map((r) => r.classification));
+  const icp = getIcp() ?? undefined; // operator-edited ICP steers the suggestions; undefined → built-in default
   const ideas = problem?.trim()
-    ? await suggestVerticalsForProblem(problem, running)
-    : await proposeVerticals(running, learnings.map((l) => ({ theme: l.theme, insight: l.insight })));
+    ? await suggestVerticalsForProblem(problem, running, icp)
+    : await proposeVerticals(running, learnings.map((l) => ({ theme: l.theme, insight: l.insight })), icp);
   return { ideas: ideas.map((i) => ({ vertical: i.vertical, angle: i.angle, fit: i.fit })) };
 }
 
 /** Suggest the specific problems CIQ solves for a vertical (cold-open ready). */
 export async function suggestProblemsAction(vertical: string): Promise<{ problems: string[] }> {
-  return { problems: (await suggestProblems(vertical)).problems };
+  await ensureData();
+  return { problems: (await suggestProblems(vertical, getIcp() ?? undefined)).problems };
 }
 
 /** Suggest buyer titles/roles that own the problem in a vertical. */
