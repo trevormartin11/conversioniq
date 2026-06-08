@@ -404,6 +404,19 @@ export async function deleteCampaign(id: string, actor: string): Promise<Campaig
 // --- leads (sourced -> persisted with attribution at source) ----------------
 export type NewLead = Omit<Lead, "id" | "createdAt">;
 
+/** Move any leads attached to one campaign over to another (used when a staging draft is replaced by
+ *  its canonical Instantly-linked campaign on push). Returns the number of leads moved. */
+export async function reassignCampaignLeads(fromId: string, toId: string, actor = "system"): Promise<number> {
+  const moving = db().leads.filter((l) => l.campaignId === fromId);
+  if (!moving.length) return 0;
+  for (const l of moving) l.campaignId = toId;
+  if (LIVE) {
+    await supabaseAdmin().from("leads").update({ campaign_id: toId }).eq("campaign_id", fromId);
+  }
+  await pushAudit(actor, "leads.reassigned", "campaign", toId, { from: fromId, count: moving.length });
+  return moving.length;
+}
+
 /** Bulk-insert sourced leads. Attribution (campaign/vertical/persona/domain/source) is
  *  baked into each record by the caller — it can't be reconstructed later. */
 export async function addLeads(inputs: NewLead[], actor = "system"): Promise<Lead[]> {
