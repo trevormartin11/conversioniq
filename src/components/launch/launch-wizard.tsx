@@ -6,6 +6,7 @@ import { Check, Clock, Loader2, Sparkles, Wand2 } from "lucide-react";
 import { Card, CardBody } from "@/components/ui/card";
 import { Tag } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { toast } from "@/components/ui/toast";
 import { cn } from "@/lib/utils";
 import {
   previewSequenceAction,
@@ -320,7 +321,10 @@ export function LaunchWizard({
     });
   }
 
-  function create() {
+  // Persist the in-progress build to the hub as a status:"draft" campaign (sequence saved with it).
+  // Shared by the footer "Save draft" (any step) and the final "Create campaign" — both just save a draft;
+  // launching happens later from the campaign page once inboxes are warm.
+  function saveDraft() {
     setError(null);
     start(async () => {
       const res = (await createCampaignAction({
@@ -334,7 +338,8 @@ export function LaunchWizard({
         setError(res.error ?? "Could not create campaign.");
         return;
       }
-      clearDraft(); // campaign is persisted — drop the in-progress draft
+      clearDraft(); // campaign is persisted server-side — drop the browser-local draft
+      toast.success("Draft saved — finish setup or launch it from the campaign page.");
       router.push(res.id ? `/campaigns/${res.id}` : "/campaigns");
       router.refresh();
     });
@@ -570,13 +575,20 @@ export function LaunchWizard({
 
           <div className="flex items-center justify-between pt-2">
             <Button variant="ghost" onClick={back} disabled={step === 0 || pending}>Back</Button>
-            {step < STEPS.length - 1 ? (
-              <Button variant="primary" onClick={nextStep} disabled={(step === 0 && !vertical.trim()) || pending}>Next</Button>
-            ) : (
-              <Button variant="primary" onClick={create} disabled={pending || !vertical.trim()}>
-                {pending ? "Creating…" : "Create campaign"}
-              </Button>
-            )}
+            <div className="flex items-center gap-2">
+              {/* Save the campaign as a draft to the hub from any step — survives across browsers and can be
+                  edited/finished from the campaign page. (The final "Create campaign" does the same thing.) */}
+              {step >= 1 && step < STEPS.length - 1 && (
+                <Button variant="secondary" onClick={saveDraft} disabled={pending || !vertical.trim()}>Save draft</Button>
+              )}
+              {step < STEPS.length - 1 ? (
+                <Button variant="primary" onClick={nextStep} disabled={(step === 0 && !vertical.trim()) || pending}>Next</Button>
+              ) : (
+                <Button variant="primary" onClick={saveDraft} disabled={pending || !vertical.trim()}>
+                  {pending ? "Creating…" : "Create campaign"}
+                </Button>
+              )}
+            </div>
           </div>
         </CardBody>
       </Card>
