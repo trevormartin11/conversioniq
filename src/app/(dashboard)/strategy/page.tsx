@@ -1,5 +1,6 @@
 import { Card, CardBody, PageHeader, SectionHeader } from "@/components/ui/card";
 import { Stat } from "@/components/ui/stat";
+import { Tag } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/charts";
 import { Lightbulb } from "lucide-react";
 import { IcpEditor } from "@/components/strategy/icp-editor";
@@ -59,22 +60,24 @@ export default async function StrategyPage() {
         <IcpEditor value={icp ?? ICP_FIT} custom={icp !== null} defaultText={ICP_FIT} />
       </section>
 
-      {/* What we've learned */}
+      {/* What we've learned — the single home for cross-campaign memory */}
       <section>
-        <SectionHeader title="What we've learned" subtitle="Signal from live replies + sequence performance — feeds the next move." />
+        <SectionHeader title="What we've learned" subtitle="Cross-campaign memory from live replies + sequence performance — applied to every new sequence, and feeds the next move in Analysis." />
         {learnings.length === 0 ? (
           <Card><CardBody className="text-sm text-slate-500">Not enough signal yet — insights appear as replies and sends accrue.</CardBody></Card>
         ) : (
           <div className="grid gap-3 sm:grid-cols-2">
-            {learnings.slice(0, 6).map((l, i) => (
+            {learnings.map((l, i) => (
               <Card key={i}>
-                <CardBody>
-                  <div className="flex items-start gap-2">
-                    <Lightbulb className="mt-0.5 h-4 w-4 shrink-0 text-brand-400" />
-                    <div>
-                      <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">{l.theme}</p>
-                      <p className="mt-1 text-sm text-slate-300">{l.insight}</p>
+                <CardBody className="flex gap-3">
+                  <Lightbulb className="mt-0.5 h-4 w-4 shrink-0 text-brand-400" />
+                  <div className="flex-1">
+                    <div className="flex items-center justify-between gap-2">
+                      <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">{l.theme}</p>
+                      <Tag tone={l.tone === "win" ? "ok" : l.tone === "watch" ? "warn" : "slate"}>{l.tone === "seed" ? "playbook" : l.tone}</Tag>
                     </div>
+                    <p className="mt-1 text-sm text-slate-200">{l.insight}</p>
+                    <p className="mt-0.5 text-[11px] text-slate-500">{l.evidence}</p>
                   </div>
                 </CardBody>
               </Card>

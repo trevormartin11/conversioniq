@@ -22,7 +22,7 @@ export interface RoutedSource {
   provider: SourceProvider;
   reason: string;
   needsEmailEnrichment: boolean; // Maps records have no email -> enrich step required
-  paid: boolean; // true -> spend routes through the credit guard
+  paid: boolean; // true -> costs provider credits (meters on Leads → Credits & budget)
 }
 
 /** A sourced lead, normalized across providers. Email is absent until enriched/revealed. */

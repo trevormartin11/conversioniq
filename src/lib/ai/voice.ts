@@ -20,14 +20,14 @@ export const CIQ_PRODUCT = {
 
   // Plain description of what it does, for grounding (not for parroting in replies).
   whatItIs:
-    "ConversionIQ gives a business AI sales agents that work every channel — social comments and DMs, website chat, SMS, WhatsApp — answering instantly in the brand's own voice, 24/7. One shared 'brain' remembers every conversation across channels and sessions (a chat that pauses on the website resumes over text the next day), resolves who an anonymous visitor is without a form or login, recommends the offer that's both right for the buyer and profitable for the business, and books the sale — with no human in the loop.",
+    "ConversionIQ gives a business AI sales agents for its social and text channels — comments and DMs, SMS, WhatsApp — answering instantly in the brand's own voice, 24/7. One shared 'brain' remembers every conversation across channels and sessions (a thread that pauses in a DM resumes over text the next day), resolves who an anonymous visitor is without a form or login, recommends the offer that's both right for the buyer and profitable for the business, and books the sale — approval-first: the business sets the voice and the rules, and signs off on anything sensitive.",
 
   positioning:
     "An intelligent layer over the existing stack (Salesforce, HubSpot, Zoho, GoHighLevel, and anything with an API) — not a CRM replacement. It captures and converts the conversations the CRM never sees, and hands every interaction back as first-party data the business owns.",
 
   // The distinct capabilities, for accurate grounding. Use to answer specifics, not to recite.
   capabilities: [
-    "Omnichannel agents: comments, DMs, website chat, SMS and WhatsApp — one intelligence across all of them, not a separate bot per channel.",
+    "Channel coverage: social comments, DMs, SMS and WhatsApp — one intelligence across all of them, not a separate bot per channel. (A website-chat agent is on the roadmap, NOT live — never claim it as a current capability.)",
     "Memory that never drops a conversation: continuous across channels, sessions and devices, so it picks up exactly where the customer left off.",
     "Identity resolution: identifies otherwise-anonymous visitors via a deep link — no form, no login — and appends demographic, sociographic and transactional data.",
     "Margin intelligence: matches what the customer wants to live inventory and recommends the package that's right for them AND most profitable for the business.",
@@ -54,7 +54,7 @@ export const CIQ_PRODUCT = {
     "Won't it sound like a robot / embarrass my brand?":
       "You set the voice and the rules, it stays inside them, and anything sensitive routes to your team. No rogue replies.",
     "We already have a chatbot.":
-      "This isn't a scripted website bot — it's one sales agent across every channel, with memory, the ability to identify anonymous visitors, and recommendations that factor in your margins. It closes, it doesn't just deflect.",
+      "This isn't a scripted website bot — it's one sales agent across your social and text channels, with memory, the ability to identify anonymous visitors, and recommendations that factor in your margins. It closes, it doesn't just deflect.",
     "Does it really work without a form or login?":
       "Yes — a deep link resolves the visitor's identity and enriches it, so you learn who they are and what they want without making them fill anything out.",
     "Does it replace my CRM/scheduler?":
@@ -105,7 +105,7 @@ Mind if I show you how a few are catching those automatically?
 Subject: quick one
 {{firstName}},
 Most of your site traffic never says who they are — they look, leave, and you never knew they were there.
-What I mentioned basically fixes that: an AI that answers every comment, DM and chat in your voice, works out who the anonymous ones are without a form, and books them — wherever they are, web or text.
+What I mentioned basically fixes that: an AI that answers every comment, DM and text in your voice, works out who the anonymous ones are without a form, and books them — on whichever channel they're already in.
 Open to a 60-second look?
 {{senderFirstName}}`;
 

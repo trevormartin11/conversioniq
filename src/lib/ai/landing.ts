@@ -18,11 +18,11 @@ export function rulesLanding(vertical: string, problem?: string): LandingContent
   return {
     vertical: v,
     seoTitle: `AI Sales Agent for ${v} | ConversionIQ`,
-    seoDescription: `ConversionIQ answers every web, text, and social inquiry for ${v} in your brand's voice, 24/7 — qualifies the lead and books the appointment before a competitor replies.`,
+    seoDescription: `ConversionIQ answers every text and social inquiry for ${v} in your brand's voice, 24/7 — qualifies the lead and books the appointment before a competitor replies.`,
     hero: {
-      eyebrow: "Autonomous AI sales agents for web, SMS & social",
+      eyebrow: "AI sales agents for SMS & social",
       headline: `Stop losing ${v} bookings to whoever replies first`,
-      subhead: `ConversionIQ answers every web, text, and social message in your brand's voice — 24/7 — qualifies the inquiry, and books it straight to your calendar. Live in minutes, works with your CRM.`,
+      subhead: `ConversionIQ answers every text and social message in your brand's voice — 24/7 — qualifies the inquiry, and books it straight to your calendar. Live in minutes, works with your CRM.`,
       primaryCta: "Book a demo",
       secondaryCta: "See it in action",
     },
@@ -64,7 +64,7 @@ export async function generateLandingContent(input: { vertical: string; problem?
     const out = await complete({
       system: voiceSystemPrompt(),
       user: [
-        `Write the copy for a single landing page selling ConversionIQ — autonomous AI sales agents that answer a business's inbound web, SMS, and social messages 24/7, qualify the lead, and book the appointment — targeted at "${input.vertical}".`,
+        `Write the copy for a single landing page selling ConversionIQ — AI sales agents that answer a business's inbound SMS and social messages 24/7, qualify the lead, and book the appointment — targeted at "${input.vertical}".`,
         input.problem ? `Lead with this specific pain: ${input.problem}` : "",
         input.brief ? `Context from the outreach campaign: ${input.brief}` : "",
         "Mirror conversioniq.ai: confident, concrete, benefit-led; speak to the vertical's real after-hours/ speed-to-lead pain; emphasize brand-safe, you-control-it, books-to-calendar, CRM-sync, live-in-minutes. Keep it tight — no fluff, no fake stats.",

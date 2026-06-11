@@ -53,10 +53,10 @@ OAuth refresh-token flow; the app mints hourly access tokens automatically. Read
 
 ```
 APOLLO_PERSONAL_API_KEY=...   # search + enrich (free)
-APOLLO_CIQ_API_KEY=...        # paid credits — HARD-GATED, never auto-spent
+APOLLO_CIQ_API_KEY=...        # paid credits — the hub never spends these
 ```
 - Discovery → enrich **by id** (search returns no email/domain).
-- The CIQ key is only ever touched by an approved, audit-logged spend (see Credit Guard).
+- The CIQ key is never touched by the hub today — the meter on Leads is visibility only.
 
 ## 6. Gmail (reply fallback)
 

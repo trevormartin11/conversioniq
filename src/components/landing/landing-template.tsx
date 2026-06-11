@@ -135,7 +135,7 @@ export function LandingTemplate({
       </section>
 
       <footer className="border-t border-white/[0.06] py-8 text-center text-xs text-slate-600">
-        © {new Date().getFullYear()} ConversionIQ · Autonomous AI sales agents for web, SMS &amp; social
+        © {new Date().getFullYear()} ConversionIQ · AI sales agents for SMS &amp; social
       </footer>
     </div>
   );

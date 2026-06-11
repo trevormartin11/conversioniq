@@ -1,4 +1,4 @@
-import { CheckCircle2, Circle, ExternalLink, LogOut } from "lucide-react";
+import { CheckCircle2, Circle, LogOut } from "lucide-react";
 import { Card, CardBody, PageHeader, SectionHeader } from "@/components/ui/card";
 import { Tag } from "@/components/ui/badge";
 import { logoutAction } from "@/app/login/actions";
@@ -94,7 +94,7 @@ export default async function SettingsPage() {
           </CardBody></Card>
           <Card><CardBody>
             <p className="text-xs uppercase tracking-wide text-slate-500">CIQ credits</p>
-            <p className="mt-1 text-sm text-slate-200">Hard-gated. Never auto-spent — request → approve → execute, all logged.</p>
+            <p className="mt-1 text-sm text-slate-200">Never spent by the hub — sourcing runs on your own provider keys. Balances are visible on Leads.</p>
           </CardBody></Card>
         </div>
       </section>
@@ -109,9 +109,6 @@ export default async function SettingsPage() {
         </Card>
       </section>
 
-      <a href="https://code.claude.com/docs/en/claude-code-on-the-web" target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-xs text-brand-400 hover:underline">
-        Remote environment docs <ExternalLink className="h-3 w-3" />
-      </a>
     </div>
   );
 }

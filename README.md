@@ -32,7 +32,7 @@ npm run lint       # next lint
 | **Command Center** (`/`) | Today's sends/replies/positives/demos, replies-by-type, 14-day trend, per-campaign health cards (🟢🟡🔴), deliverability glance, alerts. Built for a 10-second phone read. |
 | **Reply Approval** (`/replies`) | Every reply in one place, AI-classified, AI/rules-drafted response, one-tap approve / edit / send. The **automation dial** (approve-all → auto-safe → mostly-auto). Auto-suppress on negative/unsubscribe; snooze on OOO. |
 | **Leads & Suppression** (`/leads`) | Master lead table, the global suppression universe, **load-time dedupe** of a new list, and a **"have we touched this person/domain?"** checker. |
-| **Credit Guard** (`/credits`) | Live Apollo meters. CIQ credits are **hard-gated** — request → partner approval → execute — every spend audit-logged. Never auto-spent. |
+| **Credits & budget** (on `/leads`) | Live provider credit meters next to where you spend them. CIQ credits are never spent by the hub — sourcing runs on your own keys. |
 
 ## Scaffolded for Phase 2 / 3
 

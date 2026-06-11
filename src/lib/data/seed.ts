@@ -16,7 +16,6 @@ import type {
   ConsentRecord,
   Cost,
   CreditMeter,
-  CreditSpendRequest,
   Dataset,
   DailyMetric,
   Demo,
@@ -216,7 +215,7 @@ const replySeeds: ReplySeed[] = [
     lead: 11, cls: "question", hot: true, conf: 0.9,
     subject: "Re: AI booking for Glow Aesthetics",
     body: "Does this just replace our scheduler, or does it work with what we already use? We're on a GoHighLevel setup.",
-    draft: "Good question — it doesn't replace it. It works alongside GoHighLevel, so nothing you've built goes away; it just answers the DMs, comments and site chat and books into what you already use. Easiest to see it live — worth a quick 15 minutes this week?\n\nTrevor",
+    draft: "Good question — it doesn't replace it. It works alongside GoHighLevel, so nothing you've built goes away; it just answers the DMs, comments and texts and books into what you already use. Easiest to see it live — worth a quick 15 minutes this week?\n\nTrevor",
   },
   {
     lead: 21, cls: "objection", conf: 0.84,
@@ -258,7 +257,7 @@ const replySeeds: ReplySeed[] = [
     lead: 8, cls: "interested", hot: true, conf: 0.93,
     subject: "Re: never miss a lead at Lux Med Spa",
     body: "We definitely miss inquiries on Instagram DMs. What does pricing look like?",
-    draft: "Yep — the IG DMs are the classic leak. It answers those, plus comments and site chat, in your voice and books the consult. On pricing, the team tailors it on the demo since it depends on your volume and channels, and there's a free trial to start. Want a quick 15-minute walkthrough this week?\n\nTrevor",
+    draft: "Yep — the IG DMs are the classic leak. It answers those, plus comments and texts, in your voice and books the consult. On pricing, the team tailors it on the demo since it depends on your volume and channels, and there's a free trial to start. Want a quick 15-minute walkthrough this week?\n\nTrevor",
   },
   {
     lead: 19, cls: "question", conf: 0.78,
@@ -312,16 +311,11 @@ const creditMeters: CreditMeter[] = [
   { provider: "apollo_personal", label: "Apollo — Personal (search + enrich)", used: 12480, total: 25000, resetsAt: daysAgo(-12), gated: false, lastSyncedAt: minsAgo(15) },
   { provider: "apollo_ciq", label: "Apollo — CIQ (paid credits)", used: 820, total: 5000, resetsAt: daysAgo(-20), gated: true, lastSyncedAt: minsAgo(15) },
 ];
-const creditRequests: CreditSpendRequest[] = [
-  { id: "cr_1", provider: "apollo_ciq", amount: 500, reason: "Enrich 500 net-new Home Services leads (Jon) for c_home launch", requestedBy: "Jon Epstein", status: "pending", decidedBy: null, createdAt: hoursAgo(3), decidedAt: null },
-];
-
 // --- audit log --------------------------------------------------------------
 const audit: AuditEvent[] = [
   { id: "a_1", actor: "Trevor Martin", action: "reply.approved", entity: "reply", entityId: "r_0", meta: { lead: "Sarah Johnson" }, createdAt: hoursAgo(2) },
   { id: "a_2", actor: "system", action: "lead.suppressed", entity: "lead", entityId: leads[63].id, meta: { reason: "negative" }, createdAt: hoursAgo(4) },
   { id: "a_3", actor: "system", action: "inbox.auto_paused", entity: "inbox", entityId: tripped?.id ?? "", meta: { bounceRate: 0.071 }, createdAt: hoursAgo(6) },
-  { id: "a_4", actor: "Jon Epstein", action: "credit.spend_requested", entity: "apollo_ciq", entityId: "cr_1", meta: { amount: 500 }, createdAt: hoursAgo(3) },
 ];
 
 // --- jobs -------------------------------------------------------------------
@@ -414,7 +408,7 @@ const outreach: OutreachMessage[] = [
 export function buildSeed(): Dataset {
   return {
     users, personas, domains, inboxes, campaigns, leads, replies,
-    suppression, creditMeters, creditRequests, audit, jobs, demos,
+    suppression, creditMeters, audit, jobs, demos,
     variants, metrics, alerts, costs, consent, channelAccounts, outreach,
     landingPages: [],
   };

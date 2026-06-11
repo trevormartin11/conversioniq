@@ -17,9 +17,9 @@ export interface VerticalIdea {
   source: "ai" | "rules";
 }
 
-/** What makes a vertical a strong fit for ConversionIQ's omnichannel, anonymous-visitor-capturing sales agents. */
+/** What makes a vertical a strong fit for ConversionIQ's always-on social + SMS sales agents. */
 export const ICP_FIT =
-  "ConversionIQ gives a business AI sales agents across every channel — social comments and DMs, website chat, SMS, WhatsApp — that answer instantly in the brand's voice, remember every conversation, identify otherwise-anonymous visitors without a form or login, recommend the offer that's right for the buyer AND profitable for the business, and book the sale with no human in the loop. Best-fit verticals share several of: meaningful inbound traffic and social engagement that today goes anonymous or unanswered; high value per customer or per order; an offer/catalog with enough margin variation to be worth steering; heavy after-hours or overflow demand; and a reachable owner/operator who feels the leak.";
+  "ConversionIQ gives a business AI sales agents for its social and text channels — comments, DMs, SMS, WhatsApp — that answer instantly in the brand's voice 24/7, remember every conversation, recommend the offer that's right for the buyer AND profitable for the business, and book the sale (approval-first: the business signs off on anything sensitive). It can also put a name to otherwise-anonymous visitors via a deep link — no form or login. Best-fit verticals share several of: meaningful inbound and social engagement that today goes unanswered; high value per customer or per order; an offer/catalog with enough margin variation to be worth steering; heavy after-hours or overflow demand; and a reachable owner/operator who feels the leak.";
 
 const CURATED: Omit<VerticalIdea, "source">[] = [
   { vertical: "Med Spas", fit: 9, why: "High-ticket treatments, heavy after-hours DM/comment volume, owner-operated.", angle: "the 9pm 'how much is Botox?' DM that books with whoever answers first — plus the site visitors who never say who they are." },
@@ -73,7 +73,7 @@ export async function suggestProblems(vertical: string, icp: string = ICP_FIT): 
     const hit = CURATED.find((c) => c.vertical.toLowerCase() === v.toLowerCase() || (v && c.vertical.toLowerCase().includes(v.toLowerCase().split(" ")[0])));
     return [
       ...(hit ? [hit.angle] : []),
-      `After-hours DMs, comments and site chats for ${v || "them"} go unanswered, so booking-ready buyers leak to whoever replies first.`,
+      `After-hours DMs, comments and texts for ${v || "them"} go unanswered, so booking-ready buyers leak to whoever replies first.`,
       `Most of ${v || "their"} site and ad traffic stays anonymous — people look, leave, and are never identified or followed up with.`,
     ].slice(0, 3);
   };

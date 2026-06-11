@@ -20,7 +20,7 @@ function rulesDraft(reply: ReplyLike, lead: LeadLike, senderName: string): Draft
   const company = lead?.company || "your business";
   const map: Partial<Record<ReplyClass, string>> = {
     interested: `Love it, ${name}. Quickest way to show you is a 30-second example of it catching the after-hours messages and anonymous visitors ${company} is losing right now. Want me to send that over, or grab 15 min this week?\n\n${senderName}`,
-    question: `Good question, ${name}. Short version: it answers your DMs, comments and site chat in your brand's voice 24/7, works out who the anonymous visitors are without a form, and books them — across web and text. Happy to show you live — worth a quick look?\n\n${senderName}`,
+    question: `Good question, ${name}. Short version: it answers your DMs, comments and texts in your brand's voice 24/7, works out who the anonymous visitors are without a form, and books them — on whichever channel they're already in. Happy to show you live — worth a quick look?\n\n${senderName}`,
     objection: `Totally fair, ${name} — that's the first thing owners worry about. You set the voice and the rules, it stays inside them, and anything sensitive routes to your team. No rogue replies. Easier to judge seeing it live — open to a peek?\n\n${senderName}`,
     not_now: `No worries at all, ${name}. I'll circle back later. If the missed after-hours messages and anonymous visitors ever start bugging you, just reply "demo" and I'll show you how others are catching them automatically.\n\n${senderName}`,
     referral: `Appreciate it, ${name} — I'll reach out to them directly and keep you off the thread. Thanks!\n\n${senderName}`,

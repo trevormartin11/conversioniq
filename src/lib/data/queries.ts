@@ -10,7 +10,6 @@ import {
   getCampaigns,
   getCosts,
   getCreditMeters,
-  getCreditRequests,
   getDemos,
   getInboxes,
   getLeads,
@@ -136,7 +135,6 @@ export interface CommandSummary {
   today: { sends: number; opens: number; replies: number; positives: number; bounces: number; demos: number };
   queueDepth: number;
   hotCount: number;
-  creditApprovals: number;
   pausedInboxes: number;
   demosBooked: number;
   replyClassCounts: Record<ReplyClass, number>;
@@ -159,7 +157,6 @@ export function commandSummary(): CommandSummary {
   // Alerts are derived live from current state (paused inboxes, gated spend, hot replies).
   const now = new Date().toISOString();
   const paused = getInboxes().filter((i) => i.status === "paused");
-  const pendingCredits = getCreditRequests().filter((r) => r.status === "pending");
   const pendingReplies = replies.filter((r) => r.status === "pending");
   const hotPending = pendingReplies.filter((r) => r.hot);
   const alerts: Alert[] = [];
@@ -178,7 +175,6 @@ export function commandSummary(): CommandSummary {
     },
     queueDepth: pendingReplies.length,
     hotCount: hotPending.length,
-    creditApprovals: pendingCredits.length,
     pausedInboxes: paused.length,
     demosBooked: getDemos().filter((d) => d.status === "booked").length,
     replyClassCounts,
