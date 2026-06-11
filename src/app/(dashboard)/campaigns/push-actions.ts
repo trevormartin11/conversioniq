@@ -1,6 +1,6 @@
 "use server";
 
-import { ensureData, getCampaign, getCampaigns, getInboxes, getLeads, getVariants } from "@/lib/data/store";
+import { ensureData, getCampaign, getCampaigns, getInboxes, getLeads, getVariants, isSuppressed } from "@/lib/data/store";
 import {
   addLeadsToCampaign,
   createInstantlyCampaign,
@@ -212,7 +212,9 @@ export async function executeTimezoneSplitAction(campaignId: string): Promise<{ 
   const { from, to } = optimalWindowHHMM();
   const results: TzSplitResultRow[] = [];
   for (const tz of ["ET", "CT", "MT", "PT"] as const) {
-    const bucket = leads.filter((l) => leadTimezone(l) === tz);
+    // Re-apply the suppression gate at split time — a lead suppressed since the original load
+    // must not be re-introduced to sending in a child campaign.
+    const bucket = leads.filter((l) => leadTimezone(l) === tz && !isSuppressed(l.email).suppressed);
     if (!bucket.length) continue;
     const label = `${TZ_LABEL[tz]} (${bucket.length})`;
     try {

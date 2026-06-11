@@ -149,6 +149,7 @@ function AccountRow({ account }: { account: ChannelAccount }) {
   const paused = account.status === "pending";
   const dirty = cap !== account.dailyCap || tenDlc !== account.tenDlc;
   const overSafe = cap > SAFE_CAP[account.channel];
+  const [confirmRemove, setConfirmRemove] = useState(false);
 
   function run(fn: () => Promise<{ ok: boolean; error?: string }>, okMsg?: string) {
     start(async () => {
@@ -202,9 +203,18 @@ function AccountRow({ account }: { account: ChannelAccount }) {
             <Button size="sm" variant="ghost" disabled={busy} onClick={() => run(() => updateChannelAccountAction(account.id, { status: paused ? "active" : "pending" }), paused ? "Activated" : "Paused")}>
               {paused ? <><Play className="h-3.5 w-3.5" /> Activate</> : <><Pause className="h-3.5 w-3.5" /> Pause</>}
             </Button>
-            <Button size="sm" variant="ghost" disabled={busy} onClick={() => run(() => removeChannelAccountAction(account.id), "Account removed")}>
-              <Trash2 className="h-3.5 w-3.5" /> Remove
-            </Button>
+            {confirmRemove ? (
+              <>
+                <Button size="sm" variant="danger" disabled={busy} onClick={() => run(() => removeChannelAccountAction(account.id), "Account removed")}>
+                  <Trash2 className="h-3.5 w-3.5" /> Confirm
+                </Button>
+                <Button size="sm" variant="ghost" disabled={busy} onClick={() => setConfirmRemove(false)}>Cancel</Button>
+              </>
+            ) : (
+              <Button size="sm" variant="ghost" disabled={busy} onClick={() => setConfirmRemove(true)}>
+                <Trash2 className="h-3.5 w-3.5" /> Remove
+              </Button>
+            )}
           </div>
         </div>
         {overSafe && <p className="text-[11px] text-amber-300">Above the safe pace for {OUTREACH_CHANNEL_LABELS[account.channel]} (~{SAFE_CAP[account.channel]}/day).</p>}
