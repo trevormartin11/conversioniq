@@ -56,3 +56,24 @@ export async function decideReply(input: ReplyDecisionInput): Promise<ReplyDecis
   const hot = (appConfig.hotClasses as readonly string[]).includes(cls);
   return { aiDraft, draftSource, status, suppress, isOoo, hot };
 }
+
+export interface InboxSendState {
+  status: string;
+  sentToday: number;
+  dailyCap: number;
+}
+
+export type InboxGateReason = "unknown_inbox" | "paused" | "cap_reached";
+
+/**
+ * Can this inbox carry an automated reply right now? Fail closed: a paused inbox is
+ * protecting domain reputation, an inbox at its daily cap must not exceed it, and an
+ * inbox we don't track can't be verified — in every blocked case the reply falls back
+ * to the human queue instead of silently sending through a bad inbox.
+ */
+export function inboxAutoSendGate(inbox: InboxSendState | null | undefined): { ok: boolean; reason: InboxGateReason | null } {
+  if (!inbox) return { ok: false, reason: "unknown_inbox" };
+  if (inbox.status === "paused") return { ok: false, reason: "paused" };
+  if (inbox.sentToday >= inbox.dailyCap) return { ok: false, reason: "cap_reached" };
+  return { ok: true, reason: null };
+}

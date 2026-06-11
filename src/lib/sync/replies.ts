@@ -4,7 +4,7 @@ import { chunkedUpsert, supabaseAdmin } from "@/lib/data/supabase";
 import { classifyReply } from "@/lib/ai/classify";
 import { sendTelegram } from "@/lib/integrations/telegram";
 import { loadAutomationLevel } from "@/lib/data/live";
-import { decideReply } from "@/lib/replies/decide";
+import { decideReply, inboxAutoSendGate, type InboxSendState } from "@/lib/replies/decide";
 import { integrations } from "@/lib/config";
 import { stripHtml } from "@/lib/utils";
 import type { ReplyClass } from "@/lib/data/types";
@@ -36,12 +36,15 @@ export async function syncReplies(limit = 1000) {
     db.from("leads").select("id,email,first_name,company,vertical,title"),
     db.from("suppression").select("email"),
     db.from("campaigns").select("id"),
-    db.from("inboxes").select("id"),
+    db.from("inboxes").select("id,status,daily_cap,sent_today"),
   ]);
 
   const existing = new Set((existingReplies ?? []).map((r: { id: string }) => r.id));
   const campIds = new Set((campRows ?? []).map((r: { id: string }) => r.id));
-  const inboxIds = new Set((inboxRows ?? []).map((r: { id: string }) => r.id));
+  const inboxState = new Map<string, InboxSendState>();
+  for (const r of (inboxRows ?? []) as { id: string; status?: string; daily_cap?: number; sent_today?: number }[]) {
+    inboxState.set(r.id, { status: r.status ?? "", sentToday: Number(r.sent_today ?? 0), dailyCap: Number(r.daily_cap ?? 0) });
+  }
   const supEmails = new Set((supRows ?? []).map((r: { email: string | null }) => (r.email ?? "").toLowerCase()).filter(Boolean));
   const leadByEmail = new Map<string, LeadLite>();
   for (const l of (leadRows ?? []) as Record<string, string>[]) {
@@ -53,6 +56,9 @@ export async function syncReplies(limit = 1000) {
   const suppressions: Record<string, unknown>[] = [];
   let hotPings = 0;
   let autoSent = 0;
+  // Auto-sends made during THIS run, per inbox — counted against the daily cap so a burst of
+  // replies in one sync can't blow past it (the DB's sent_today only refreshes on inbox sync).
+  const sentThisRun = new Map<string, number>();
 
   for (const e of replies) {
     const id = `i_${e.id}`;
@@ -80,10 +86,17 @@ export async function syncReplies(limit = 1000) {
     // ever went out: the prospect got silence while the queue showed it handled.)
     if (status === "auto_sent") {
       const subject = (e.subject ?? "").toLowerCase().startsWith("re:") ? (e.subject ?? "") : `Re: ${e.subject ?? ""}`.trim();
-      if (integrations.instantly && e.eaccount && aiDraft?.trim()) {
+      // Inbox guard: never auto-send through a paused, capped-out, or untracked inbox.
+      const inboxId = e.eaccount ? `ib_${slug(e.eaccount)}` : "";
+      const state = inboxState.get(inboxId);
+      const gate = inboxAutoSendGate(state ? { ...state, sentToday: state.sentToday + (sentThisRun.get(inboxId) ?? 0) } : state);
+      if (!gate.ok) {
+        status = "pending"; // inbox can't carry the send — route to the human queue instead
+      } else if (integrations.instantly && e.eaccount && aiDraft?.trim()) {
         try {
           await replyToEmail({ replyToUuid: e.id, eaccount: e.eaccount, subject, bodyText: aiDraft });
           autoSent++;
+          sentThisRun.set(inboxId, (sentThisRun.get(inboxId) ?? 0) + 1);
         } catch {
           status = "pending"; // send failed — don't claim it was sent
         }
@@ -97,7 +110,7 @@ export async function syncReplies(limit = 1000) {
     rows.push({
       id, lead_id: lead?.id ?? null,
       campaign_id: e.campaign_id && campIds.has(`c_${e.campaign_id}`) ? `c_${e.campaign_id}` : null,
-      inbox_id: e.eaccount && inboxIds.has(`ib_${slug(e.eaccount)}`) ? `ib_${slug(e.eaccount)}` : null,
+      inbox_id: e.eaccount && inboxState.has(`ib_${slug(e.eaccount)}`) ? `ib_${slug(e.eaccount)}` : null,
       instantly_email_id: e.id,
       from_email: from, from_name: fromName, subject: e.subject ?? "", body: text,
       received_at: e.timestamp_email ?? now, classification: cls, confidence,
