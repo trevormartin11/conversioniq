@@ -74,9 +74,12 @@ async function apolloHealth(key: string | undefined): Promise<string> {
 export const probes: Partial<Record<IntegrationKey, () => Promise<string>>> = {
   supabase: async () => {
     const url = (process.env.NEXT_PUBLIC_SUPABASE_URL ?? "").replace(/\/+$/, "");
-    const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? "";
+    // Probe with the key the hub actually uses (the server-side service key, same fallback
+    // chain as supabaseAdmin). Projects with the Data API restricted to secret keys reject
+    // anon-tier keys outright — probing the anon key shows "Fail" while the app is healthy.
+    const key = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "";
     await probeFetch(`${url}/rest/v1/`, { headers: { apikey: key, Authorization: `Bearer ${key}` } });
-    return "URL + anon key valid";
+    return "URL + server key valid";
   },
   anthropic: async () => {
     await probeFetch("https://api.anthropic.com/v1/models?limit=1", {
