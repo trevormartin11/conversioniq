@@ -70,6 +70,12 @@ export function AppShell({
           </div>
         </header>
 
+        {dataMode === "mock" && (
+          <div role="status" className="border-b border-warn/20 bg-warn/10 px-3 py-2 text-center text-xs text-amber-200 md:px-6">
+            Sample data — every number here is seeded preview data, not your real pipeline.{" "}
+            <Link href="/settings" className="font-medium underline underline-offset-2 hover:text-amber-100">Connect Supabase in Settings</Link> to go live.
+          </div>
+        )}
         <main className="mx-auto w-full max-w-5xl flex-1 px-3 pb-28 pt-4 md:px-6 md:pb-10">{children}</main>
       </div>
 

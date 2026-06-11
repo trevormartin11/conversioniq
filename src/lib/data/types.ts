@@ -228,18 +228,6 @@ export interface CreditMeter {
   lastSyncedAt: string | null;
 }
 
-export interface CreditSpendRequest {
-  id: string;
-  provider: CreditProvider;
-  amount: number;
-  reason: string;
-  requestedBy: string;
-  status: "pending" | "approved" | "denied" | "executed";
-  decidedBy: string | null;
-  createdAt: string;
-  decidedAt: string | null;
-}
-
 export interface AuditEvent {
   id: string;
   actor: string;
@@ -441,7 +429,6 @@ export interface Dataset {
   replies: Reply[];
   suppression: SuppressionEntry[];
   creditMeters: CreditMeter[];
-  creditRequests: CreditSpendRequest[];
   audit: AuditEvent[];
   jobs: JobRun[];
   demos: Demo[];

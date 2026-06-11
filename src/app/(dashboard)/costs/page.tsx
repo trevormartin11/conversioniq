@@ -86,7 +86,7 @@ export default async function CostsPage() {
       <CostManager costs={costs} />
 
       <p className="text-xs text-slate-600">
-        Tip: Instantly, Apollo, and domain costs can later be pulled in automatically; for now add and edit them here. Apollo <em>credit</em> usage is tracked separately under Credit Guard.
+        Tip: Instantly, Apollo, and domain costs can later be pulled in automatically; for now add and edit them here. Provider <em>credit</em> meters live on Leads → Credits &amp; budget.
       </p>
     </div>
   );

@@ -1,11 +1,9 @@
+import Link from "next/link";
 import { Card, CardBody, PageHeader, SectionHeader } from "@/components/ui/card";
 import { Stat } from "@/components/ui/stat";
-import { Tag } from "@/components/ui/badge";
-import { attribution, lostReasons, sourcingRecommendations, pipeline, residual, outcomeLoop, projection } from "@/lib/data/queries";
+import { pipeline, residual, outcomeLoop, projection } from "@/lib/data/queries";
 import { ensureData, getDemos, getLead } from "@/lib/data/store";
 import { DemoTracker, type DemoRow } from "@/components/pipeline/demo-tracker";
-import { AttributionView } from "@/components/pipeline/attribution-view";
-import { DEMO_LOST_REASON_LABELS } from "@/lib/data/types";
 import { num, pct, titleCase, usd } from "@/lib/format";
 
 export const dynamic = "force-dynamic";
@@ -32,15 +30,6 @@ export default async function PipelinePage() {
       reminderSentAt: d.reminderSentAt,
     };
   });
-  const attr = {
-    vertical: attribution("vertical"),
-    persona: attribution("persona"),
-    source: attribution("source"),
-    sendingDomain: attribution("sendingDomain"),
-  };
-  const lost = lostReasons();
-  const recs = sourcingRecommendations();
-
   return (
     <div className="space-y-6">
       <PageHeader title="Pipeline & Residual" subtitle="Funnel from contacted → closed, the demo tracker, and your 20%-split-3-ways residual." />
@@ -95,47 +84,9 @@ export default async function PipelinePage() {
         </div>
       </section>
 
-      {/* Attribution — which cell converts (from the at-source tags) */}
-      <section>
-        <SectionHeader title="Attribution" subtitle="Which vertical / persona / source / sending domain converts to MRR — from the tags set at source" />
-        <AttributionView data={attr} />
-        {lost.length > 0 && (
-          <Card className="mt-3">
-            <CardBody>
-              <p className="mb-2.5 text-xs font-medium uppercase tracking-wide text-slate-500">Why demos are lost — the training signal back from each demo</p>
-              <div className="space-y-1.5">
-                {lost.map((l) => (
-                  <div key={l.reason} className="flex items-center gap-2.5 text-sm">
-                    <span className="w-32 shrink-0 text-slate-300">{DEMO_LOST_REASON_LABELS[l.reason]}</span>
-                    <div className="h-2 flex-1 overflow-hidden rounded bg-white/5">
-                      <div className="h-full rounded bg-rose-500/60" style={{ width: `${Math.max(4, (l.count / lost[0].count) * 100)}%` }} />
-                    </div>
-                    <span className="w-6 text-right font-mono tabular-nums text-slate-400">{l.count}</span>
-                  </div>
-                ))}
-              </div>
-            </CardBody>
-          </Card>
-        )}
-        {recs.length > 0 && (
-          <Card className="mt-3">
-            <CardBody>
-              <p className="mb-2.5 text-xs font-medium uppercase tracking-wide text-slate-500">Recommended sourcing moves — feed budget into what closes</p>
-              <div className="space-y-2">
-                {recs.map((r) => (
-                  <div key={r.vertical} className="flex items-start gap-2.5 text-sm">
-                    <Tag tone={r.action === "scale" ? "ok" : r.action === "cut" ? "bad" : "warn"}>{r.action}</Tag>
-                    <div className="min-w-0">
-                      <span className="font-medium text-slate-200">{r.vertical}</span>
-                      <span className="ml-1.5 text-xs text-slate-500">{r.reason}</span>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </CardBody>
-          </Card>
-        )}
-      </section>
+      <p className="text-xs text-slate-500">
+        Which verticals, personas and domains convert — and why demos are lost — lives in <Link href="/analysis" className="font-medium text-brand-400 hover:text-brand-300">Analysis →</Link>
+      </p>
 
       {/* Residual */}
       <section>

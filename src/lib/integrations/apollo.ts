@@ -1,7 +1,7 @@
 /**
- * Apollo client — DATA (search + enrich). Two keys, kept strictly separate:
- *   - personal: search + enrich (free)
- *   - CIQ: paid credits — HARD RULE: never spend without explicit, gated approval
+ * Apollo client — DATA (search + enrich). Uses the PERSONAL key only.
+ * The CIQ (paid-credit) key is never touched by the hub today — if CIQ-credit
+ * enrichment is ever wired up, it must get its own explicitly confirmed spend path.
  *
  * Verified realities (brief):
  *   - Enrich BY ID returns real email + domain + phone:
@@ -11,7 +11,7 @@
  *   - Technographic filters are ~useless for SMB — do not gate targeting on them.
  */
 import { integrations } from "@/lib/config";
-import { httpJson, IntegrationError, NotConfiguredError } from "./http";
+import { httpJson, NotConfiguredError } from "./http";
 
 const BASE = "https://api.apollo.io/v1";
 
@@ -34,26 +34,6 @@ export async function enrichById(id: string): Promise<unknown> {
   return httpJson("apollo", `${BASE}/people/match`, {
     method: "POST",
     headers: { "X-Api-Key": personalKey(), "content-type": "application/json" },
-    body: JSON.stringify({ id }),
-  });
-}
-
-/**
- * Spend CIQ (paid) credits. This is the ONLY function that touches the CIQ key
- * and it REFUSES to run unless an approved gate is passed in. The credit guard
- * UI/flow is responsible for obtaining that approval and audit-logging it.
- */
-export async function enrichWithCiqCredits(
-  id: string,
-  approval: { approvedRequestId: string; approvedBy: string },
-): Promise<unknown> {
-  if (!integrations.apolloCiq) throw new NotConfiguredError("apollo (CIQ)");
-  if (!approval?.approvedRequestId || !approval?.approvedBy) {
-    throw new IntegrationError("apollo (CIQ)", "refused: CIQ credit spend requires an approved, audit-logged request");
-  }
-  return httpJson("apollo", `${BASE}/people/match`, {
-    method: "POST",
-    headers: { "X-Api-Key": process.env.APOLLO_CIQ_API_KEY!, "content-type": "application/json" },
     body: JSON.stringify({ id }),
   });
 }

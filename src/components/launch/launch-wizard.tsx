@@ -434,7 +434,7 @@ export function LaunchWizard({
                   value={problem}
                   onChange={(e) => setProblem(e.target.value)}
                   rows={3}
-                  placeholder="e.g. After-hours DMs and website chats go unanswered, so booking-ready buyers quietly leak to whoever replies first."
+                  placeholder="e.g. After-hours DMs and texts go unanswered, so booking-ready buyers quietly leak to whoever replies first."
                   className="mt-1 w-full rounded-lg border border-ink-700 bg-ink-950 px-3 py-2 text-sm text-slate-200 focus:border-brand-500 focus:outline-none"
                 />
                 {problemOpts.length > 0 && (

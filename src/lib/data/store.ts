@@ -18,7 +18,6 @@ import type {
   ConsentSource,
   ConsentStatus,
   Cost,
-  CreditSpendRequest,
   Dataset,
   Demo,
   DemoLostReason,
@@ -111,7 +110,6 @@ export const getLeads = () => db().leads;
 export const getReplies = () => db().replies;
 export const getSuppression = () => db().suppression;
 export const getCreditMeters = () => db().creditMeters;
-export const getCreditRequests = () => db().creditRequests;
 export const getAudit = () => [...db().audit].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
 export const getJobs = () => db().jobs;
 export const getDemos = () => db().demos;
@@ -271,48 +269,6 @@ export function searchUniverse(query: string) {
       (s) => s.email?.toLowerCase().includes(q) || s.domain?.toLowerCase().includes(q),
     ).slice(0, 50),
   };
-}
-
-// --- credit guard -----------------------------------------------------------
-export async function decideCreditRequest(id: string, decision: "approved" | "denied", actor: string): Promise<CreditSpendRequest | null> {
-  const req = db().creditRequests.find((r) => r.id === id);
-  if (!req) return null;
-  if (req.status !== "pending") return null; // terminal requests can't be re-decided (no double-spend)
-  if (decision === "approved" && req.requestedBy === actor) return null; // no self-approval
-  req.status = decision;
-  req.decidedBy = actor;
-  req.decidedAt = new Date().toISOString();
-  await liveUpsert("credit_requests", { id, status: decision, decided_by: actor, decided_at: req.decidedAt });
-  await pushAudit(actor, `credit.${decision}`, "apollo_ciq", id, { amount: req.amount });
-  return req;
-}
-
-export async function createCreditRequest(input: Pick<CreditSpendRequest, "provider" | "amount" | "reason" | "requestedBy">): Promise<CreditSpendRequest> {
-  const req: CreditSpendRequest = { ...input, id: `cr_${Math.random().toString(36).slice(2, 9)}`, status: "pending", decidedBy: null, createdAt: new Date().toISOString(), decidedAt: null };
-  db().creditRequests.unshift(req);
-  await liveUpsert("credit_requests", {
-    id: req.id, provider: req.provider, amount: req.amount, reason: req.reason,
-    requested_by: req.requestedBy, status: req.status, created_at: req.createdAt,
-  });
-  await pushAudit(input.requestedBy, "credit.spend_requested", input.provider, req.id, { amount: input.amount });
-  return req;
-}
-
-export async function executeCreditSpend(id: string, actor: string): Promise<CreditSpendRequest | null> {
-  const req = db().creditRequests.find((r) => r.id === id);
-  if (!req || req.status !== "approved") return null;
-  req.status = "executed";
-  await liveUpsert("credit_requests", { id, status: "executed" });
-  // Reconcile the gated meter so spend is reflected. (The actual per-lead
-  // apollo.enrichWithCiqCredits calls happen in the enrichment flow with this
-  // approved request id as the audit-logged authorization.)
-  const meter = db().creditMeters.find((m) => m.provider === req.provider);
-  if (meter) {
-    meter.used = Math.min(meter.total, meter.used + req.amount);
-    await liveUpsert("credit_meters", { provider: meter.provider, used: meter.used }, "provider");
-  }
-  await pushAudit(actor, "credit.executed", "apollo_ciq", id, { amount: req.amount });
-  return req;
 }
 
 // --- costs (P&L) ------------------------------------------------------------

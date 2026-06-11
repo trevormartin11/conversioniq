@@ -1,12 +1,11 @@
 import { Suspense } from "react";
 import Link from "next/link";
-import { GraduationCap } from "lucide-react";
 import { Card, CardBody, PageHeader, SectionHeader } from "@/components/ui/card";
 import { Tag, HealthBadge } from "@/components/ui/badge";
 import { ensureData, getCampaigns, getReplies, getVariants } from "@/lib/data/store";
-import { deriveLearnings } from "@/lib/ai/learnings";
 import { nextMoves, type NextMove } from "@/lib/ai/iterate";
-import { campaignCards, lostReasons } from "@/lib/data/queries";
+import { attribution, campaignCards, lostReasons, sourcingRecommendations } from "@/lib/data/queries";
+import { AttributionView } from "@/components/pipeline/attribution-view";
 import { DEMO_LOST_REASON_LABELS } from "@/lib/data/types";
 import { integrations } from "@/lib/config";
 import { num, pct } from "@/lib/format";
@@ -19,10 +18,16 @@ function moveTone(kind: NextMove["kind"]): "ok" | "bad" | "brand" | "warn" | "sl
 
 export default async function AnalysisPage() {
   await ensureData();
-  const learnings = deriveLearnings(getVariants(), getReplies().map((r) => r.classification));
   const cards = campaignCards();
   const lost = lostReasons();
   const maxLost = lost[0]?.count ?? 1;
+  const attr = {
+    vertical: attribution("vertical"),
+    persona: attribution("persona"),
+    source: attribution("source"),
+    sendingDomain: attribution("sendingDomain"),
+  };
+  const recs = sourcingRecommendations();
 
   return (
     <div className="space-y-6">
@@ -36,31 +41,6 @@ export default async function AnalysisPage() {
         <Suspense fallback={<MovesSkeleton />}>
           <Moves />
         </Suspense>
-      </section>
-
-      <section>
-        <SectionHeader title="What we've learned" subtitle="Cross-campaign memory — applied to every new sequence." />
-        {learnings.length === 0 ? (
-          <p className="text-sm text-slate-500">No learnings yet — they accrue as results come in.</p>
-        ) : (
-          <div className="grid gap-2 sm:grid-cols-2">
-            {learnings.map((l, i) => (
-              <Card key={i}>
-                <CardBody className="flex gap-3">
-                  <GraduationCap className="mt-0.5 h-4 w-4 shrink-0 text-brand-400" />
-                  <div className="flex-1">
-                    <div className="flex items-center justify-between gap-2">
-                      <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">{l.theme}</p>
-                      <Tag tone={l.tone === "win" ? "ok" : l.tone === "watch" ? "warn" : "slate"}>{l.tone === "seed" ? "playbook" : l.tone}</Tag>
-                    </div>
-                    <p className="mt-1 text-sm text-slate-200">{l.insight}</p>
-                    <p className="mt-0.5 text-[11px] text-slate-500">{l.evidence}</p>
-                  </div>
-                </CardBody>
-              </Card>
-            ))}
-          </div>
-        )}
       </section>
 
       <section>
@@ -95,6 +75,30 @@ export default async function AnalysisPage() {
         )}
       </section>
 
+      {/* Attribution — which cell converts (from the at-source tags) */}
+      <section>
+        <SectionHeader title="Attribution" subtitle="Which vertical / persona / source / sending domain converts to MRR — from the tags set at source." />
+        <AttributionView data={attr} />
+        {recs.length > 0 && (
+          <Card className="mt-3">
+            <CardBody>
+              <p className="mb-2.5 text-xs font-medium uppercase tracking-wide text-slate-500">Recommended sourcing moves — feed budget into what closes</p>
+              <div className="space-y-2">
+                {recs.map((r) => (
+                  <div key={r.vertical} className="flex items-start gap-2.5 text-sm">
+                    <Tag tone={r.action === "scale" ? "ok" : r.action === "cut" ? "bad" : "warn"}>{r.action}</Tag>
+                    <div className="min-w-0">
+                      <span className="font-medium text-slate-200">{r.vertical}</span>
+                      <span className="ml-1.5 text-xs text-slate-500">{r.reason}</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </CardBody>
+          </Card>
+        )}
+      </section>
+
       {lost.length > 0 && (
         <section>
           <SectionHeader title="Why demos are lost" subtitle="The signal back from each completed demo — feed it into targeting + copy." />
@@ -113,6 +117,10 @@ export default async function AnalysisPage() {
           </Card>
         </section>
       )}
+
+      <p className="text-xs text-slate-500">
+        Cross-campaign learnings live in <Link href="/strategy" className="font-medium text-brand-400 hover:text-brand-300">Strategy →</Link>
+      </p>
     </div>
   );
 }
