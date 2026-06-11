@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { runAllSyncs } from "@/lib/sync";
 import { enforceDeliverability } from "@/lib/jobs/deliverability";
 import { verifyAllDomains } from "@/lib/jobs/domain-auth";
+import { syncCivCustomers } from "@/lib/jobs/civ-suppression";
 import { sendDailyBrief } from "@/lib/jobs/digest";
 import { integrations } from "@/lib/config";
 import { cronAuthorized } from "@/lib/api-auth";
@@ -11,9 +12,10 @@ export const maxDuration = 60;
 
 /**
  * Combined daily maintenance (Hobby-friendly: one cron). Runs the full sync,
- * the live SPF/DKIM/DMARC re-check, the deliverability auto-pause sweep, and the
- * daily Telegram brief. The granular routes (/api/sync, /api/cron/*) remain for
- * manual runs or a Pro plan with more frequent schedules.
+ * the live SPF/DKIM/DMARC re-check, the deliverability auto-pause sweep, the
+ * CIQ-customer suppression refresh (never pitch someone already in their funnel),
+ * and the daily Telegram brief. The granular routes (/api/sync, /api/cron/*)
+ * remain for manual runs or a Pro plan with more frequent schedules.
  */
 async function run(req: NextRequest) {
   const denied = cronAuthorized(req);
@@ -25,6 +27,9 @@ async function run(req: NextRequest) {
     // dmarc:false; without this it never gets corrected). Runs after sync creates the domains.
     try { result.domainAuth = await verifyAllDomains(); } catch (e) { result.domainAuthError = (e as Error).message; }
     try { result.deliverability = await enforceDeliverability(); } catch (e) { result.deliverabilityError = (e as Error).message; }
+    if (integrations.zohoCiq) {
+      try { result.civSuppression = await syncCivCustomers(); } catch (e) { result.civSuppressionError = (e as Error).message; }
+    }
   }
   try { result.brief = await sendDailyBrief(); } catch (e) { result.briefError = (e as Error).message; }
   return NextResponse.json({ ok: true, ...result });
