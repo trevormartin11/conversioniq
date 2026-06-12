@@ -5,17 +5,27 @@
  * unauthenticated — the old per-route checks skipped verification entirely when the secret was unset,
  * which left the endpoints open. In dev/preview an unset secret is allowed so local testing works.
  */
+import { createHash, timingSafeEqual } from "node:crypto";
 import { NextRequest, NextResponse } from "next/server";
 
 export type AuthResult = { ok: true } | { ok: false; status: number; error: string };
 
-/** Pure auth decision — testable without a request/response. */
+/** Constant-time equality via digest comparison (hides both content and length timing). */
+function secretEquals(a: string, b: string): boolean {
+  return timingSafeEqual(createHash("sha256").update(a).digest(), createHash("sha256").update(b).digest());
+}
+
+/** Pure auth decision — testable without a request/response. A plain `includes`/=== compare
+ *  short-circuits on the first differing byte, giving a byte-by-byte timing oracle against
+ *  `?secret=` — the Twilio path already used timingSafeEqual; this brings the shared gate
+ *  (every cron/sync/webhook) in line. */
 export function checkSecretAuth(opts: { configured: (string | undefined)[]; provided: string | null; isProd: boolean }): AuthResult {
   const secrets = opts.configured.filter((s): s is string => !!s);
   if (secrets.length === 0) {
     return opts.isProd ? { ok: false, status: 503, error: "auth secret not configured" } : { ok: true };
   }
-  return opts.provided && secrets.includes(opts.provided)
+  const provided = opts.provided;
+  return provided && secrets.some((s) => secretEquals(s, provided))
     ? { ok: true }
     : { ok: false, status: 401, error: "unauthorized" };
 }

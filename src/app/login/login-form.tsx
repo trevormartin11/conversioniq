@@ -4,6 +4,7 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { loginAction } from "./actions";
+import { safeNextPath } from "@/lib/session";
 
 export function LoginForm({ next }: { next: string }) {
   const router = useRouter();
@@ -20,7 +21,7 @@ export function LoginForm({ next }: { next: string }) {
         setError(res.error ?? "Login failed.");
         return;
       }
-      router.replace(next);
+      router.replace(safeNextPath(next)); // never an off-origin target (open-redirect phishing)
       router.refresh();
     });
   }
