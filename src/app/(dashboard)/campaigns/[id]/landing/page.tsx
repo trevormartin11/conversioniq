@@ -10,7 +10,7 @@ export const dynamic = "force-dynamic";
 
 export default async function CampaignLandingPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  await ensureData();
+  await ensureData(["campaigns", "domains", "inboxes", "landingPages"]);
   const campaign = getCampaign(id);
   if (!campaign) notFound();
   const page = getLandingPage(id);

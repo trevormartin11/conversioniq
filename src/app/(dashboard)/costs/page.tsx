@@ -11,7 +11,7 @@ import { usd, titleCase } from "@/lib/format";
 export const dynamic = "force-dynamic";
 
 export default async function CostsPage() {
-  await ensureData();
+  await ensureData(["costs", "demos", "leads", "metrics"]);
   const s = costSummary();
   const meter = await loadCostMeter();
   const claudeMonthly = meter.actual ? meter.actual.monthToDateUsd : meter.self.monthToDateUsd;

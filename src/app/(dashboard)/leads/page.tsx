@@ -15,7 +15,7 @@ import type { SuppressionReason } from "@/lib/data/types";
 export const dynamic = "force-dynamic";
 
 export default async function LeadsPage({ searchParams }: { searchParams: Promise<{ q?: string; check?: string }> }) {
-  await ensureData();
+  await ensureData(["campaigns", "leads", "suppression", "creditMeters"]);
   const { q, check } = await searchParams;
   const query = (q ?? "").toLowerCase().trim();
   const leads = getLeads();

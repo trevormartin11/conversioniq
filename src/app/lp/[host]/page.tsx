@@ -12,7 +12,7 @@ import { normalizeHost } from "@/lib/landing/publish";
 export const dynamic = "force-dynamic";
 
 async function pageFor(rawHost: string) {
-  await ensureData();
+  await ensureData(["landingPages"]);
   return getLandingByHost(normalizeHost(decodeURIComponent(rawHost)));
 }
 

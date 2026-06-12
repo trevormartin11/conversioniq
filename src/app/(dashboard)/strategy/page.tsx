@@ -12,7 +12,7 @@ import { appConfig } from "@/lib/config";
 export const dynamic = "force-dynamic";
 
 export default async function StrategyPage() {
-  await ensureData();
+  await ensureData(["demos", "replies", "variants", "leads", "campaigns", "metrics"]);
   const icp = getIcp();
   const learnings = deriveLearnings(getVariants(), getReplies().map((r) => r.classification));
 

@@ -15,7 +15,7 @@ const JOB_LABELS: Record<string, string> = {
 };
 
 export default async function AutomationPage() {
-  await ensureData();
+  await ensureData(["audit", "jobs"]);
   const jobs = getJobs();
   const statuses = integrationStatuses();
   const audit = getAudit().slice(0, 12);

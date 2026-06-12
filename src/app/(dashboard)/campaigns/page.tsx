@@ -16,7 +16,7 @@ const GROUPS: { key: string; label: string; sub: string }[] = [
 ];
 
 export default async function CampaignsPage() {
-  await ensureData();
+  await ensureData(["campaigns", "variants", "leads", "demos", "replies", "inboxes", "metrics", "landingPages"]);
   const board = campaignBoard();
 
   return (

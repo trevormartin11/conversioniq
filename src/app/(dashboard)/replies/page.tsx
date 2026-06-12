@@ -10,7 +10,7 @@ export const dynamic = "force-dynamic";
 const HANDLED_HISTORY_CAP = 200;
 
 export default async function RepliesPage() {
-  await ensureData();
+  await ensureData(["replies", "leads"]);
   const leadById = new Map(getLeads().map((l) => [l.id, l]));
   const sorted = getReplies()
     .slice()

@@ -26,7 +26,7 @@ const SETUP_STEPS = [
 ] as const;
 
 export default async function SettingsPage() {
-  await ensureData();
+  await ensureData(["users"]);
   const statuses = integrationStatuses();
   const connectedMap = Object.fromEntries(statuses.map((s) => [s.key, s.connected]));
   const assumptions = getAssumptions();

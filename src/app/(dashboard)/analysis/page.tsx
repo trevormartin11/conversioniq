@@ -17,7 +17,7 @@ function moveTone(kind: NextMove["kind"]): "ok" | "bad" | "brand" | "warn" | "sl
 }
 
 export default async function AnalysisPage() {
-  await ensureData();
+  await ensureData(["campaigns", "variants", "replies", "demos", "leads", "metrics"]);
   const cards = campaignCards();
   const lost = lostReasons();
   const maxLost = lost[0]?.count ?? 1;

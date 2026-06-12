@@ -9,7 +9,7 @@ import { appConfig, integrations } from "@/lib/config";
 export const dynamic = "force-dynamic";
 
 export default async function LaunchPage() {
-  await ensureData();
+  await ensureData(["campaigns", "personas", "replies", "variants", "demos"]);
   const personas = getPersonas().map((p) => ({ id: p.id, name: p.name }));
   const running = Array.from(new Set(getCampaigns().map((c) => c.vertical)));
   const learnings = deriveLearnings(getVariants(), getReplies().map((r) => r.classification));

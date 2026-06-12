@@ -7,7 +7,7 @@ import { integrations } from "@/lib/config";
 export const dynamic = "force-dynamic";
 
 export default async function ChannelsPage() {
-  await ensureData();
+  await ensureData(["channelAccounts", "consent", "leads", "outreach"]);
   const accounts = getChannelAccounts();
   const consent = getConsent();
   const outreach = getOutreach();
