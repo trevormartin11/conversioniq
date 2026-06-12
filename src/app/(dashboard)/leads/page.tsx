@@ -97,6 +97,9 @@ export default async function LeadsPage({ searchParams }: { searchParams: Promis
                 );
               })}
               {filtered.length === 0 && <p className="px-4 py-8 text-center text-sm text-slate-500">No leads match.</p>}
+              {filtered.length > 40 && (
+                <p className="px-4 py-2.5 text-center text-xs text-slate-500">Showing the first 40 of {filtered.length} — search to narrow.</p>
+              )}
             </div>
           </CardBody>
         </Card>
@@ -108,6 +111,9 @@ export default async function LeadsPage({ searchParams }: { searchParams: Promis
         <Card>
           <CardBody className="p-0">
             <div className="divide-y divide-ink-800">
+              {suppression.length === 0 && (
+                <p className="px-4 py-6 text-center text-sm text-slate-500">Nothing suppressed yet — DNC, unsubscribes, and bounces will collect here automatically.</p>
+              )}
               {suppression.slice(0, 20).map((s) => (
                 <div key={s.id} className="flex items-center justify-between gap-3 px-4 py-2.5 text-sm">
                   <span className="truncate text-slate-300">{s.email ?? s.domain}</span>

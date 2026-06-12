@@ -60,17 +60,18 @@ export async function approveAndSendAction(id: string, body: string) {
 export async function skipReplyAction(id: string) {
   await ensureData();
   const user = await getCurrentUser();
-  await updateReplyStatus(id, "skipped", user.name);
+  const updated = await updateReplyStatus(id, "skipped", user.name);
   revalidate();
-  return { ok: true };
+  // A null means it wasn't pending anymore (handled in another tab) — say so, don't fake success.
+  return updated ? { ok: true as const } : { ok: false as const, error: "Already handled — refresh to see the latest queue." };
 }
 
 export async function snoozeReplyAction(id: string) {
   await ensureData();
   const user = await getCurrentUser();
-  await updateReplyStatus(id, "snoozed", user.name);
+  const updated = await updateReplyStatus(id, "snoozed", user.name);
   revalidate();
-  return { ok: true };
+  return updated ? { ok: true as const } : { ok: false as const, error: "Already handled — refresh to see the latest queue." };
 }
 
 export async function suppressFromReplyAction(id: string) {
@@ -119,9 +120,9 @@ export async function bookDemoFromReplyAction(id: string) {
 export async function revertReplyAction(id: string) {
   await ensureData();
   const user = await getCurrentUser();
-  await revertReplyToPending(id, user.name);
+  const reverted = await revertReplyToPending(id, user.name);
   revalidate();
-  return { ok: true };
+  return reverted ? { ok: true as const } : { ok: false as const, error: "Reply not found." };
 }
 
 export async function regenerateDraftAction(id: string) {
@@ -132,7 +133,8 @@ export async function regenerateDraftAction(id: string) {
   const { draft } = await draftReply(reply, lead);
   if (draft) await saveReplyDraft(id, draft);
   revalidate();
-  return { ok: true, draft: draft ?? "" };
+  if (!draft) return { ok: false as const, draft: "", error: "Couldn't draft a reply for this one — write it manually." };
+  return { ok: true as const, draft };
 }
 
 export async function setAutomationAction(level: AutomationLevel) {

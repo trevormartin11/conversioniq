@@ -22,7 +22,7 @@ vi.mock("@/lib/integrations/instantly", () => ({
 vi.mock("@/lib/integrations/zoho", () => ({ setDoNotContact: vi.fn(async () => ({})) }));
 vi.mock("@/lib/integrations/telegram", () => ({ sendTelegram: vi.fn(async () => ({ ok: true })), tgEscape: (s: string) => s }));
 
-import { approveAndSendAction } from "@/app/(dashboard)/replies/actions";
+import { approveAndSendAction, skipReplyAction, snoozeReplyAction } from "@/app/(dashboard)/replies/actions";
 import { ensureData, getReplies, getReply } from "@/lib/data/store";
 
 function aPendingReply() {
@@ -46,6 +46,17 @@ describe("approveAndSendAction — claim before send", () => {
     expect(second.ok).toBe(false);
     expect(!second.ok && second.error).toMatch(/already handled/i);
     expect(replyToEmail).toHaveBeenCalledTimes(1); // the dangerous part: no second email
+  });
+
+  it("skip/snooze on an already-handled reply report failure instead of a false-success toast", async () => {
+    await ensureData();
+    const handled = getReplies().find((r) => r.status !== "pending");
+    expect(handled).toBeTruthy();
+    const skip = await skipReplyAction(handled!.id);
+    expect(skip.ok).toBe(false);
+    expect(!skip.ok && skip.error).toMatch(/already handled/i);
+    const snooze = await snoozeReplyAction(handled!.id);
+    expect(snooze.ok).toBe(false);
   });
 
   it("releases the claim back to pending when the send fails", async () => {

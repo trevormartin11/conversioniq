@@ -37,7 +37,7 @@ export default async function AnalysisPage() {
       />
 
       <section>
-        <SectionHeader title="Recommended next moves" subtitle="Scale winners, kill losers, fix leaks — act on each in Copy & Sequence or the campaign." />
+        <SectionHeader title="Recommended next moves" subtitle="Scale winners, kill losers, fix leaks — act on each from the campaign page's sequence editor." />
         <Suspense fallback={<MovesSkeleton />}>
           <Moves />
         </Suspense>

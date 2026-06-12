@@ -36,7 +36,7 @@ export async function enforceDeliverability() {
         } catch { /* inbox is already paused in-hub + we alert; don't let one failure stop the sweep */ }
       }
     }
-    void sendTelegram(`⚠️ Auto-paused *${i.email}* — ${reason}. Protecting domain reputation.`);
+    await sendTelegram(`⚠️ Auto-paused *${i.email}* — ${reason}. Protecting domain reputation.`);
   }
 
   // 2) Per-CAMPAIGN bounce breach over the recent window. Uses REAL synced metrics
@@ -56,7 +56,7 @@ export async function enforceDeliverability() {
       }
       await setCampaignStatus(c.id, "paused", "system");
       campaignsPaused++;
-      void sendTelegram(`⚠️ Auto-paused campaign *${c.name}* — ${pct(br, 1)} bounce over ${WINDOW_DAYS}d. Protecting domain reputation.`);
+      await sendTelegram(`⚠️ Auto-paused campaign *${c.name}* — ${pct(br, 1)} bounce over ${WINDOW_DAYS}d. Protecting domain reputation.`);
     }
   }
 

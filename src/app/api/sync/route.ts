@@ -19,7 +19,9 @@ async function run(req: NextRequest) {
     return NextResponse.json({ ok: false, error: "supabase not configured" }, { status: 400 });
   }
   try {
-    return NextResponse.json(await runAllSyncs());
+    const res = await runAllSyncs();
+    // ok:false must not ride a 200 — HTTP-status monitors never parse bodies.
+    return NextResponse.json(res, { status: res.ok ? 200 : 500 });
   } catch (e) {
     return NextResponse.json({ ok: false, error: (e as Error).message }, { status: 500 });
   }

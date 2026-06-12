@@ -30,6 +30,7 @@ export default async function AutomationPage() {
         <Card>
           <CardBody className="p-0">
             <div className="divide-y divide-ink-800">
+              {jobs.length === 0 && <p className="px-4 py-6 text-center text-sm text-slate-500">No job runs yet — they appear after the first cron/sync.</p>}
               {jobs.map((j) => (
                 <div key={j.id} className="flex items-center justify-between gap-3 px-4 py-3">
                   <div className="flex items-center gap-3">
@@ -68,6 +69,7 @@ export default async function AutomationPage() {
         <SectionHeader title="Activity log" />
         <Card>
           <CardBody className="space-y-1.5">
+            {audit.length === 0 && <p className="px-4 py-6 text-center text-sm text-slate-500">No activity yet.</p>}
             {audit.map((a) => (
               <div key={a.id} className="flex items-center justify-between border-b border-ink-800 py-1.5 text-xs last:border-0">
                 <span className="text-slate-300"><span className="font-medium text-slate-100">{a.actor}</span> · {a.action}</span>

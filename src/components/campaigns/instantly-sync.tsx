@@ -12,32 +12,49 @@ export function InstantlySync({ campaignId }: { campaignId: string }) {
   const [pending, setPending] = useState<"" | "copy" | "schedule" | "upgrade">("");
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
 
+  // try/finally on every handler: a rejected action used to leave `pending` set forever —
+  // all three buttons bricked with a frozen spinner and no message.
   async function upgrade() {
     setPending("upgrade");
     setMsg(null);
-    const r = await upgradeSequenceAction(campaignId);
-    if (r.ok) {
-      const bits = [r.personalized ? "added the personalization opener" : null, r.subjectsAdded ? `${r.subjectsAdded} A/B subject${r.subjectsAdded === 1 ? "" : "s"}` : null].filter(Boolean);
-      setMsg({ ok: true, text: bits.length ? `Pushed: ${bits.join(" + ")} across ${r.steps} steps.` : "Already upgraded — nothing to change." });
-    } else {
-      setMsg({ ok: false, text: r.error ?? "Failed." });
+    try {
+      const r = await upgradeSequenceAction(campaignId);
+      if (r.ok) {
+        const bits = [r.personalized ? "added the personalization opener" : null, r.subjectsAdded ? `${r.subjectsAdded} A/B subject${r.subjectsAdded === 1 ? "" : "s"}` : null].filter(Boolean);
+        setMsg({ ok: true, text: bits.length ? `Pushed: ${bits.join(" + ")} across ${r.steps} steps.` : "Already upgraded — nothing to change." });
+      } else {
+        setMsg({ ok: false, text: r.error ?? "Failed." });
+      }
+    } catch (e) {
+      setMsg({ ok: false, text: `Failed: ${(e as Error).message}` });
+    } finally {
+      setPending("");
     }
-    setPending("");
   }
 
   async function pushCopy() {
     setPending("copy");
     setMsg(null);
-    const r = await pushCopyToInstantlyAction(campaignId);
-    setMsg(r.ok ? { ok: true, text: "Copy pushed to the live Instantly sequence." } : { ok: false, text: r.error ?? "Failed." });
-    setPending("");
+    try {
+      const r = await pushCopyToInstantlyAction(campaignId);
+      setMsg(r.ok ? { ok: true, text: "Copy pushed to the live Instantly sequence." } : { ok: false, text: r.error ?? "Failed." });
+    } catch (e) {
+      setMsg({ ok: false, text: `Failed: ${(e as Error).message}` });
+    } finally {
+      setPending("");
+    }
   }
   async function applySchedule() {
     setPending("schedule");
     setMsg(null);
-    const r = await applyOptimalScheduleAction(campaignId);
-    setMsg(r.ok ? { ok: true, text: `Optimal window applied${r.timezone ? ` (${r.timezone})` : ""}.` } : { ok: false, text: r.error ?? "Failed." });
-    setPending("");
+    try {
+      const r = await applyOptimalScheduleAction(campaignId);
+      setMsg(r.ok ? { ok: true, text: `Optimal window applied${r.timezone ? ` (${r.timezone})` : ""}.` } : { ok: false, text: r.error ?? "Failed." });
+    } catch (e) {
+      setMsg({ ok: false, text: `Failed: ${(e as Error).message}` });
+    } finally {
+      setPending("");
+    }
   }
 
   const btn = "inline-flex items-center gap-1.5 rounded-lg border border-ink-700 bg-ink-850 px-3 py-2 text-sm text-slate-200 transition-colors hover:border-ink-600 disabled:opacity-50";

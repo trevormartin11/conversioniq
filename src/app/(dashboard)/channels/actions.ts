@@ -144,9 +144,9 @@ export async function sendOutreachAction(id: string) {
 export async function skipOutreachAction(id: string) {
   await ensureData();
   const user = await getCurrentUser();
-  await skipOutreach(id, user.name);
+  const skipped = await skipOutreach(id, user.name);
   rev();
-  return { ok: true as const };
+  return skipped ? { ok: true as const } : { ok: false as const, error: "Message not found — refresh." };
 }
 
 // --- sending-account setup --------------------------------------------------

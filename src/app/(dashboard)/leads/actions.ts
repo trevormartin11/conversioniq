@@ -157,17 +157,24 @@ export async function loadLeadsIntoCampaignAction(input: { campaignId: string; l
   // 2) Persist in the hub (the universe + attribution backbone).
   const persisted = await addLeads(prepared, user.name);
 
-  // 3) Load into Instantly — only if the campaign is live there.
+  // 3) Load into Instantly — only if the campaign is live there. Never throw past the
+  // {ok,error} envelope: the leads are already persisted, and a thrown error here replaced
+  // the page with the error boundary while a retry then reported "already a duplicate".
   let instantlyAdded = 0;
   let instantlyFailed = 0;
   let note = "";
   if (campaign.instantlyCampaignId && integrations.instantly) {
-    const res = await addLeadsToCampaign(
-      campaign.instantlyCampaignId,
-      clean.map((l) => ({ email: l.email, first_name: l.firstName, last_name: l.lastName, company_name: l.company, phone: l.phone })),
-    );
-    instantlyAdded = res.added;
-    instantlyFailed = res.failed;
+    try {
+      const res = await addLeadsToCampaign(
+        campaign.instantlyCampaignId,
+        clean.map((l) => ({ email: l.email, first_name: l.firstName, last_name: l.lastName, company_name: l.company, phone: l.phone })),
+      );
+      instantlyAdded = res.added;
+      instantlyFailed = res.failed;
+    } catch (e) {
+      instantlyFailed = clean.length;
+      note = `Leads saved in the hub, but the Instantly load failed (${(e as Error).message}) — they'll load on the next sync, or re-push the campaign.`;
+    }
   } else {
     note = "Persisted + created in Zoho. Push this campaign to Instantly to load these into sending.";
   }
