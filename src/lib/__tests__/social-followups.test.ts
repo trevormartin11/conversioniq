@@ -17,11 +17,23 @@ vi.mock("@/lib/integrations/apollo", () => ({
 }));
 
 import { queueSocialFollowupsAction } from "@/app/(dashboard)/channels/actions";
-import { ensureData, getLeads, getOutreach, getReplies } from "@/lib/data/store";
+import { addSuppression, ensureData, getDataset, getLeads, getOutreach, getReplies } from "@/lib/data/store";
 
 describe("queueSocialFollowupsAction — engaged repliers → ready-to-send DM cards", () => {
   it("queues DMs with the profile deep link and drafted copy, then dedupes on re-run", async () => {
     await ensureData();
+    // Make the opt-out filter LOAD-BEARING (mutation check M5): give one engaged replier a
+    // dnc suppression — if the filter is ever disabled, the final assertion below fails.
+    const engagedReply = getReplies().find((r) => r.classification === "interested" && r.leadId);
+    const dncLead = getLeads().find((l) => l.id === engagedReply?.leadId);
+    expect(dncLead).toBeTruthy();
+    await addSuppression(
+      { email: dncLead!.email, domain: null, reason: "dnc", source: "test", leadId: dncLead!.id, note: null },
+      "test",
+    );
+    // Keep the lead engaged-and-active so ONLY the opt-out filter can exclude it.
+    const leadRow = getDataset().leads.find((l) => l.id === dncLead!.id)!;
+    leadRow.status = "replied";
     // Engaged audience from the seed: leads whose latest reply is interested/question/not_now
     // and who aren't booked/closed/lost.
     const engagedLeadIds = new Set(
