@@ -34,12 +34,21 @@ export function estimate(route: RoutedSource, count: number, budgetCap: number):
   perLead += UNIT_COSTS.verify;
 
   const projectedCost = round(perLead * count);
-  return { count, costPerLead: round(perLead), projectedCost, withinBudget: projectedCost <= budgetCap, lines };
+  const withinBudget = Number.isFinite(projectedCost) && projectedCost >= 0 && projectedCost <= budgetCap;
+  return { count, costPerLead: round(perLead), projectedCost, withinBudget, lines };
 }
+
+/** Validate an operator-supplied lead count: a positive, finite integer within the platform ceiling.
+ *  Guards the cost model against negatives (which trivially satisfy a `<=` budget check) and NaN. */
+export function isValidCount(count: number): boolean {
+  return Number.isInteger(count) && count > 0 && count <= MAX_RUN_COUNT;
+}
+export const MAX_RUN_COUNT = 50_000;
 
 /** Hard platform ceiling — no single run may exceed this, regardless of the UI budget cap. */
 export const platformCapUsd = () => appConfig.sourcing.maxRunBudgetUsd;
-export const withinPlatformCap = (projectedCost: number) => projectedCost <= platformCapUsd();
+export const withinPlatformCap = (projectedCost: number) =>
+  Number.isFinite(projectedCost) && projectedCost >= 0 && projectedCost <= platformCapUsd();
 
 /** Which provider keys a route needs to actually run (vs. just plan). */
 export function requiredProviders(route: RoutedSource): ("lusha" | "outscraper" | "findymail" | "millionverifier")[] {

@@ -63,17 +63,20 @@ export interface InboxSendState {
   dailyCap: number;
 }
 
-export type InboxGateReason = "unknown_inbox" | "paused" | "cap_reached";
+export type InboxGateReason = "unknown_inbox" | "inactive" | "cap_reached";
+
+/** Inbox statuses healthy enough to carry an automated reply. Allowlist (fail closed): any
+ *  other value — "paused", "error", or a future status — blocks rather than silently sending. */
+const SENDABLE_STATUSES = new Set(["active", "warming"]);
 
 /**
- * Can this inbox carry an automated reply right now? Fail closed: a paused inbox is
- * protecting domain reputation, an inbox at its daily cap must not exceed it, and an
- * inbox we don't track can't be verified — in every blocked case the reply falls back
- * to the human queue instead of silently sending through a bad inbox.
+ * Can this inbox carry an automated reply right now? Fail closed: only an active/warming inbox
+ * under its daily cap may send; a paused/errored inbox (protecting domain reputation), one at
+ * its cap, or one we don't track routes the reply to the human queue instead.
  */
 export function inboxAutoSendGate(inbox: InboxSendState | null | undefined): { ok: boolean; reason: InboxGateReason | null } {
   if (!inbox) return { ok: false, reason: "unknown_inbox" };
-  if (inbox.status === "paused") return { ok: false, reason: "paused" };
-  if (inbox.sentToday >= inbox.dailyCap) return { ok: false, reason: "cap_reached" };
+  if (!SENDABLE_STATUSES.has(inbox.status)) return { ok: false, reason: "inactive" };
+  if (Math.max(0, inbox.sentToday) >= inbox.dailyCap) return { ok: false, reason: "cap_reached" };
   return { ok: true, reason: null };
 }

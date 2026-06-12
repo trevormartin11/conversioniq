@@ -10,7 +10,9 @@ export interface Classification {
 
 const RULES: { cls: ReplyClass; patterns: RegExp[] }[] = [
   { cls: "unsubscribe", patterns: [/unsubscribe/i, /remove me/i, /opt out/i, /take me off/i] },
-  { cls: "negative", patterns: [/not interested/i, /no thanks/i, /stop emailing/i, /\bno\b.*\bthanks\b/i, /go away/i] },
+  // "no thanks" / "no, thank you" must be ADJACENT — the old /\bno\b.*\bthanks\b/ spanned a
+  // whole body, so "no rush. Thanks, I'd love a demo!" mis-fired negative (→ auto-suppressed a buyer).
+  { cls: "negative", patterns: [/not interested/i, /\bno,?\s+thank(s|\syou)\b/i, /stop emailing/i, /go away/i] },
   { cls: "ooo", patterns: [/out of office/i, /automatic reply/i, /on vacation/i, /limited email access/i, /\bOOO\b/] },
   { cls: "referral", patterns: [/not me/i, /reach out to/i, /better person/i, /forward(ed)? (this|you)/i, /handles this/i] },
   { cls: "not_now", patterns: [/circle back/i, /not (right )?now/i, /next (quarter|month|year)/i, /maybe later/i, /slammed/i, /busy/i] },

@@ -85,7 +85,34 @@ describe("loadLeadsIntoCampaignAction — suppression gate, attribution, Instant
       leads: [sourced("owner@elitelaserspa.com")],
     });
     expect(res.ok).toBe(false);
-    expect(!res.ok && res.error).toMatch(/suppressed or a duplicate/i);
+    expect(!res.ok && res.error).toMatch(/suppressed.*duplicate/i);
+  });
+
+  it("does not admit a DNC address wrapped in the 'Name <addr>' format", async () => {
+    await ensureData();
+    const campaign = await addCampaign({ name: "Load Test Angle", vertical: "Med Spas", personaId: "pe_trevor", dailyCap: 80 }, "Test Operator");
+    const res = await loadLeadsIntoCampaignAction({
+      campaignId: campaign.id,
+      leads: [{ ...sourced("ignored"), email: "Owner Person <owner@elitelaserspa.com>" }],
+    });
+    expect(res.ok).toBe(false); // the only lead normalizes to a seeded DNC address → nothing clean
+    expect(getLeads().some((l) => l.email.includes("owner@elitelaserspa.com"))).toBe(false);
+  });
+
+  it("keeps the first occurrence's data on an in-batch duplicate", async () => {
+    await ensureData();
+    const campaign = await addCampaign({ name: "Load Test Dupe", vertical: "Med Spas", personaId: "pe_trevor", dailyCap: 80 }, "Test Operator");
+    const res = await loadLeadsIntoCampaignAction({
+      campaignId: campaign.id,
+      leads: [
+        { ...sourced("dupe@example-freshspa.com"), firstName: "First" },
+        { ...sourced("DUPE@example-freshspa.com"), firstName: "Second" },
+      ],
+    });
+    expect(res.ok).toBe(true);
+    if (!res.ok) return;
+    expect(res.persisted).toBe(1);
+    expect(getLeads().find((l) => l.email === "dupe@example-freshspa.com")?.firstName).toBe("First");
   });
 
   it("refuses an unknown campaign", async () => {

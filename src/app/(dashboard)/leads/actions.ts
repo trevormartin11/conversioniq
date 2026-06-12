@@ -5,9 +5,12 @@ import { addLeads, dedupeAgainstUniverse, ensureData, getCampaign, getDomains, g
 import type { NewLead } from "@/lib/data/store";
 import { getCurrentUser } from "@/lib/auth";
 import { buildPlan, runSourcing } from "@/lib/sourcing/engine";
+import { isValidCount, MAX_RUN_COUNT } from "@/lib/sourcing/cost";
 import { addLeadsToCampaign } from "@/lib/integrations/instantly";
 import { createLead as zohoCreateLead } from "@/lib/integrations/zoho";
 import { integrations } from "@/lib/config";
+import { extractEmail } from "@/lib/email";
+import { num } from "@/lib/format";
 import type { SizeBand, SourcedLead } from "@/lib/sourcing/types";
 
 interface SourcingInput { vertical: string; geo?: string; sizeBand?: SizeBand; count: number; budgetCap: number }
@@ -17,6 +20,7 @@ const toTarget = (i: SourcingInput) => ({ vertical: i.vertical.trim(), geo: i.ge
 export async function planSourcingAction(input: SourcingInput) {
   await ensureData();
   if (!input.vertical.trim()) return { ok: false as const, error: "Enter a vertical to target." };
+  if (!isValidCount(input.count)) return { ok: false as const, error: `Enter a lead count between 1 and ${num(MAX_RUN_COUNT)}.` };
   return { ok: true as const, plan: buildPlan(toTarget(input), input.count, input.budgetCap) };
 }
 
@@ -24,6 +28,7 @@ export async function planSourcingAction(input: SourcingInput) {
 export async function runSourcingAction(input: SourcingInput) {
   await ensureData();
   if (!input.vertical.trim()) return { ok: false as const, plan: null, leads: [], rejected: [], stats: null, error: "Enter a vertical to target." };
+  if (!isValidCount(input.count)) return { ok: false as const, plan: null, leads: [], rejected: [], stats: null, error: `Enter a lead count between 1 and ${num(MAX_RUN_COUNT)}.` };
   const user = await getCurrentUser();
   const res = await runSourcing(toTarget(input), input.count, input.budgetCap);
   // Audit every real (key-ready) run attempt — the spend record, alongside the platform cap.
@@ -61,10 +66,13 @@ export async function checkTouchedAction(value: string) {
  */
 export async function dedupeListAction(text: string) {
   await ensureData();
+  // Parse each token through the canonical extractor: a "Name <addr>" / dotted / quoted
+  // token must reduce to the same normalized key the suppression gate compares against,
+  // or a DNC address slips through (it has an "@" but never matches the suppression entry).
   const emails = text
-    .split(/[\s,]+/)
-    .map((s) => s.trim())
-    .filter((s) => s.includes("@"))
+    .split(/[\s,;]+/)
+    .map((t) => extractEmail(t))
+    .filter((e): e is string => !!e)
     .map((email) => ({ email }));
   const { clean, rejected } = dedupeAgainstUniverse(emails);
   return {
@@ -88,11 +96,16 @@ export async function loadLeadsIntoCampaignAction(input: { campaignId: string; l
   if (!input.leads?.length) return { ok: false as const, error: "No leads to load." };
 
   // Defense-in-depth: re-apply the load-time suppression gate (keeps our typed leads).
-  const candidates = input.leads.filter((l) => l.email).map((l) => ({ ...l, email: l.email as string }));
-  const byEmail = new Map(candidates.map((c) => [c.email, c]));
-  const { clean: cleanRaw } = dedupeAgainstUniverse(candidates);
-  const clean = cleanRaw.map((c) => byEmail.get(c.email)).filter((c): c is (typeof candidates)[number] => !!c);
-  if (!clean.length) return { ok: false as const, error: "Every lead was already suppressed or a duplicate." };
+  // Normalize + validate the address (a whitespace-only or malformed "email" must not persist),
+  // and dedupe in-batch first-wins keyed on the normalized address (so the surviving row's data
+  // matches the address the suppression gate actually vetted).
+  const byEmail = new Map<string, SourcedLead & { email: string }>();
+  for (const l of input.leads) {
+    const email = extractEmail(l.email ?? "");
+    if (email && !byEmail.has(email)) byEmail.set(email, { ...l, email });
+  }
+  const { clean } = dedupeAgainstUniverse([...byEmail.values()]);
+  if (!clean.length) return { ok: false as const, error: "Every lead was already suppressed, invalid, or a duplicate." };
 
   // Attribution at source — resolved from the campaign.
   const persona = getPersonas().find((p) => p.id === campaign.personaId)?.name ?? campaign.personaId;

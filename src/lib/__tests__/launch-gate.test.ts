@@ -36,4 +36,11 @@ describe("launchBlocker", () => {
     // no Instantly link, no inboxes — but no live sender, so sends simulate and launch is allowed
     expect(launchBlocker(base, opts({ instantlyConnected: false }))).toBeNull();
   });
+
+  it("blocks (fail closed) when an assigned inbox id no longer resolves to a hub inbox", () => {
+    // Regression: an empty/under-resolved inbox list let the warmup guard evaporate while
+    // inboxIds.length still satisfied the no_inboxes check — launching from ghosts.
+    const c = { ...base, instantlyCampaignId: "x", inboxIds: ["ib_gone_1", "ib_gone_2"] };
+    expect(launchBlocker(c, opts({ inboxes: [] }))?.reason).toBe("warmup");
+  });
 });
