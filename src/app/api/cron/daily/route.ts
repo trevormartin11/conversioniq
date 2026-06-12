@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { ensureData } from "@/lib/data/store";
 import { runAllSyncs } from "@/lib/sync";
 import { enforceDeliverability } from "@/lib/jobs/deliverability";
 import { verifyAllDomains } from "@/lib/jobs/domain-auth";
@@ -23,6 +24,9 @@ async function run(req: NextRequest) {
   const result: Record<string, unknown> = {};
   if (integrations.supabase) {
     try { result.sync = await runAllSyncs(); } catch (e) { result.syncError = (e as Error).message; }
+    // Hydrate AFTER the sync so the store-reading jobs below (domain auth, deliverability,
+    // CIQ suppression, brief) see today's data — without this they ran against the mock seed.
+    await ensureData();
     // Re-verify domain auth against live DNS so SPF/DKIM/DMARC reflect reality (sync seeds
     // dmarc:false; without this it never gets corrected). Runs after sync creates the domains.
     try { result.domainAuth = await verifyAllDomains(); } catch (e) { result.domainAuthError = (e as Error).message; }

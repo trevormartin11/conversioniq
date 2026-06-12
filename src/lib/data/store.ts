@@ -90,6 +90,16 @@ async function liveUpsert(table: string, row: Record<string, unknown>, onConflic
   const { error } = await supabaseAdmin().from(table).upsert(row, { onConflict });
   if (error) throw new Error(`${table} write failed: ${error.message}`);
 }
+
+/** Patch an EXISTING row — a plain UPDATE, never an insert. Partial patches must not go
+ *  through liveUpsert: Postgres builds the upsert's insert tuple before conflict arbitration,
+ *  so any missing not-null column without a default (name, email, domain…) aborts the write
+ *  even when the row already exists — which silently broke every status/patch write in live mode. */
+async function liveUpdate(table: string, id: string, patch: Record<string, unknown>, idCol = "id") {
+  if (!LIVE) return;
+  const { error } = await supabaseAdmin().from(table).update(patch).eq(idCol, id);
+  if (error) throw new Error(`${table} update failed: ${error.message}`);
+}
 async function liveDeleteRow(table: string, id: string) {
   if (!LIVE) return;
   await supabaseAdmin().from(table).delete().eq("id", id);
@@ -184,7 +194,7 @@ export async function updateReplyStatus(id: string, status: ReplyStatus, actor: 
   reply.status = status;
   reply.handledBy = actor;
   reply.handledAt = new Date().toISOString();
-  await liveUpsert("replies", { id, status, handled_by: actor, handled_at: reply.handledAt });
+  await liveUpdate("replies", id, { status, handled_by: actor, handled_at: reply.handledAt });
   await pushAudit(actor, `reply.${status}`, "reply", id, { lead: reply.fromName });
   return reply;
 }
@@ -193,7 +203,7 @@ export async function saveReplyDraft(id: string, draft: string): Promise<Reply |
   const reply = getReply(id);
   if (!reply) return null;
   reply.aiDraft = draft;
-  await liveUpsert("replies", { id, ai_draft: draft });
+  await liveUpdate("replies", id, { ai_draft: draft });
   return reply;
 }
 
@@ -204,7 +214,7 @@ export async function revertReplyToPending(id: string, actor: string): Promise<R
   reply.status = "pending";
   reply.handledBy = null;
   reply.handledAt = null;
-  await liveUpsert("replies", { id, status: "pending", handled_by: null, handled_at: null });
+  await liveUpdate("replies", id, { status: "pending", handled_by: null, handled_at: null });
   await pushAudit(actor, "reply.reopened", "reply", id, {});
   return reply;
 }
@@ -317,7 +327,7 @@ export async function setCampaignStatus(id: string, status: Campaign["status"], 
   const c = getCampaign(id);
   if (!c) return null;
   c.status = status;
-  await liveUpsert("campaigns", { id, status });
+  await liveUpdate("campaigns", id, { status });
   await pushAudit(actor, `campaign.${status}`, "campaign", id, { name: c.name });
   return c;
 }
@@ -400,7 +410,7 @@ export async function setLeadZohoId(id: string, zohoLeadId: string) {
   const lead = getLead(id);
   if (!lead) return;
   lead.zohoLeadId = zohoLeadId;
-  await liveUpsert("leads", { id, zoho_lead_id: zohoLeadId });
+  await liveUpdate("leads", id, { zoho_lead_id: zohoLeadId });
 }
 
 /** Move a lead through its lifecycle (reply DNC -> lost, demo flow -> closed, ...). */
@@ -408,7 +418,7 @@ export async function setLeadStatus(id: string, status: LeadStatus, actor = "sys
   const lead = getLead(id);
   if (!lead) return null;
   lead.status = status;
-  await liveUpsert("leads", { id, status });
+  await liveUpdate("leads", id, { status });
   await pushAudit(actor, `lead.${status}`, "lead", id, {});
   return lead;
 }
@@ -444,7 +454,7 @@ export async function updateDemo(id: string, patch: { status?: DemoStatus; mrr?:
   if (!demo) return null;
   if (patch.status) demo.status = patch.status;
   if (patch.mrr !== undefined) demo.mrr = patch.mrr;
-  await liveUpsert("demos", { id, status: demo.status, mrr: demo.mrr });
+  await liveUpdate("demos", id, { status: demo.status, mrr: demo.mrr });
   const leadStatus = patch.status ? DEMO_TO_LEAD[patch.status] : undefined;
   if (leadStatus) await setLeadStatus(demo.leadId, leadStatus, actor);
   await pushAudit(actor, `demo.${demo.status}`, "demo", id, { mrr: demo.mrr });
@@ -473,7 +483,7 @@ export async function recordDemoOutcome(
     demo.status = "lost";
     demo.outcomeReason = input.reason ?? "other";
   }
-  await liveUpsert("demos", { id, status: demo.status, mrr: demo.mrr, outcome_reason: demo.outcomeReason, outcome_note: demo.outcomeNote, outcome_at: demo.outcomeAt });
+  await liveUpdate("demos", id, { status: demo.status, mrr: demo.mrr, outcome_reason: demo.outcomeReason, outcome_note: demo.outcomeNote, outcome_at: demo.outcomeAt });
   await setLeadStatus(demo.leadId, demo.status === "closed" ? "closed" : "lost", actor);
   await pushAudit(actor, `demo.${input.result}`, "demo", id, { reason: demo.outcomeReason, mrr: demo.mrr });
   return demo;
@@ -484,7 +494,7 @@ export async function markDemoReminded(id: string, actor = "system"): Promise<De
   const demo = db().demos.find((d) => d.id === id);
   if (!demo) return null;
   demo.reminderSentAt = new Date().toISOString();
-  await liveUpsert("demos", { id, reminder_sent_at: demo.reminderSentAt });
+  await liveUpdate("demos", id, { reminder_sent_at: demo.reminderSentAt });
   await pushAudit(actor, "demo.reminded", "demo", id, {});
   return demo;
 }
@@ -543,7 +553,7 @@ export async function updateVariant(id: string, patch: { subject?: string; body?
   if (!v) return null;
   if (patch.subject !== undefined) v.subject = patch.subject;
   if (patch.body !== undefined) v.body = patch.body;
-  await liveUpsert("sequence_variants", { id, subject: v.subject, body: v.body });
+  await liveUpdate("sequence_variants", id, { subject: v.subject, body: v.body });
   await pushAudit(actor, "variant.edited", "campaign", v.campaignId, { variantId: id, step: v.step, variant: v.variant });
   return v;
 }
@@ -557,7 +567,7 @@ export async function updateDomainAuth(id: string, patch: { spf?: boolean; dkim?
   if (patch.dkim !== undefined) d.dkim = patch.dkim;
   if (patch.dmarc !== undefined) d.dmarc = patch.dmarc;
   d.reputation = d.spf && d.dkim && d.dmarc ? "green" : !d.spf || !d.dmarc ? "red" : "yellow";
-  await liveUpsert("domains", { id, spf: d.spf, dkim: d.dkim, dmarc: d.dmarc, reputation: d.reputation });
+  await liveUpdate("domains", id, { spf: d.spf, dkim: d.dkim, dmarc: d.dmarc, reputation: d.reputation });
   return d;
 }
 
@@ -565,7 +575,7 @@ export async function pauseInbox(id: string, actor: string, reason: string) {
   const inbox = getInbox(id);
   if (!inbox) return null;
   inbox.status = "paused";
-  await liveUpsert("inboxes", { id, status: "paused" });
+  await liveUpdate("inboxes", id, { status: "paused" });
   await pushAudit(actor, "inbox.paused", "inbox", id, { reason });
   return inbox;
 }
@@ -574,7 +584,7 @@ export async function resumeInbox(id: string, actor: string) {
   const inbox = getInbox(id);
   if (!inbox) return null;
   inbox.status = inbox.warmupScore >= appConfig.deliverability.warmupGate ? "active" : "warming";
-  await liveUpsert("inboxes", { id, status: inbox.status });
+  await liveUpdate("inboxes", id, { status: inbox.status });
   await pushAudit(actor, "inbox.resumed", "inbox", id, {});
   return inbox;
 }
@@ -590,7 +600,7 @@ export async function recordInboxBounce(eaccount: string) {
   if (!inbox) return null;
   const denom = Math.max(inbox.sentToday, 20);
   inbox.bounceRate = Math.min(1, inbox.bounceRate + 1 / denom);
-  await liveUpsert("inboxes", { id: inbox.id, bounce_rate: inbox.bounceRate });
+  await liveUpdate("inboxes", inbox.id, { bounce_rate: inbox.bounceRate });
   return inbox;
 }
 
@@ -649,10 +659,10 @@ export async function recordConsent(
       if (status === "opted_in" && m.status === "needs_consent") {
         m.status = "draft";
         m.consentId = saved.id;
-        await liveUpsert("outreach_messages", { id: m.id, status: m.status, consent_id: m.consentId });
+        await liveUpdate("outreach_messages", m.id, { status: m.status, consent_id: m.consentId });
       } else if (status === "opted_out" && (m.status === "draft" || m.status === "approved")) {
         m.status = "needs_consent";
-        await liveUpsert("outreach_messages", { id: m.id, status: m.status });
+        await liveUpdate("outreach_messages", m.id, { status: m.status });
       }
     }
   }
@@ -708,7 +718,7 @@ export async function updateOutreachBody(id: string, body: string, actor = "syst
   const m = getOutreachMessage(id);
   if (!m) return null;
   m.body = body;
-  await liveUpsert("outreach_messages", { id, body });
+  await liveUpdate("outreach_messages", id, { body });
   await pushAudit(actor, "outreach.edited", "outreach", id, {});
   return m;
 }
@@ -721,13 +731,13 @@ export async function approveOutreach(id: string, actor: string): Promise<{ ok: 
     const gate = sendGate("sms", db().consent, m.toHandle, (m.accountId ? getChannelAccount(m.accountId) : null) ?? defaultAccountFor("sms") ?? null);
     if (!gate.ok && (gate.reason === "no_consent" || gate.reason === "opted_out")) {
       m.status = "needs_consent";
-      await liveUpsert("outreach_messages", { id, status: m.status });
+      await liveUpdate("outreach_messages", id, { status: m.status });
       return { ok: false, error: GATE_REASONS[gate.reason] };
     }
   }
   m.status = "approved";
   m.approvedBy = actor;
-  await liveUpsert("outreach_messages", { id, status: m.status, approved_by: actor });
+  await liveUpdate("outreach_messages", id, { status: m.status, approved_by: actor });
   await pushAudit(actor, "outreach.approved", "outreach", id, { channel: m.channel });
   return { ok: true, msg: m };
 }
@@ -747,7 +757,7 @@ export async function sendOutreach(id: string, actor: string): Promise<{ ok: boo
     // A consent failure re-parks an SMS so the queue reflects reality; cap/account failures just report.
     if (m.channel === "sms" && (gate.reason === "no_consent" || gate.reason === "opted_out") && m.status !== "needs_consent") {
       m.status = "needs_consent";
-      await liveUpsert("outreach_messages", { id, status: m.status });
+      await liveUpdate("outreach_messages", id, { status: m.status });
     }
     return { ok: false, error: GATE_REASONS[gate.reason] };
   }
@@ -759,7 +769,7 @@ export async function sendOutreach(id: string, actor: string): Promise<{ ok: boo
     if (!res.ok) {
       // A provider rejection must NOT mark sent or burn cap — surface it and leave it retryable.
       m.status = "failed";
-      await liveUpsert("outreach_messages", { id, status: m.status });
+      await liveUpdate("outreach_messages", id, { status: m.status });
       await pushAudit(actor, "outreach.failed", "outreach", id, { channel: "sms", to: m.toName, error: res.reason ?? null, code: res.code ?? null });
       return { ok: false, error: res.reason ? `Twilio: ${res.reason}` : "SMS send failed." };
     }
@@ -769,10 +779,10 @@ export async function sendOutreach(id: string, actor: string): Promise<{ ok: boo
   m.sentAt = new Date().toISOString();
   m.sentBy = actor;
   if (m.channel === "sms" && !m.consentId) m.consentId = findConsent(db().consent, "sms", m.toHandle)?.id ?? null;
-  await liveUpsert("outreach_messages", { id, status: m.status, sent_at: m.sentAt, sent_by: actor, consent_id: m.consentId });
+  await liveUpdate("outreach_messages", id, { status: m.status, sent_at: m.sentAt, sent_by: actor, consent_id: m.consentId });
   if (account) {
     account.sentToday += 1;
-    await liveUpsert("channel_accounts", { id: account.id, sent_today: account.sentToday });
+    await liveUpdate("channel_accounts", account.id, { sent_today: account.sentToday });
   }
   await pushAudit(actor, "outreach.sent", "outreach", id, { channel: m.channel, to: m.toName, ...(providerSid ? { provider: "twilio", sid: providerSid } : {}) });
   return { ok: true, msg: m };
@@ -782,7 +792,7 @@ export async function skipOutreach(id: string, actor: string): Promise<OutreachM
   const m = getOutreachMessage(id);
   if (!m) return null;
   m.status = "skipped";
-  await liveUpsert("outreach_messages", { id, status: "skipped" });
+  await liveUpdate("outreach_messages", id, { status: "skipped" });
   await pushAudit(actor, "outreach.skipped", "outreach", id, {});
   return m;
 }
@@ -922,7 +932,7 @@ export async function updateLandingContent(campaignId: string, content: LandingC
   p.approvedBy = null;
   p.approvedAt = null;
   p.updatedAt = new Date().toISOString();
-  await liveUpsert("landing_pages", { id: p.id, content: p.content, status: p.status, approved_by: null, approved_at: null, updated_at: p.updatedAt });
+  await liveUpdate("landing_pages", p.id, { content: p.content, status: p.status, approved_by: null, approved_at: null, updated_at: p.updatedAt });
   await pushAudit(actor, "landing.edited", "landing_page", p.id, { campaignId });
   return p;
 }
@@ -935,7 +945,7 @@ export async function approveLandingPage(campaignId: string, actor: string): Pro
   p.approvedBy = actor;
   p.approvedAt = new Date().toISOString();
   p.updatedAt = p.approvedAt;
-  await liveUpsert("landing_pages", { id: p.id, status: p.status, approved_by: actor, approved_at: p.approvedAt, updated_at: p.updatedAt });
+  await liveUpdate("landing_pages", p.id, { status: p.status, approved_by: actor, approved_at: p.approvedAt, updated_at: p.updatedAt });
   await pushAudit(actor, "landing.approved", "landing_page", p.id, { campaignId });
   return p;
 }
@@ -952,7 +962,7 @@ export async function setLandingConfig(
   if (cfg.schedulerUrl !== undefined) p.schedulerUrl = cfg.schedulerUrl;
   if (cfg.videoUrl !== undefined) p.videoUrl = cfg.videoUrl;
   p.updatedAt = new Date().toISOString();
-  await liveUpsert("landing_pages", { id: p.id, domain: p.domain, scheduler_url: p.schedulerUrl, video_url: p.videoUrl, updated_at: p.updatedAt });
+  await liveUpdate("landing_pages", p.id, { domain: p.domain, scheduler_url: p.schedulerUrl, video_url: p.videoUrl, updated_at: p.updatedAt });
   await pushAudit(actor, "landing.config", "landing_page", p.id, { ...cfg });
   return p;
 }

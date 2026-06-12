@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { ensureData } from "@/lib/data/store";
 import { sendDailyBrief } from "@/lib/jobs/digest";
 import { cronAuthorized } from "@/lib/api-auth";
 
@@ -8,6 +9,7 @@ export const maxDuration = 60;
 async function run(req: NextRequest) {
   const denied = cronAuthorized(req);
   if (denied) return denied;
+  await ensureData(); // hydrate the store — without this the job runs against the mock seed
   try {
     return NextResponse.json({ ok: true, ...(await sendDailyBrief()) });
   } catch (e) {
