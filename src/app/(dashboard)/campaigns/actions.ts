@@ -2,10 +2,11 @@
 
 import { revalidatePath } from "next/cache";
 import { getCurrentUser } from "@/lib/auth";
-import { addCampaign, cloneCampaign, deleteCampaign, ensureData, getCampaign, getInboxes, getLeads, getVariants, pushAudit, reassignCampaignLeads, seedCampaignVariants, setCampaignAttribution, setCampaignStatus, upsertCanonicalCampaign } from "@/lib/data/store";
+import { addCampaign, cloneCampaign, deleteCampaign, ensureData, getCampaign, getInboxes, getLandingPage, getLeads, getVariants, pushAudit, reassignCampaignLeads, seedCampaignVariants, setCampaignAttribution, setCampaignStatus, upsertCanonicalCampaign } from "@/lib/data/store";
 import { activateCampaign, addLeadsToCampaign, createInstantlyCampaign, deleteInstantlyCampaign, pauseCampaign } from "@/lib/integrations/instantly";
 import { syncCampaigns } from "@/lib/sync/campaigns";
 import { launchBlocker } from "@/lib/campaigns/launch-gate";
+import { buildLaunchChecklist } from "@/lib/campaigns/launch-checklist";
 import { appConfig, integrations } from "@/lib/config";
 
 /** First variant per step, ordered — the sequence to replicate into Instantly on push. */
@@ -33,6 +34,23 @@ export async function pauseCampaignAction(id: string) {
   await setCampaignStatus(id, "paused", user.name);
   revalidate();
   return { ok: true };
+}
+
+/** Assemble the pre-launch checklist — the final human gate before sending starts. */
+export async function launchChecklistAction(id: string) {
+  await ensureData();
+  const c = getCampaign(id);
+  if (!c) return { ok: false as const, error: "Campaign not found.", items: [] };
+  const items = buildLaunchChecklist({
+    campaign: c,
+    variants: getVariants(),
+    leads: getLeads(),
+    landing: getLandingPage(id),
+    inboxes: getInboxes(),
+    instantlyConnected: integrations.instantly,
+    warmupGate: appConfig.deliverability.warmupGate,
+  });
+  return { ok: true as const, items };
 }
 
 export async function launchCampaignAction(id: string, override = false) {

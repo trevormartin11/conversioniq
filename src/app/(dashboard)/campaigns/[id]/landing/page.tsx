@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
-import { LandingTemplate } from "@/components/landing/landing-template";
+import { LandingWorkbench } from "@/components/landing/landing-workbench";
 import { LandingControls } from "@/components/landing/landing-controls";
 import { ensureData, getCampaign, getDomains, getInboxes, getLandingPage } from "@/lib/data/store";
 import { publishHostFor } from "@/lib/landing/publish";
@@ -37,10 +37,7 @@ export default async function CampaignLandingPage({ params }: { params: Promise<
       />
 
       {page ? (
-        <div className="overflow-hidden rounded-xl border border-ink-700">
-          {/* Live preview of the generated microsite (renders exactly what publishes in Phase 2). */}
-          <LandingTemplate content={page.content} schedulerUrl={page.schedulerUrl} videoUrl={page.videoUrl} />
-        </div>
+        <LandingWorkbench campaignId={id} content={page.content} status={page.status} schedulerUrl={page.schedulerUrl} videoUrl={page.videoUrl} />
       ) : (
         <div className="rounded-xl border border-ink-700 bg-ink-900/40 p-10 text-center text-sm text-slate-400">
           No landing page yet for <span className="text-slate-200">{campaign.name}</span>. Click <span className="font-medium text-brand-300">Generate</span> above to draft one from this campaign&apos;s vertical and copy.

@@ -1112,15 +1112,23 @@ export async function generateLandingPage(campaignId: string, actor = "system"):
   return page;
 }
 
-/** Save operator-edited copy. Edited copy drops back to draft (re-sign-off required). */
+/** Save operator-edited copy. Draft/approved pages drop back to draft (re-sign-off keeps the
+ *  approval meaningful before first publish). A PUBLISHED page stays published — the edit goes
+ *  live on save; dropping it to draft would have taken the URL offline (the public router only
+ *  serves status='published'), 404ing every email link in flight until re-approval. */
 export async function updateLandingContent(campaignId: string, content: LandingContent, actor = "system"): Promise<LandingPage | null> {
   const p = getLandingPage(campaignId);
   if (!p) return null;
   p.content = content;
+  p.updatedAt = new Date().toISOString();
+  if (p.status === "published") {
+    await liveUpdate("landing_pages", p.id, { content: p.content, updated_at: p.updatedAt });
+    await pushAudit(actor, "landing.edited_live", "landing_page", p.id, { campaignId });
+    return p;
+  }
   p.status = "draft";
   p.approvedBy = null;
   p.approvedAt = null;
-  p.updatedAt = new Date().toISOString();
   await liveUpdate("landing_pages", p.id, { content: p.content, status: p.status, approved_by: null, approved_at: null, updated_at: p.updatedAt });
   await pushAudit(actor, "landing.edited", "landing_page", p.id, { campaignId });
   return p;
