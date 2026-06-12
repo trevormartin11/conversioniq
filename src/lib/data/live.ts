@@ -17,15 +17,34 @@ const sn = (v: unknown): string | null => (v == null ? null : String(v));
 const num = (v: unknown): number => (typeof v === "number" ? v : Number(v) || 0);
 const bool = (v: unknown): boolean => v === true || v === "true";
 
-async function fetchAll(table: string): Promise<Row[]> {
-  const { data, error } = await supabaseAdmin().from(table).select("*").limit(5000);
-  if (error) {
-    // Stay resilient to a not-yet-applied migration (e.g. `costs` before 0002):
-    // a missing/unavailable table just reads as empty rather than crashing the app.
-    if (process.env.NODE_ENV !== "production") console.warn(`[live] ${table}: ${error.message}`);
-    return [];
+/** PostgREST error code for "relation does not exist" — the only error we tolerate as empty. */
+const UNDEFINED_TABLE = "42P01";
+const PAGE = 1000; // Supabase's default max-rows clamps any larger limit anyway
+
+/**
+ * Read a whole table, paginated past PostgREST's row cap (a single `.limit(5000)` was silently
+ * clamped to 1,000 rows — at sending scale that truncated the suppression universe and made the
+ * DNC gate miss entries). Fail-closed: only a not-yet-applied migration (undefined table) reads
+ * as empty; any other error THROWS so a transient Supabase failure aborts the request instead of
+ * hydrating an empty universe that the suppression/consent gates would then wave through.
+ */
+export async function fetchAll(table: string, orderCols: string[] = ["id"]): Promise<Row[]> {
+  const all: Row[] = [];
+  for (let from = 0; ; from += PAGE) {
+    let q = supabaseAdmin().from(table).select("*");
+    for (const col of orderCols) q = q.order(col, { ascending: true });
+    const { data, error } = await q.range(from, from + PAGE - 1);
+    if (error) {
+      if (error.code === UNDEFINED_TABLE) {
+        if (process.env.NODE_ENV !== "production") console.warn(`[live] ${table}: ${error.message}`);
+        return [];
+      }
+      throw new Error(`hydration failed for ${table}: ${error.message}`);
+    }
+    const rows = (data as Row[]) ?? [];
+    all.push(...rows);
+    if (rows.length < PAGE) return all;
   }
-  return (data as Row[]) ?? [];
 }
 
 export async function loadDatasetLive(): Promise<Dataset> {
@@ -36,9 +55,9 @@ export async function loadDatasetLive(): Promise<Dataset> {
   ] = await Promise.all([
     fetchAll("users"), fetchAll("personas"), fetchAll("domains"), fetchAll("inboxes"),
     fetchAll("campaigns"), fetchAll("leads"), fetchAll("replies"), fetchAll("suppression"),
-    fetchAll("credit_meters"), fetchAll("audit_log"),
+    fetchAll("credit_meters", ["provider"]), fetchAll("audit_log"),
     fetchAll("job_runs"), fetchAll("demos"), fetchAll("sequence_variants"),
-    fetchAll("daily_metrics"), fetchAll("costs"),
+    fetchAll("daily_metrics", ["date", "campaign_id"]), fetchAll("costs"),
     fetchAll("consent_records"), fetchAll("channel_accounts"), fetchAll("outreach_messages"),
     fetchAll("landing_pages"),
   ]);

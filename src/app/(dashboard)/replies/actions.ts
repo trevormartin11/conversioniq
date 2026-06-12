@@ -5,10 +5,13 @@ import { getCurrentUser } from "@/lib/auth";
 import {
   addDemo,
   addSuppression,
+  claimReply,
   ensureData,
   getInbox,
   getLead,
   getReply,
+  pushAudit,
+  releaseReplyClaim,
   revertReplyToPending,
   saveReplyDraft,
   setAutomationLevel,
@@ -32,19 +35,24 @@ export async function approveAndSendAction(id: string, body: string) {
   const user = await getCurrentUser();
   const reply = getReply(id);
   if (!reply) return { ok: false as const, error: "Reply not found." };
+  if (reply.status !== "pending") return { ok: false as const, error: "Already handled — refresh to see the latest queue." };
   if (!body.trim()) return { ok: false as const, error: "Write a reply before sending." };
   await saveReplyDraft(id, body);
-  // Send on the original Instantly thread. Only mark "sent" if the send succeeds.
+  // Claim BEFORE the send (conditional DB flip to "sent" only while still pending): a
+  // double-click, second tab, or post-blip retry loses the claim and can't email twice.
+  const claimed = await claimReply(id, user.name);
+  if (!claimed) return { ok: false as const, error: "Already handled (just now) — refresh." };
   if (integrations.instantly && reply.instantlyEmailId) {
     const inbox = getInbox(reply.inboxId);
     const subject = reply.subject?.toLowerCase().startsWith("re:") ? reply.subject : `Re: ${reply.subject ?? ""}`.trim();
     try {
       await replyToEmail({ replyToUuid: reply.instantlyEmailId, eaccount: inbox?.email ?? "", subject, bodyText: body });
     } catch (e) {
+      await releaseReplyClaim(id); // claimed but nothing went out — return it to the queue
       return { ok: false as const, error: `Send failed: ${(e as Error).message}` };
     }
   }
-  await updateReplyStatus(id, "sent", user.name);
+  await pushAudit(user.name, "reply.sent", "reply", id, { lead: reply.fromName });
   revalidate();
   return { ok: true as const };
 }

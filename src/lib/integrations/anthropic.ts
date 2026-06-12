@@ -8,7 +8,10 @@ let client: Anthropic | null = null;
 
 function getClient(): Anthropic {
   if (!integrations.anthropic) throw new NotConfiguredError("anthropic");
-  if (!client) client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+  // SDK defaults are 10 minutes × 2 retries — inside Vercel functions capped at 60s, one hung
+  // call eats the whole budget (and in the reply sync, converts an API brownout into killed
+  // runs). Fail fast instead: every consumer has a rules fallback that kicks in on throw.
+  if (!client) client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY, timeout: 25_000, maxRetries: 1 });
   return client;
 }
 
