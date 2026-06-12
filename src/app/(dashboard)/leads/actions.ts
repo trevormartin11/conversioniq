@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { addLeads, dedupeAgainstUniverse, ensureData, getCampaign, getDomains, getInboxes, getPersonas, isSuppressed, pushAudit, searchUniverse } from "@/lib/data/store";
+import { addLeads, dedupeAgainstUniverse, ensureData, getCampaign, getDomains, getInboxes, getLeads, getPersonas, isSuppressed, pushAudit, searchUniverse } from "@/lib/data/store";
 import type { NewLead } from "@/lib/data/store";
 import { getCurrentUser } from "@/lib/auth";
 import { buildPlan, runSourcing } from "@/lib/sourcing/engine";
@@ -104,8 +104,13 @@ export async function loadLeadsIntoCampaignAction(input: { campaignId: string; l
     const email = extractEmail(l.email ?? "");
     if (email && !byEmail.has(email)) byEmail.set(email, { ...l, email });
   }
-  const { clean } = dedupeAgainstUniverse([...byEmail.values()]);
-  if (!clean.length) return { ok: false as const, error: "Every lead was already suppressed, invalid, or a duplicate." };
+  const { clean: vetted } = dedupeAgainstUniverse([...byEmail.values()]);
+  // Idempotency: drop any address already persisted as a hub lead, so re-submitting the SAME
+  // list (double-click, retry) can't create a duplicate person + load them to Instantly twice.
+  // (dedupeAgainstUniverse only checks suppression + in-batch dupes, not existing lead rows.)
+  const existingLeadEmails = new Set(getLeads().map((l) => l.email.toLowerCase()));
+  const clean = vetted.filter((l) => !existingLeadEmails.has(l.email.toLowerCase()));
+  if (!clean.length) return { ok: false as const, error: "Every lead was already in the hub, suppressed, invalid, or a duplicate." };
 
   // Attribution at source — resolved from the campaign.
   const persona = getPersonas().find((p) => p.id === campaign.personaId)?.name ?? campaign.personaId;

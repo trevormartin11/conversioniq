@@ -37,10 +37,25 @@ describe("launchBlocker", () => {
     expect(launchBlocker(base, opts({ instantlyConnected: false }))).toBeNull();
   });
 
-  it("blocks (fail closed) when an assigned inbox id no longer resolves to a hub inbox", () => {
-    // Regression: an empty/under-resolved inbox list let the warmup guard evaporate while
-    // inboxIds.length still satisfied the no_inboxes check — launching from ghosts.
+  it("HARD-blocks (no_inboxes, NOT overridable warmup) when EVERY assigned inbox id has vanished", () => {
+    // Regression: all-vanished was classified "warmup" → an override could launch with zero
+    // resolvable inboxes. It is now a hard no_inboxes block.
     const c = { ...base, instantlyCampaignId: "x", inboxIds: ["ib_gone_1", "ib_gone_2"] };
-    expect(launchBlocker(c, opts({ inboxes: [] }))?.reason).toBe("warmup");
+    expect(launchBlocker(c, opts({ inboxes: [] }))?.reason).toBe("no_inboxes");
+  });
+
+  it("warns (overridable) when SOME assigned inboxes resolve but others vanished", () => {
+    const c = { ...base, instantlyCampaignId: "x", inboxIds: ["ib_1", "ib_gone"] };
+    expect(launchBlocker(c, opts({ inboxes: [inbox({})] }))?.reason).toBe("warmup");
+  });
+});
+
+describe("launchBlocker — override semantics (the SILENT-mutation guard)", () => {
+  // The server forgives ONLY warmup under override; these assert the reason a caller checks.
+  it("a hard not_live/no_inboxes block is distinguishable from warmup so override can't forgive it", () => {
+    expect(launchBlocker(base, opts({}))?.reason).toBe("not_live");
+    expect(launchBlocker({ ...base, instantlyCampaignId: "x" }, opts({}))?.reason).toBe("no_inboxes");
+    const warm = { ...base, instantlyCampaignId: "x", inboxIds: ["ib_1"] };
+    expect(launchBlocker(warm, opts({ inboxes: [inbox({ warmupScore: 10 })] }))?.reason).toBe("warmup");
   });
 });

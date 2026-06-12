@@ -62,8 +62,17 @@ export async function launchCampaignAction(id: string, override = false) {
   // from under-warmed inboxes. `override` forgives ONLY the warmup warning — not the can't-send blocks.
   if (c) {
     const block = launchBlocker(c, { instantlyConnected: integrations.instantly, warmupGate: appConfig.deliverability.warmupGate, inboxes: getInboxes() });
+    // override forgives ONLY the warmup warning — never a hard not_live/no_inboxes block.
     if (block && !(override && block.reason === "warmup")) {
       return { ok: false as const, blocked: block.reason, error: block.message };
+    }
+    // Server-side re-check of the one checklist item the server can verify: a variant with an
+    // empty subject or body would send broken copy. (The manual sign-offs — the personalization
+    // test send, the landing read — are human attestations the server can't verify, so they stay
+    // UI-gated; but a direct action call must not slip past broken copy.)
+    const vars = getVariants().filter((v) => v.campaignId === id);
+    if (vars.some((v) => !v.subject.trim() || !v.body.trim())) {
+      return { ok: false as const, blocked: "incomplete_copy" as const, error: "A sequence step has an empty subject or body — fix the copy before launching." };
     }
   }
   if (c?.instantlyCampaignId && integrations.instantly) {
