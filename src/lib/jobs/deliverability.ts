@@ -2,7 +2,7 @@
 import { appConfig, integrations } from "@/lib/config";
 import { ensureData, getCampaigns, getInboxes, getMetrics, pauseInbox, setCampaignStatus } from "@/lib/data/store";
 import { pauseCampaign } from "@/lib/integrations/instantly";
-import { sendTelegram } from "@/lib/integrations/telegram";
+import { sendTelegram, tgEscape } from "@/lib/integrations/telegram";
 import { pct, rate } from "@/lib/format";
 
 const WINDOW_DAYS = 7;
@@ -36,7 +36,7 @@ export async function enforceDeliverability() {
         } catch { /* inbox is already paused in-hub + we alert; don't let one failure stop the sweep */ }
       }
     }
-    await sendTelegram(`⚠️ Auto-paused *${i.email}* — ${reason}. Protecting domain reputation.`);
+    await sendTelegram(`⚠️ Auto-paused *${tgEscape(i.email)}* — ${reason}. Protecting domain reputation.`);
   }
 
   // 2) Per-CAMPAIGN bounce breach over the recent window. Uses REAL synced metrics
@@ -56,7 +56,7 @@ export async function enforceDeliverability() {
       }
       await setCampaignStatus(c.id, "paused", "system");
       campaignsPaused++;
-      await sendTelegram(`⚠️ Auto-paused campaign *${c.name}* — ${pct(br, 1)} bounce over ${WINDOW_DAYS}d. Protecting domain reputation.`);
+      await sendTelegram(`⚠️ Auto-paused campaign *${tgEscape(c.name)}* — ${pct(br, 1)} bounce over ${WINDOW_DAYS}d. Protecting domain reputation.`);
     }
   }
 

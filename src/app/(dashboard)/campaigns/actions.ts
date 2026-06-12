@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { getCurrentUser } from "@/lib/auth";
-import { addCampaign, cloneCampaign, deleteCampaign, ensureData, getCampaign, getInboxes, getLandingPage, getLeads, getVariants, pushAudit, reassignCampaignLeads, seedCampaignVariants, setCampaignAttribution, setCampaignStatus, upsertCanonicalCampaign } from "@/lib/data/store";
+import { addCampaign, claimCampaignPush, cloneCampaign, deleteCampaign, ensureData, getCampaign, getInboxes, getLandingPage, getLeads, getVariants, pushAudit, reassignCampaignLeads, releaseCampaignPush, seedCampaignVariants, setCampaignAttribution, setCampaignStatus, upsertCanonicalCampaign } from "@/lib/data/store";
 import { activateCampaign, addLeadsToCampaign, createInstantlyCampaign, deleteInstantlyCampaign, pauseCampaign } from "@/lib/integrations/instantly";
 import { syncCampaigns } from "@/lib/sync/campaigns";
 import { launchBlocker } from "@/lib/campaigns/launch-gate";
@@ -148,6 +148,13 @@ export async function pushCampaignToInstantlyAction(id: string, inboxIds: string
   const chosen = getInboxes().filter((i) => inboxIds.includes(i.id));
   if (!chosen.length) return { ok: false as const, error: "Select at least one sending inbox." };
 
+  // ATOMIC claim (DB-conditional) — the in-memory Set only guards one lambda; two cold
+  // instances both passed the instantlyCampaignId===null check and created TWO Instantly
+  // campaigns with every lead queued twice. The loser of this conditional write bails here.
+  const originalListVersion = c.listVersion;
+  if (!(await claimCampaignPush(id))) {
+    return { ok: false as const, error: "This campaign is already being pushed (another tab or click) — give it a few seconds and refresh." };
+  }
   pushing.add(id);
   try {
     const { id: instId } = await createInstantlyCampaign({ name: c.name, steps, inboxEmails: chosen.map((i) => i.email), dailyLimit: c.dailyCap });
@@ -185,6 +192,8 @@ export async function pushCampaignToInstantlyAction(id: string, inboxIds: string
     revalidatePath(`/campaigns/${newId}`);
     return { ok: true as const, id: newId, leads: draftLeads.length };
   } catch (e) {
+    // Release the claim so a retry isn't permanently locked out (the success path retires the draft).
+    try { await releaseCampaignPush(id, originalListVersion); } catch { /* best effort */ }
     return { ok: false as const, error: (e as Error).message };
   } finally {
     pushing.delete(id);

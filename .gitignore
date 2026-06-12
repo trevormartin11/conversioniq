@@ -36,3 +36,6 @@ next-env.d.ts
 !.vscode/extensions.json
 .idea
 .vercel
+
+# Claude Code agent worktrees / local agent state (never source)
+.claude/

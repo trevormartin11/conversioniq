@@ -15,10 +15,17 @@ export function InboxActions({ id, status }: { id: string; status: string }) {
   function run(fn: () => Promise<unknown>, msg: string) {
     setBusy(true);
     start(async () => {
-      const r = (await fn()) as { ok?: boolean } | undefined;
-      setBusy(false);
-      if (r && r.ok === false) toast.error("Action failed.");
-      else toast.success(msg);
+      try {
+        const r = (await fn()) as { ok?: boolean; error?: string } | undefined;
+        if (r && r.ok === false) toast.error(r.error ?? "Action failed.");
+        else toast.success(msg);
+      } catch {
+        // A thrown action used to strand busy=true forever — this button was the one
+        // permanently-brickable spinner in the app.
+        toast.error("That didn't go through — try again.");
+      } finally {
+        setBusy(false);
+      }
       router.refresh();
     });
   }

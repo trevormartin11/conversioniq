@@ -12,9 +12,11 @@ import type { ReplyClass } from "@/lib/data/types";
 export function bodyText(body: unknown): string {
   if (!body) return "";
   if (typeof body === "string") return stripHtml(body);
-  const b = body as { html?: string; text?: string };
-  if (b.text) return b.text.trim();
-  if (b.html) return stripHtml(b.html);
+  // Sub-fields must be string-guarded too: a hand-crafted {"text": ["x"]} payload threw a
+  // TypeError past the webhook's preview branch.
+  const b = body as { html?: unknown; text?: unknown };
+  if (typeof b.text === "string" && b.text) return b.text.trim();
+  if (typeof b.html === "string" && b.html) return stripHtml(b.html);
   return "";
 }
 
