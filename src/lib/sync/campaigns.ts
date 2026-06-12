@@ -39,9 +39,10 @@ export async function syncCampaigns() {
   // NAME KEYWORDS on every run (a pushed draft's authored "Med Spa" became "General") and
   // zeroed every variant's sent/opens/replies/positives counters.
   const db = supabaseAdmin();
-  const { data: existingCamps, error: exErr } = await db.from("campaigns").select("id, created_at");
+  const { data: existingCamps, error: exErr } = await db.from("campaigns").select("id, created_at, vertical, persona_id");
   if (exErr) throw new Error(`syncCampaigns: campaigns read failed: ${exErr.message}`);
-  const createdAtById = new Map((existingCamps ?? []).map((r: { id: string; created_at: string }) => [r.id, r.created_at]));
+  const existingById = new Map((existingCamps ?? []).map((r: { id: string; created_at: string; vertical: string; persona_id: string | null }) => [r.id, r]));
+  const createdAtById = new Map([...existingById.entries()].map(([id, r]) => [id, r.created_at]));
   const { data: existingVars, error: varErr } = await db.from("sequence_variants").select("id");
   if (varErr) throw new Error(`syncCampaigns: variants read failed: ${varErr.message}`);
   const knownVariantIds = new Set((existingVars ?? []).map((r: { id: string }) => r.id));
@@ -63,7 +64,12 @@ export async function syncCampaigns() {
       daily_cap: c.daily_limit ?? 80,
     };
     if (createdAtById.has(cid)) {
-      campUpdates.push(shared); // vertical/persona_id/list_version/created_at: hub-owned, untouched
+      // Updates go through the same upsert call — and Postgres builds the INSERT tuple
+      // BEFORE conflict arbitration, so every NOT-NULL column must be present even though
+      // the row exists (first live cron run failed exactly here on `vertical`). Echo the
+      // EXISTING hub-owned values: constraint satisfied, nothing clobbered.
+      const prev = existingById.get(cid)!;
+      campUpdates.push({ ...shared, vertical: prev.vertical, persona_id: prev.persona_id });
     } else {
       campInserts.push({
         ...shared,
