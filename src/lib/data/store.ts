@@ -7,7 +7,6 @@
  * Supabase. Selectors/getters stay synchronous and unchanged — pages/actions
  * just `await ensureData()` first.
  */
-import { cache } from "react";
 import { appConfig, DATA_MODE, integrations } from "@/lib/config";
 import type {
   AutomationLevel,
@@ -42,8 +41,10 @@ import { pushDemoDeal } from "@/lib/integrations/zoho-civ";
 import { sendSms } from "@/lib/integrations/twilio";
 import { generateLandingContent } from "@/lib/ai/landing";
 import { buildSeed } from "./seed";
-import { loadAutomationLevel, loadAssumptions, loadDatasetLive, loadIcp } from "./live";
+import { ALL_COLLECTIONS, loadCollectionsLive, loadSettings, type HubCollection } from "./live";
 import { supabaseAdmin } from "./supabase";
+
+export type { HubCollection } from "./live";
 
 const LIVE = DATA_MODE === "live";
 
@@ -57,6 +58,10 @@ interface RuntimeState {
   automationLevel: AutomationLevel;
   assumptions: { closeRate: number; monthlyMrr: number };
   icp: string | null; // operator-edited ICP override; null → use the built-in default
+  /** When each collection (and settings) was last fetched — the freshness ledger. */
+  hydratedAt: Map<HubCollection | "settings", number>;
+  /** In-flight fetches, so concurrent requests share one round-trip per collection. */
+  inflight: Map<string, Promise<void>>;
 }
 const rt: RuntimeState = ((globalThis as unknown as { __ciqRuntime?: RuntimeState }).__ciqRuntime ??= {
   data: null,
@@ -66,32 +71,91 @@ const rt: RuntimeState = ((globalThis as unknown as { __ciqRuntime?: RuntimeStat
     monthlyMrr: appConfig.projection.assumedMonthlyMrr,
   },
   icp: null,
+  hydratedAt: new Map(),
+  inflight: new Map(),
 });
 
+/** Within this window a collection is NOT refetched — it dedupes the multiple ensureData
+ *  calls inside one request (page render, or getCurrentUser + the action body, which used to
+ *  cost TWO full hydrations per action). Long enough to span a request, short enough that the
+ *  next user interaction sees fresh data. Correctness never rests on this snapshot: every
+ *  send/claim/mutation re-checks via conditional DB writes. */
+const HYDRATION_TTL_MS = 2_000;
+
+function emptyDataset(): Dataset {
+  return {
+    users: [], personas: [], domains: [], inboxes: [], campaigns: [], leads: [], replies: [],
+    suppression: [], creditMeters: [], audit: [], jobs: [], demos: [], variants: [], metrics: [],
+    costs: [], alerts: [], consent: [], channelAccounts: [], outreach: [], landingPages: [],
+  };
+}
+
 function db(): Dataset {
-  if (!rt.data) rt.data = buildSeed();
+  if (!rt.data) rt.data = LIVE ? emptyDataset() : buildSeed();
   return rt.data;
 }
 
-const hydrateLive = cache(async () => {
-  // One parallel phase: the three settings loads used to run serially AFTER the dataset
-  // (4 sequential network phases — +3×RTT on every request for no reason).
-  const [data, automationLevel, assumptions, icp] = await Promise.all([
-    loadDatasetLive(),
-    loadAutomationLevel(),
-    loadAssumptions(),
-    loadIcp(),
-  ]);
-  rt.data = data;
-  rt.automationLevel = automationLevel;
-  rt.assumptions = assumptions;
-  rt.icp = icp;
-});
+/** Fail-loud accessor: in live mode a collection read before it was EVER hydrated is a missed
+ *  ensureData declaration — throw immediately rather than silently returning [] (an empty
+ *  suppression list or inbox fleet read as "fine" is exactly how silent catastrophes start). */
+function col<K extends HubCollection>(key: K): Dataset[K] {
+  if (LIVE && !rt.hydratedAt.has(key)) {
+    throw new Error(`store: "${key}" read before hydration — add "${key}" to this surface's ensureData([...]) declaration`);
+  }
+  return db()[key];
+}
 
-/** Populate the in-memory dataset for this request (live: from Supabase). */
-export async function ensureData(): Promise<void> {
-  if (LIVE) await hydrateLive();
-  else if (!rt.data) rt.data = buildSeed();
+async function fetchCollections(keys: HubCollection[]): Promise<void> {
+  const partial = await loadCollectionsLive(keys);
+  const data = db();
+  const now = Date.now();
+  for (const k of keys) {
+    (data[k] as unknown) = partial[k] ?? [];
+    rt.hydratedAt.set(k, now);
+  }
+}
+
+/**
+ * Hydrate the collections a surface reads (live mode; mock mode is the seed). No argument =
+ * everything (the cron path and not-yet-declared surfaces). Per-collection TTL + in-flight
+ * sharing replace the old whole-DB-every-request hydration (22 round-trips, 3.85–17 MB/page).
+ */
+export async function ensureData(collections?: HubCollection[]): Promise<void> {
+  if (!LIVE) {
+    if (!rt.data) rt.data = buildSeed();
+    return;
+  }
+  const wanted: (HubCollection | "settings")[] = [...(collections ?? ALL_COLLECTIONS), "settings"];
+  const now = Date.now();
+  const waits: Promise<void>[] = [];
+
+  // Settings ride every hydration (one small query, TTL-deduped like the rest).
+  if (wanted.includes("settings") && now - (rt.hydratedAt.get("settings") ?? 0) > HYDRATION_TTL_MS) {
+    let p = rt.inflight.get("settings");
+    if (!p) {
+      p = loadSettings().then((s) => {
+        rt.automationLevel = s.automationLevel;
+        rt.assumptions = s.assumptions;
+        rt.icp = s.icp;
+        rt.hydratedAt.set("settings", Date.now());
+      }).finally(() => rt.inflight.delete("settings"));
+      rt.inflight.set("settings", p);
+    }
+    waits.push(p);
+  }
+
+  const stale = (collections ?? ALL_COLLECTIONS).filter(
+    (k) => now - (rt.hydratedAt.get(k) ?? 0) > HYDRATION_TTL_MS && !rt.inflight.has(k),
+  );
+  if (stale.length) {
+    const batch = fetchCollections(stale).finally(() => stale.forEach((k) => rt.inflight.delete(k)));
+    stale.forEach((k) => rt.inflight.set(k, batch));
+  }
+  for (const k of collections ?? ALL_COLLECTIONS) {
+    const p = rt.inflight.get(k);
+    if (p) waits.push(p);
+  }
+  await Promise.all(waits);
 }
 
 async function liveUpsert(table: string, row: Record<string, unknown>, onConflict = "id") {
@@ -122,31 +186,31 @@ export function dataMode() {
 
 // --- raw getters (sync; read the hydrated dataset) --------------------------
 export const getDataset = (): Dataset => db();
-export const getUsers = () => db().users;
-export const getPersonas = () => db().personas;
-export const getDomains = () => db().domains;
-export const getInboxes = () => db().inboxes;
-export const getCampaigns = () => db().campaigns;
-export const getLeads = () => db().leads;
-export const getReplies = () => db().replies;
-export const getSuppression = () => db().suppression;
-export const getCreditMeters = () => db().creditMeters;
-export const getAudit = () => [...db().audit].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
-export const getJobs = () => db().jobs;
-export const getDemos = () => db().demos;
-export const getVariants = () => db().variants;
-export const getMetrics = () => db().metrics;
-export const getCosts = () => db().costs;
-export const getConsent = () => db().consent;
-export const getChannelAccounts = () => db().channelAccounts;
-export const getOutreach = () => [...db().outreach].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
-export const getChannelAccount = (id: string) => db().channelAccounts.find((a) => a.id === id) ?? null;
-export const getOutreachMessage = (id: string) => db().outreach.find((o) => o.id === id) ?? null;
+export const getUsers = () => col("users");
+export const getPersonas = () => col("personas");
+export const getDomains = () => col("domains");
+export const getInboxes = () => col("inboxes");
+export const getCampaigns = () => col("campaigns");
+export const getLeads = () => col("leads");
+export const getReplies = () => col("replies");
+export const getSuppression = () => col("suppression");
+export const getCreditMeters = () => col("creditMeters");
+export const getAudit = () => [...col("audit")].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+export const getJobs = () => col("jobs");
+export const getDemos = () => col("demos");
+export const getVariants = () => col("variants");
+export const getMetrics = () => col("metrics");
+export const getCosts = () => col("costs");
+export const getConsent = () => col("consent");
+export const getChannelAccounts = () => col("channelAccounts");
+export const getOutreach = () => [...col("outreach")].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+export const getChannelAccount = (id: string) => col("channelAccounts").find((a) => a.id === id) ?? null;
+export const getOutreachMessage = (id: string) => col("outreach").find((o) => o.id === id) ?? null;
 
-export const getReply = (id: string) => db().replies.find((r) => r.id === id) ?? null;
-export const getLead = (id: string) => db().leads.find((l) => l.id === id) ?? null;
-export const getCampaign = (id: string) => db().campaigns.find((c) => c.id === id) ?? null;
-export const getInbox = (id: string) => db().inboxes.find((i) => i.id === id) ?? null;
+export const getReply = (id: string) => col("replies").find((r) => r.id === id) ?? null;
+export const getLead = (id: string) => col("leads").find((l) => l.id === id) ?? null;
+export const getCampaign = (id: string) => col("campaigns").find((c) => c.id === id) ?? null;
+export const getInbox = (id: string) => col("inboxes").find((i) => i.id === id) ?? null;
 
 // --- automation dial --------------------------------------------------------
 export const getAutomationLevel = () => rt.automationLevel;
@@ -1065,8 +1129,8 @@ export async function removeChannelAccount(id: string, actor = "system"): Promis
 }
 
 // --- landing pages (auto-generated per-vertical microsites) -----------------
-export const getLandingPages = () => db().landingPages;
-export const getLandingPage = (campaignId: string) => db().landingPages.find((p) => p.campaignId === campaignId) ?? null;
+export const getLandingPages = () => col("landingPages");
+export const getLandingPage = (campaignId: string) => col("landingPages").find((p) => p.campaignId === campaignId) ?? null;
 
 /** Resolve a PUBLISHED page by the public hostname serving it — the public router's lookup.
  *  Only published pages resolve: a draft/approved page must never be publicly reachable. */

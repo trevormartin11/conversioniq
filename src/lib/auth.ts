@@ -13,7 +13,7 @@ import type { User } from "@/lib/data/types";
 const FALLBACK_OPERATOR: User = { id: "u_operator", name: "Operator", email: "", role: "owner", avatarColor: "#6366f1" };
 
 export async function getCurrentUser(): Promise<User> {
-  await ensureData();
+  await ensureData(["users"]); // the single hottest call — every action pays it
   return getUsers()[0] ?? FALLBACK_OPERATOR; // single shared-password gate → the primary operator
 }
 

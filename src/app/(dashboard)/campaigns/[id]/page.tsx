@@ -30,7 +30,7 @@ function stepsFromSynced(vs: SequenceVariant[]): InstantlyStepView[] {
 }
 
 export default async function CampaignDetail({ params }: { params: Promise<{ id: string }> }) {
-  await ensureData();
+  await ensureData(["campaigns", "inboxes", "personas", "variants", "metrics", "leads", "demos", "replies", "landingPages"]);
   const { id } = await params;
   const c = getCampaign(id);
   if (!c) notFound();

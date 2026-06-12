@@ -15,7 +15,7 @@ import type { Health } from "@/lib/data/types";
 export const dynamic = "force-dynamic";
 
 export default async function DeliverabilityPage() {
-  await ensureData();
+  await ensureData(["domains", "inboxes", "leads", "personas"]);
   const s = deliverabilitySummary();
   const domains = getDomains();
   const inboxes = getInboxes();

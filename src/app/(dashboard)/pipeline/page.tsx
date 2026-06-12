@@ -9,7 +9,7 @@ import { num, pct, titleCase, usd } from "@/lib/format";
 export const dynamic = "force-dynamic";
 
 export default async function PipelinePage() {
-  await ensureData();
+  await ensureData(["demos", "leads", "replies", "metrics", "campaigns"]);
   const p = pipeline();
   const r = residual();
   const loop = outcomeLoop();
