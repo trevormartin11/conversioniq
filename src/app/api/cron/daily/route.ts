@@ -30,6 +30,9 @@ async function run(req: NextRequest) {
     // CIQ suppression, brief) see today's data — without this they ran against the mock seed.
     // Guarded like every other step: a hydration failure must degrade to a structured
     // {ok:false} (it used to throw past all the per-job capture into a raw 500).
+    // Send reconciler is DB-direct (no store reads) — it must run even when hydration fails,
+    // since a failed hydration day is exactly when crash-window divergence goes unnoticed.
+    try { result.reconcile = await reconcileSends(); } catch (e) { result.reconcileError = (e as Error).message; }
     let hydrated = false;
     try { await ensureData(); hydrated = true; } catch (e) { result.hydrationError = (e as Error).message; }
     if (hydrated) {
@@ -39,9 +42,6 @@ async function run(req: NextRequest) {
     try { result.deliverability = await enforceDeliverability(); } catch (e) { result.deliverabilityError = (e as Error).message; }
     // Subject A/B tuner: needs today's variant counters (synced above) + the hydrated store.
     try { result.subjectTuner = await runSubjectTuner(); } catch (e) { result.subjectTunerError = (e as Error).message; }
-    // Send reconciler: diffs claimed-sent rows against what providers ACTUALLY sent (the
-    // claim-before-send crash window) — orphans return to the queue, ghosts get marked sent.
-    try { result.reconcile = await reconcileSends(); } catch (e) { result.reconcileError = (e as Error).message; }
     if (integrations.zohoCiq) {
       try { result.civSuppression = await syncCivCustomers(); } catch (e) { result.civSuppressionError = (e as Error).message; }
     }

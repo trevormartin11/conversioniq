@@ -72,7 +72,11 @@ export async function smsExistsTo(to: string, sinceIso: string): Promise<boolean
   const token = process.env.TWILIO_AUTH_TOKEN;
   if (!accountSid || !token) return null;
   try {
-    const qs = new URLSearchParams({ To: to, "DateSent>": sinceIso.slice(0, 10), PageSize: "20" });
+    // No DateSent filter: queued/throttled messages (A2P 10DLC can hold long-code SMS for
+    // hours) have DateSent=null and a server-side date filter EXCLUDES them — the reconciler
+    // would then "find no trace", revert, and the operator's retry double-texts when the
+    // queue drains. Fetch the 20 most recent to this number and refine in memory instead.
+    const qs = new URLSearchParams({ To: to, PageSize: "20" });
     const res = await httpJson<{ messages?: { sid: string; status?: string; date_created?: string }[] }>(
       "twilio",
       `https://api.twilio.com/2010-04-01/Accounts/${accountSid}/Messages.json?${qs}`,

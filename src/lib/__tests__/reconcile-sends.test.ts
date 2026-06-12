@@ -55,6 +55,32 @@ describe("verifyEmailClaims — claimed-sent vs the actual thread", () => {
     expect(res.unverifiable).toEqual([]);
   });
 
+  it("does NOT verify off the original cold email when the prospect replied fast (P1 regression)", () => {
+    // Cold email at T-8min, reply at T-5min, claim at T-4min... wait — anchor on real bug:
+    // outbound BEFORE the inbound must never verify, even inside the handledAt slack window.
+    const fastInbound = email({ id: "e_in3", thread_id: "t3", from_address_email: "p3@spa.com", timestamp_email: ago(125) });
+    const coldEmail = email({ id: "e_cold3", thread_id: "t3", from_address_email: "us@ciqsends.com", timestamp_email: ago(128) }); // 3min before the reply, inside the 10min slack of handledAt
+    const res = verifyEmailClaims(
+      [claim({ id: "i_r3", instantlyEmailId: "e_in3", receivedAt: ago(125), handledAt: ago(124) })],
+      [fastInbound, coldEmail],
+      NOW,
+    );
+    expect(res.orphans).toEqual(["i_r3"]); // the cold email is not our answer
+  });
+
+  it("does NOT verify off our answer to an EARLIER sibling reply (P1 regression)", () => {
+    // Reply #1 at T-180 answered at T-115; reply #2 at T-118 claimed at T-112 then crashed.
+    const in1 = email({ id: "e_in", from_address_email: "prospect@spa.com", timestamp_email: ago(180) });
+    const answer1 = email({ id: "e_a1", from_address_email: "us@ciqsends.com", timestamp_email: ago(119) });
+    const in2 = email({ id: "e_in2b", from_address_email: "prospect@spa.com", timestamp_email: ago(118) });
+    const res = verifyEmailClaims(
+      [claim({ id: "i_r2b", instantlyEmailId: "e_in2b", receivedAt: ago(118), handledAt: ago(112) })],
+      [in1, answer1, in2],
+      NOW,
+    );
+    expect(res.orphans).toEqual(["i_r2b"]); // answer1 predates reply #2 — not its answer
+  });
+
   it("ignores outbound from a different inbox (not our send)", () => {
     const other = email({ id: "e_other", from_address_email: "someoneelse@x.com", timestamp_email: ago(60) });
     const res = verifyEmailClaims([claim({})], [inbound, other], NOW);
@@ -79,6 +105,19 @@ describe("findGhostPending — actually-sent rows stuck on pending", () => {
     expect(ghosts).toEqual([]);
   });
 
+  it("does NOT ghost-mark an earlier pending reply off our answer to a LATER sibling (P1 regression)", () => {
+    // Pending reply #1 at T-180 (never answered); reply #2 at T-120; we answered #2 at T-90.
+    const in1 = email({ id: "e_in", from_address_email: "prospect@spa.com", timestamp_email: ago(180) });
+    const in2 = email({ id: "e_in2c", from_address_email: "prospect@spa.com", timestamp_email: ago(120) });
+    const answer2 = email({ id: "e_a2", from_address_email: "us@ciqsends.com", timestamp_email: ago(90) });
+    const ghosts = findGhostPending(
+      [claim({ id: "i_r1", status: "pending", handledAt: null, instantlyEmailId: "e_in", receivedAt: ago(180) })],
+      [in1, in2, answer2],
+      NOW,
+    );
+    expect(ghosts).toEqual([]); // the answer belongs to reply #2's window, not #1's
+  });
+
   it("leaves a fresh pending reply alone (grace window — a human may be answering it now)", () => {
     const freshInbound = email({ id: "e_in2", thread_id: "t2", from_address_email: "p2@spa.com", timestamp_email: new Date(NOW - 60_000).toISOString() });
     const ourReply = email({ id: "e_out2", thread_id: "t2", from_address_email: "us@ciqsends.com", timestamp_email: new Date(NOW - 30_000).toISOString() });
@@ -97,24 +136,30 @@ const canned = { claimed: [] as Record<string, unknown>[], pending: [] as Record
 
 vi.mock("@/lib/data/supabase", () => ({
   supabaseAdmin: () => ({
-    from: (table: string) => ({
-      select: () => {
-        const q = {
-          in: () => ({ gte: async () => ({ data: canned.claimed, error: null }) }),
-          eq: (_c: string, v: unknown) =>
-            table === "replies"
-              ? { gte: async () => ({ data: canned.pending, error: null }) }
-              : { eq: () => ({ gte: () => ({ limit: async () => ({ data: canned.sms, error: null }) }) }) },
+    from: (table: string) => {
+      // Generic chainable fake: any filter/order call returns the chain; awaiting it resolves
+      // the canned rows (selects) or records the patch (updates). Mirrors PostgREST's builder.
+      const make = (kind: "select" | "update", patch?: Record<string, unknown>, marks: string[] = []) => {
+        const resolve = () => {
+          if (kind === "update") {
+            dbOps.updates.push({ table, patch: patch! });
+            return { data: null, error: null };
+          }
+          if (table !== "replies") return { data: canned.sms, error: null };
+          return marks.includes("in") ? { data: canned.claimed, error: null } : { data: canned.pending, error: null };
         };
-        return q;
-      },
-      update: (patch: Record<string, unknown>) => ({
-        eq: (_c: string, _v: unknown) => ({
-          in: async () => { dbOps.updates.push({ table, patch }); return { error: null }; },
-          eq: async () => { dbOps.updates.push({ table, patch }); return { error: null }; },
-        }),
-      }),
-    }),
+        const chain: Record<string, unknown> = {};
+        for (const m of ["eq", "in", "gte", "order", "limit", "not"]) {
+          chain[m] = (..._a: unknown[]) => make(kind, patch, [...marks, m]);
+        }
+        chain.then = (res: (v: unknown) => unknown) => res(resolve());
+        return chain;
+      };
+      return {
+        select: () => make("select"),
+        update: (patch: Record<string, unknown>) => make("update", patch),
+      };
+    },
   }),
   chunkedUpsert: vi.fn(),
 }));
