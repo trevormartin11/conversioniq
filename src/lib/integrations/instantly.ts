@@ -124,6 +124,22 @@ export async function listAllEmails(max = 1000): Promise<InstantlyEmail[]> {
   return out;
 }
 
+/** GET /campaigns/analytics/steps — per-step, per-variant counters for ONE campaign. This is
+ *  the data pipe for subject A/B learning; tolerant of shape drift (array or {items}), and a
+ *  missing/unsupported endpoint just returns [] so the variant-metrics sync degrades quietly. */
+export async function getCampaignStepAnalytics(campaignId: string): Promise<Record<string, unknown>[]> {
+  try {
+    const data = await httpJson<Record<string, unknown>[] | { items?: Record<string, unknown>[] }>(
+      "instantly",
+      `${BASE}/campaigns/analytics/steps?campaign_id=${encodeURIComponent(campaignId)}`,
+      { headers: headers() },
+    );
+    return Array.isArray(data) ? data : data.items ?? [];
+  } catch {
+    return [];
+  }
+}
+
 /** GET /campaigns/analytics — per-campaign totals (sent/opens/replies). */
 export async function getCampaignAnalytics(): Promise<Record<string, unknown>[]> {
   const data = await httpJson<Record<string, unknown>[] | { items?: Record<string, unknown>[] }>("instantly", `${BASE}/campaigns/analytics`, { headers: headers() });
