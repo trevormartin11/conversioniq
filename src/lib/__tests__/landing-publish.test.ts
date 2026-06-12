@@ -48,6 +48,29 @@ describe("mergeCnameHost — read-merge-write never collides with existing recor
   });
 });
 
+describe("editing semantics — live pages never go offline", () => {
+  it("editing a draft/approved page drops it to draft; editing a PUBLISHED page stays live", async () => {
+    const { updateLandingContent } = await import("@/lib/data/store");
+    await ensureData();
+    const c = await addCampaign({ name: "LP Edit Test", vertical: "Med Spas", personaId: "pe_trevor", dailyCap: 80 }, "Test");
+    const page = await generateLandingPage(c.id, "Test");
+    await approveLandingPage(c.id, "Test");
+
+    // Pre-publish edit → back to draft (re-approval required).
+    const edited = await updateLandingContent(c.id, { ...page!.content, seoTitle: "Edited title" }, "Test");
+    expect(edited?.status).toBe("draft");
+    expect(edited?.approvedBy).toBeNull();
+
+    await approveLandingPage(c.id, "Test");
+    await publishLandingPage(c.id, "https://go.lpedit-spa.com", "Test");
+
+    // Post-publish edit → stays published, content updated, URL keeps serving.
+    const live = await updateLandingContent(c.id, { ...page!.content, seoTitle: "Live edit" }, "Test");
+    expect(live?.status).toBe("published");
+    expect(getLandingByHost("go.lpedit-spa.com")?.content.seoTitle).toBe("Live edit");
+  });
+});
+
 describe("publish lifecycle — only PUBLISHED pages resolve publicly", () => {
   it("generate → approve → publish → resolvable by host; drafts never resolve", async () => {
     await ensureData();
