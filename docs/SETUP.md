@@ -111,6 +111,12 @@ tagline) feeds the opener-line generator. Credit-metered per lookup; without the
 other signals (website, hiring, reviews, news) carry personalization on their own. The
 generic `SOCIAL_SIGNAL_API_URL/KEY` webhook adapter remains as an alternative.
 
+> **Verify provider availability before subscribing**: Proxycurl announced a wind-down after
+> LinkedIn's 2025 lawsuit — confirm the API answers (a 200 from
+> `GET https://nubela.co/proxycurl/api/linkedin/company/resolve?company_domain=stripe.com`
+> with your key) before counting on this signal. The adapter degrades silently to the other
+> signals either way.
+
 ## 10. Landing-page publishing (Vercel + Namecheap)
 
 ```
