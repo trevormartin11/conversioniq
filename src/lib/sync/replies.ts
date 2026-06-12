@@ -11,7 +11,7 @@ import type { ReplyClass } from "@/lib/data/types";
 
 const slug = (s: string) => s.replace(/[^a-z0-9]+/gi, "_").toLowerCase();
 
-function bodyText(body: unknown): string {
+export function bodyText(body: unknown): string {
   if (!body) return "";
   if (typeof body === "string") return stripHtml(body);
   const b = body as { html?: string; text?: string };

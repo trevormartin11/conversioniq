@@ -25,12 +25,18 @@ export function launchBlocker(
       return { reason: "no_inboxes", message: "No sending inboxes are assigned — assign at least one before launching." };
   }
   // Never start sending from under-warmed / inactive inboxes — that burns the fleet. (Overridable.)
-  const unfit = opts.inboxes.filter((i) => c.inboxIds.includes(i.id) && (i.status !== "active" || i.warmupScore < opts.warmupGate));
+  // Iterate the ASSIGNED ids (not the resolvable inboxes): an id that no longer resolves to a hub
+  // inbox (deleted/renamed by sync, slug change) is treated as unfit — fail closed, not skipped.
+  const byId = new Map(opts.inboxes.map((i) => [i.id, i]));
+  const unfit = c.inboxIds.filter((id) => {
+    const i = byId.get(id);
+    return !i || i.status !== "active" || i.warmupScore < opts.warmupGate;
+  });
   if (unfit.length) {
-    const names = unfit.slice(0, 3).map((i) => i.email).join(", ");
+    const names = unfit.slice(0, 3).map((id) => byId.get(id)?.email ?? id).join(", ");
     return {
       reason: "warmup",
-      message: `${unfit.length} assigned inbox${unfit.length > 1 ? "es are" : " is"} under warmup ${opts.warmupGate} or not active (${names}${unfit.length > 3 ? "…" : ""}). Launching now risks the fleet.`,
+      message: `${unfit.length} assigned inbox${unfit.length > 1 ? "es are" : " is"} under warmup ${opts.warmupGate}, not active, or unknown (${names}${unfit.length > 3 ? "…" : ""}). Launching now risks the fleet.`,
     };
   }
   return null;

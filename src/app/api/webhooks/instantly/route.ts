@@ -4,7 +4,7 @@ import { appConfig, integrations } from "@/lib/config";
 import { addSuppression, ensureData, isSuppressed, recordInboxBounce } from "@/lib/data/store";
 import { addToBlocklist } from "@/lib/integrations/instantly";
 import { sendTelegram } from "@/lib/integrations/telegram";
-import { syncReplies } from "@/lib/sync/replies";
+import { syncReplies, bodyText } from "@/lib/sync/replies";
 import { webhookAuthorized } from "@/lib/api-auth";
 
 export const maxDuration = 60;
@@ -25,12 +25,17 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: false, error: "invalid json" }, { status: 400 });
   }
 
-  const event = String(payload.event_type ?? payload.type ?? "unknown");
+  // Only a string event type is meaningful — an array like ["reply_received"] must NOT be
+  // String()-coerced into a real reply that smuggles past the switch.
+  const rawEvent = payload.event_type ?? payload.type;
+  const event = typeof rawEvent === "string" ? rawEvent : "unknown";
 
   switch (event) {
     case "reply_received":
     case "email_received": {
-      const body = String(payload.body ?? payload.text ?? "");
+      // Route through the same bodyText() the sync path uses, so the documented {html,text}
+      // object shape is handled (not String()-coerced to "[object Object]" and misclassified).
+      const body = bodyText(payload.body ?? payload.text);
       const from = String(payload.from ?? payload.lead_email ?? "");
       // Live: delegate to the canonical sync path so the reply is classified, drafted,
       // persisted, auto-handled and hot-pinged exactly like the cron — no divergence. We

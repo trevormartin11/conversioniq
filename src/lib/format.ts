@@ -1,6 +1,7 @@
 import { formatDistanceToNowStrict } from "date-fns";
 
 export function pct(n: number, digits = 0): string {
+  if (!Number.isFinite(n)) return "—";
   return `${(n * 100).toFixed(digits)}%`;
 }
 
@@ -39,7 +40,7 @@ export function ago(iso: string | null): string {
 
 /** Safe division that returns 0 instead of NaN/Infinity. */
 export function rate(numerator: number, denominator: number): number {
-  if (!denominator) return 0;
+  if (!denominator || !Number.isFinite(numerator) || !Number.isFinite(denominator)) return 0;
   return numerator / denominator;
 }
 

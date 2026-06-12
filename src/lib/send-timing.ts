@@ -30,11 +30,13 @@ const AREA_CODE_TZ: Record<string, Exclude<Tz, "unknown">> = {
   "213": "PT", "323": "PT", "310": "PT", "424": "PT", "818": "PT", "747": "PT", "626": "PT", "661": "PT", "562": "PT", "714": "PT", "949": "PT", "415": "PT", "628": "PT", "510": "PT", "408": "PT", "669": "PT", "650": "PT", "916": "PT", "925": "PT", "619": "PT", "858": "PT", "760": "PT", "206": "PT", "253": "PT", "425": "PT", "503": "PT", "971": "PT", "702": "PT", "725": "PT",
 };
 
-/** Infer the recipient's timezone from their phone area code. */
+/** Infer the recipient's timezone from their phone area code. Only a confident NANP match
+ *  (exactly 10 local digits, optionally a leading US "1") infers a zone; a foreign number like
+ *  +61 2… must NOT be read as area code "612" and bucketed into a US send window. */
 export function leadTimezone(lead: Pick<Lead, "phone">): Tz {
   const digits = (lead.phone ?? "").replace(/\D/g, "");
   const local = digits.length === 11 && digits.startsWith("1") ? digits.slice(1) : digits;
-  if (local.length < 10) return "unknown";
+  if (local.length !== 10) return "unknown";
   return AREA_CODE_TZ[local.slice(0, 3)] ?? "unknown";
 }
 

@@ -37,6 +37,7 @@ import type {
   LandingPage,
 } from "./types";
 import { capRemaining, findConsent, GATE_REASONS, normalizeHandle, sendGate } from "@/lib/channels/policy";
+import { isLikelyEmail } from "@/lib/email";
 import { pushDemoDeal } from "@/lib/integrations/zoho-civ";
 import { sendSms } from "@/lib/integrations/twilio";
 import { generateLandingContent } from "@/lib/ai/landing";
@@ -233,14 +234,18 @@ export function isSuppressed(email: string): { suppressed: boolean; entry?: Supp
   return { suppressed: !!entry, entry };
 }
 
-export function dedupeAgainstUniverse(
-  candidates: { email: string; [k: string]: unknown }[],
-): { clean: typeof candidates; rejected: { email: string; reason: string }[] } {
-  const clean: typeof candidates = [];
+export function dedupeAgainstUniverse<T extends { email: string }>(
+  candidates: T[],
+): { clean: T[]; rejected: { email: string; reason: string }[] } {
+  const clean: T[] = [];
   const rejected: { email: string; reason: string }[] = [];
   const seen = new Set<string>();
   for (const c of candidates) {
     const e = norm(c.email);
+    if (!isLikelyEmail(e)) {
+      rejected.push({ email: c.email, reason: "invalid" });
+      continue;
+    }
     if (seen.has(e)) {
       rejected.push({ email: c.email, reason: "duplicate in list" });
       continue;

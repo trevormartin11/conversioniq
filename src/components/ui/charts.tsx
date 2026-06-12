@@ -2,15 +2,17 @@ import { cn } from "@/lib/utils";
 
 export function Progress({ value, tone = "brand" }: { value: number; tone?: "brand" | "ok" | "warn" | "bad" }) {
   const bar = { brand: "bg-brand-500", ok: "bg-ok", warn: "bg-warn", bad: "bg-bad" }[tone];
+  const v = Number.isFinite(value) ? value : 0;
   return (
     <div className="h-1.5 w-full overflow-hidden rounded-full bg-ink-700">
-      <div className={cn("h-full rounded-full transition-all", bar)} style={{ width: `${Math.min(100, Math.max(0, value * 100))}%` }} />
+      <div className={cn("h-full rounded-full transition-all", bar)} style={{ width: `${Math.min(100, Math.max(0, v * 100))}%` }} />
     </div>
   );
 }
 
 /** Inline trend line with gradient area fill, end-point dot, and trend coloring. */
-export function Sparkline({ data, className }: { data: number[]; className?: string }) {
+export function Sparkline({ data: raw, className }: { data: number[]; className?: string }) {
+  const data = raw.map((n) => (Number.isFinite(n) ? n : 0));
   if (data.length < 2) return null;
   const w = 240;
   const h = 48;

@@ -15,6 +15,13 @@ describe("send timing — timezone from area code", () => {
     expect(leadTimezone({ phone: "999-555-1212" })).toBe("unknown");
   });
 
+  it("does not read a foreign number as a US area code (strict 10-digit NANP)", () => {
+    // Regression: +61 2 9876 5432 → digits 61298765432 → old code sliced "612" → CT.
+    expect(leadTimezone({ phone: "+61 2 9876 5432" })).toBe("unknown");
+    expect(leadTimezone({ phone: "21255512129" })).toBe("unknown"); // 11 digits, not a 1-prefixed NANP
+    expect(leadTimezone({ phone: "+44 20 7946 0958" })).toBe("unknown");
+  });
+
   it("buckets in ET→CT→MT→PT→unknown order with counts + a null server window for unknown", () => {
     const buckets = bucketByTimezone([
       { phone: "212-555-0000" },
