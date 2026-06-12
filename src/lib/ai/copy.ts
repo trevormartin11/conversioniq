@@ -1,6 +1,7 @@
 /** Copy coach — analyze variant results and suggest improvements / A-B ideas. */
 import { aiAvailable, complete } from "@/lib/integrations/anthropic";
 import { voiceSystemPrompt } from "./voice";
+import { provenContextBlock } from "./proven";
 import { rate } from "@/lib/format";
 import type { SequenceVariant } from "@/lib/data/types";
 import type { Learning } from "./learnings";
@@ -116,6 +117,7 @@ export async function generateSequence(
       user: [
         `Draft a 4-step cold-email sequence for a "${vertical}" outbound campaign selling ConversionIQ — an AI that instantly answers a business's inbound/after-hours leads and books them into the calendar.`,
         brief ? `Why this vertical, and the angle to lead with: ${brief}. Make the copy reflect this specific pain.` : "",
+        provenContextBlock(),
         `Apply these learnings from prior campaigns:\n${learningText || "(no results yet — use the playbook defaults)"}`,
         `Rules: short lowercase subject lines; lead with the prospect's missed revenue, not features; exactly one CTA per email (a 15-minute demo) phrased as a question; every follow-up adds a NEW angle (timing, math, proof, breakup) — never "just bumping"; bodies under 90 words; use {{firstName}} and {{companyName}} merge tags.`,
         `Return ONLY compact JSON: {"steps":[{"step":1,"subject":"...","body":"...","rationale":"why this works"}]}`,

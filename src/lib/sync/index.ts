@@ -5,6 +5,7 @@ import { syncCampaigns } from "./campaigns";
 import { syncLeads } from "./leads";
 import { syncReplies } from "./replies";
 import { syncMetrics } from "./metrics";
+import { syncVariantMetrics } from "./variant-metrics";
 
 async function recordJob(job: string, status: "ok" | "error", startedAt: number, error?: string) {
   try {
@@ -27,6 +28,7 @@ export async function runAllSyncs() {
     ["leads", syncLeads],
     ["replies", syncReplies],
     ["metrics", syncMetrics],
+    ["variant_metrics", syncVariantMetrics],
   ];
   for (const [name, fn] of steps) {
     const t = Date.now();

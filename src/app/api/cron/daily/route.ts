@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { ensureData } from "@/lib/data/store";
 import { runAllSyncs } from "@/lib/sync";
 import { enforceDeliverability } from "@/lib/jobs/deliverability";
+import { runSubjectTuner } from "@/lib/ai/subject-tuner";
 import { verifyAllDomains } from "@/lib/jobs/domain-auth";
 import { syncCivCustomers } from "@/lib/jobs/civ-suppression";
 import { sendDailyBrief } from "@/lib/jobs/digest";
@@ -31,6 +32,8 @@ async function run(req: NextRequest) {
     // dmarc:false; without this it never gets corrected). Runs after sync creates the domains.
     try { result.domainAuth = await verifyAllDomains(); } catch (e) { result.domainAuthError = (e as Error).message; }
     try { result.deliverability = await enforceDeliverability(); } catch (e) { result.deliverabilityError = (e as Error).message; }
+    // Subject A/B tuner: needs today's variant counters (synced above) + the hydrated store.
+    try { result.subjectTuner = await runSubjectTuner(); } catch (e) { result.subjectTunerError = (e as Error).message; }
     if (integrations.zohoCiq) {
       try { result.civSuppression = await syncCivCustomers(); } catch (e) { result.civSuppressionError = (e as Error).message; }
     }
