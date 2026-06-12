@@ -102,3 +102,19 @@ export async function ensureDmarc(domain: string, record: string): Promise<{ add
   if (added) await setHosts(domain, hosts);
   return { added, live: true };
 }
+
+/** Add a CNAME for `name` (e.g. "go") only if that host doesn't exist yet. Pure, like mergeDmarcHost. */
+export function mergeCnameHost(hosts: NcHost[], name: string, target: string): { hosts: NcHost[]; added: boolean } {
+  const has = hosts.some((h) => h.name.toLowerCase() === name.toLowerCase() && ["CNAME", "A", "URL"].includes(h.type.toUpperCase()));
+  if (has) return { hosts, added: false };
+  return { hosts: [...hosts, { name, type: "CNAME", address: target, mxPref: "10", ttl: "1800" }], added: true };
+}
+
+/** Read existing hosts, add the landing CNAME only if its host is unclaimed, write back.
+ *  Same read-merge-write safety as ensureDmarc — never wipes the sending domain's records. */
+export async function ensureCname(domain: string, name: string, target: string): Promise<{ added: boolean; live: boolean }> {
+  if (!integrations.namecheap) return { added: false, live: false };
+  const { hosts, added } = mergeCnameHost(await getHosts(domain), name, target);
+  if (added) await setHosts(domain, hosts);
+  return { added, live: true };
+}

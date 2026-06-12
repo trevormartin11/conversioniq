@@ -3,7 +3,8 @@ import { notFound } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
 import { LandingTemplate } from "@/components/landing/landing-template";
 import { LandingControls } from "@/components/landing/landing-controls";
-import { ensureData, getCampaign, getLandingPage } from "@/lib/data/store";
+import { ensureData, getCampaign, getDomains, getInboxes, getLandingPage } from "@/lib/data/store";
+import { publishHostFor } from "@/lib/landing/publish";
 
 export const dynamic = "force-dynamic";
 
@@ -14,13 +15,26 @@ export default async function CampaignLandingPage({ params }: { params: Promise<
   if (!campaign) notFound();
   const page = getLandingPage(id);
 
+  // Where Publish will put it: the configured domain, else the campaign's first sending domain.
+  const firstInbox = getInboxes().find((i) => campaign.inboxIds.includes(i.id));
+  const autoDomain = getDomains().find((d) => d.id === firstInbox?.domainId)?.domain ?? firstInbox?.email.split("@")[1] ?? null;
+  const targetDomain = page?.domain ?? autoDomain;
+  const publishTarget = targetDomain ? publishHostFor(targetDomain) : null;
+
   return (
     <div className="space-y-4">
       <Link href={`/campaigns/${id}`} className="inline-flex items-center gap-1.5 text-sm text-slate-400 transition-colors hover:text-slate-200">
         <ArrowLeft className="h-4 w-4" /> Back to {campaign.name}
       </Link>
 
-      <LandingControls campaignId={id} status={page?.status ?? null} source={page?.source ?? null} hasPage={!!page} />
+      <LandingControls
+        campaignId={id}
+        status={page?.status ?? null}
+        source={page?.source ?? null}
+        hasPage={!!page}
+        publishTarget={publishTarget}
+        publishedUrl={page?.publishedUrl ?? null}
+      />
 
       {page ? (
         <div className="overflow-hidden rounded-xl border border-ink-700">
