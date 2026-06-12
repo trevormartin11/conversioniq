@@ -2,7 +2,7 @@
   "name": "ciq-hub",
   "version": "0.1.0",
   "private": true,
-  "description": "CIQ Outbound — Central Control Hub. Orchestration + unification layer over Instantly, Zoho, Apollo, Gmail and Telegram for a parallel cold-email operation reselling ConversionIQ.",
+  "description": "CIQ Outbound \u2014 Central Control Hub. Orchestration + unification layer over Instantly, Zoho, Apollo, Gmail and Telegram for a parallel cold-email operation reselling ConversionIQ.",
   "scripts": {
     "dev": "next dev",
     "build": "next build",
