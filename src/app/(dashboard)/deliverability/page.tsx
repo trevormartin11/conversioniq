@@ -19,6 +19,7 @@ export default async function DeliverabilityPage() {
   const s = deliverabilitySummary();
   const domains = getDomains();
   const inboxes = getInboxes();
+  const attention = inboxes.filter((i) => i.status === "paused" || i.bounceRate > appConfig.deliverability.autoPauseBounceRate || i.warmupScore < appConfig.deliverability.warmupGate);
   const personas = getPersonas();
   const personaName = (id: string) => personas.find((p) => p.id === id)?.name ?? "—";
   const tzBuckets = bucketByTimezone(getLeads());
@@ -87,6 +88,9 @@ export default async function DeliverabilityPage() {
       {/* Domain rollup */}
       <section>
         <SectionHeader title="Domains" subtitle="SPF / DKIM / DMARC + warmup rollup" />
+        {rollup.length === 0 && (
+          <Card><CardBody className="text-sm text-slate-500">No sending domains yet — they appear after the first Instantly sync.</CardBody></Card>
+        )}
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {rollup.map(({ d, ibs, warming, paused, avgWarmup, health }) => (
             <Card key={d.id}>
@@ -119,8 +123,10 @@ export default async function DeliverabilityPage() {
         <Card>
           <CardBody className="p-0">
             <div className="divide-y divide-ink-800">
-              {inboxes
-                .filter((i) => i.status === "paused" || i.bounceRate > appConfig.deliverability.autoPauseBounceRate || i.warmupScore < appConfig.deliverability.warmupGate)
+              {attention.length === 0 && (
+                <p className="px-4 py-6 text-center text-sm text-ok">All inboxes healthy — nothing needs attention ✓</p>
+              )}
+              {attention
                 .slice(0, 25)
                 .map((i) => (
                   <div key={i.id} className="flex items-center justify-between gap-3 px-4 py-3">

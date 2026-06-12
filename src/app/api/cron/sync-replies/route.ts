@@ -16,7 +16,7 @@ async function run(req: NextRequest) {
   try {
     return NextResponse.json({ ok: true, ...(await syncReplies()) });
   } catch (e) {
-    return NextResponse.json({ ok: false, error: (e as Error).message }, { status: 502 });
+    return NextResponse.json({ ok: false, error: (e as Error).message }, { status: 500 });
   }
 }
 

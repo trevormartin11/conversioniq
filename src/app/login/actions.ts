@@ -6,7 +6,12 @@ import { redirect } from "next/navigation";
 const MONTH = 60 * 60 * 24 * 30;
 
 export async function loginAction(password: string) {
-  if (!process.env.APP_PASSWORD || password !== process.env.APP_PASSWORD) {
+  // Distinguish misconfiguration from a wrong password — with APP_PASSWORD unset no password
+  // can ever be correct, and "Incorrect password." hard-locks the operator with a lie.
+  if (!process.env.APP_PASSWORD) {
+    return { ok: false, error: "Login isn't configured (APP_PASSWORD is missing) — contact whoever deployed the hub." };
+  }
+  if (password !== process.env.APP_PASSWORD) {
     return { ok: false, error: "Incorrect password." };
   }
   const jar = await cookies();

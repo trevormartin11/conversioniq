@@ -36,7 +36,12 @@ async function run(req: NextRequest) {
     }
   }
   try { result.brief = await sendDailyBrief(); } catch (e) { result.briefError = (e as Error).message; }
-  return NextResponse.json({ ok: true, ...result });
+  // Honest status: the route used to answer 200 {ok:true} even when every sub-job failed,
+  // so cron monitors saw a permanently healthy day. Any *Error key (or a failed sync) flips
+  // ok and the HTTP status, while still reporting everything that did run.
+  const syncFailed = !!result.sync && (result.sync as { ok?: boolean }).ok === false;
+  const failed = syncFailed || Object.keys(result).some((k) => k.endsWith("Error"));
+  return NextResponse.json({ ok: !failed, ...result }, { status: failed ? 500 : 200 });
 }
 
 export const GET = run;

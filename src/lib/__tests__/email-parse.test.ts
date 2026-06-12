@@ -28,6 +28,20 @@ describe("extractEmail — canonical address extraction for the suppression gate
   });
 });
 
+describe("dedupeAgainstUniverse — Set-based suppression lookup", () => {
+  it("still rejects by suppressed DOMAIN through the map path", async () => {
+    const { ensureData, dedupeAgainstUniverse } = await import("@/lib/data/store");
+    await ensureData();
+    // competitorspa.com is domain-suppressed in the seed.
+    const { clean, rejected } = dedupeAgainstUniverse([
+      { email: "ceo@competitorspa.com" },
+      { email: "fresh@brand-new-spa.com" },
+    ]);
+    expect(clean.map((c) => c.email)).toEqual(["fresh@brand-new-spa.com"]);
+    expect(rejected).toHaveLength(1);
+  });
+});
+
 describe("isLikelyEmail", () => {
   it("accepts plausible addresses, rejects malformed ones", () => {
     expect(isLikelyEmail("x@y.com")).toBe(true);

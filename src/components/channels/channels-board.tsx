@@ -467,6 +467,9 @@ function ConsentLedger({ consent }: { consent: ConsentRecord[] }) {
   }
 
   function optOut(c: ConsentRecord) {
+    // Permanent + one-way from this screen (re-opt-in needs fresh consent at the top form) —
+    // a mis-click must not silently kill a legally-consented channel.
+    if (typeof window !== "undefined" && !window.confirm(`Record an opt-out for ${c.handle}? This permanently blocks sends until they opt in again.`)) return;
     start(async () => {
       const r = await optOutAction(c.channel, c.handle);
       if (!r.ok) {

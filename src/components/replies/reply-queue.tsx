@@ -118,15 +118,22 @@ export function ReplyQueue({
   async function run(id: string, fn: () => Promise<unknown>, opts: RunOpts = {}) {
     const next = opts.advance ? nextPendingExcluding(id) : null;
     setBusyId(id);
-    const res = (await fn()) as { ok?: boolean; error?: string } | undefined;
-    setBusyId(null);
-    if (res && res.ok === false) {
-      toast.error(res.error ?? "Something went wrong.");
-    } else {
-      if (opts.successMsg) {
-        toast.success(opts.successMsg, opts.undo ? { label: "Undo", onClick: () => startTransition(async () => { await revertReplyAction(id); router.refresh(); }) } : undefined);
+    try {
+      const res = (await fn()) as { ok?: boolean; error?: string } | undefined;
+      if (res && res.ok === false) {
+        toast.error(res.error ?? "Something went wrong.");
+      } else {
+        if (opts.successMsg) {
+          toast.success(opts.successMsg, opts.undo ? { label: "Undo", onClick: () => startTransition(async () => { await revertReplyAction(id); router.refresh(); }) } : undefined);
+        }
+        if (opts.advance) setOpenId(next);
       }
-      if (opts.advance) setOpenId(next);
+    } catch {
+      // A rejected action (network blip, server exception) used to freeze this row's buttons
+      // forever with zero feedback — the silent dead-end class a non-technical operator can't diagnose.
+      toast.error("That didn't go through — check your connection and try again.");
+    } finally {
+      setBusyId(null);
     }
     startTransition(() => router.refresh());
   }

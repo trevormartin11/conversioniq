@@ -8,6 +8,7 @@ import { Tag } from "@/components/ui/badge";
 import { usd, titleCase } from "@/lib/format";
 import { COST_CADENCES, COST_CATEGORIES, type CostCadence, type CostCategory } from "@/lib/data/types";
 import { createCostAction, deleteCostAction } from "@/app/(dashboard)/costs/actions";
+import { toast } from "@/components/ui/toast";
 
 export interface CostView {
   id: string;
@@ -26,6 +27,7 @@ export function CostManager({ costs }: { costs: CostView[] }) {
   const [pending, startTransition] = useTransition();
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
+  const [confirmId, setConfirmId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const [category, setCategory] = useState<CostCategory>("software");
@@ -45,11 +47,25 @@ export function CostManager({ costs }: { costs: CostView[] }) {
     });
   }
 
+  // Two-tap confirm (same pattern as campaign delete): a mis-tap on the trash icon used to
+  // silently destroy a financial record with no confirmation and no feedback.
   function remove(id: string) {
+    if (confirmId !== id) {
+      setConfirmId(id);
+      return;
+    }
+    setConfirmId(null);
     setBusy(id);
     startTransition(async () => {
-      await deleteCostAction(id);
-      setBusy(null);
+      try {
+        const res = await deleteCostAction(id);
+        if (res && (res as { ok?: boolean }).ok === false) toast.error("Couldn't remove that cost — refresh and try again.");
+        else toast.success("Cost removed");
+      } catch {
+        toast.error("Couldn't remove that cost — check your connection.");
+      } finally {
+        setBusy(null);
+      }
       router.refresh();
     });
   }
@@ -99,9 +115,16 @@ export function CostManager({ costs }: { costs: CostView[] }) {
             </div>
             <div className="flex shrink-0 items-center gap-3">
               <span className="text-sm tabular-nums text-slate-200">{usd(c.amount)}<span className="text-xs text-slate-500"> {CADENCE_LABEL[c.cadence]}</span></span>
-              <button onClick={() => remove(c.id)} disabled={busy === c.id} className="rounded p-1.5 text-slate-500 hover:bg-bad/15 hover:text-bad disabled:opacity-50" aria-label="Remove cost">
-                <Trash2 className="h-4 w-4" />
-              </button>
+              {confirmId === c.id ? (
+                <span className="flex items-center gap-1.5">
+                  <button onClick={() => remove(c.id)} disabled={busy === c.id} className="rounded bg-bad/15 px-2 py-1 text-xs font-medium text-bad hover:bg-bad/25 disabled:opacity-50">Remove?</button>
+                  <button onClick={() => setConfirmId(null)} className="rounded px-1.5 py-1 text-xs text-slate-500 hover:bg-ink-700">Cancel</button>
+                </span>
+              ) : (
+                <button onClick={() => remove(c.id)} disabled={busy === c.id} className="rounded p-1.5 text-slate-500 hover:bg-bad/15 hover:text-bad disabled:opacity-50" aria-label="Remove cost">
+                  <Trash2 className="h-4 w-4" />
+                </button>
+              )}
             </div>
           </div>
         ))}

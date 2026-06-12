@@ -18,16 +18,25 @@ export function CampaignActions({ id, status }: { id: string; status: string }) 
   function run(key: string, fn: () => Promise<unknown>, successMsg?: string) {
     setBusy(key);
     start(async () => {
-      const res = (await fn()) as { ok?: boolean; error?: string; blocked?: string } | undefined;
-      setBusy(null);
-      if (res && res.ok === false && res.blocked === "warmup") {
-        setWarmupWarn(res.error ?? "Some assigned inboxes are under warmup."); // keep UI open, offer override
-        return;
+      try {
+        const res = (await fn()) as { ok?: boolean; error?: string; blocked?: string; id?: string } | undefined;
+        if (res && res.ok === false && res.blocked === "warmup") {
+          setWarmupWarn(res.error ?? "Some assigned inboxes are under warmup."); // keep UI open, offer override
+          return;
+        }
+        setConfirmLaunch(false);
+        setWarmupWarn(null);
+        if (res && res.ok === false) toast.error(res.error ?? "Something went wrong.");
+        else if (key === "clone" && res?.id) {
+          // Give the operator a path to the clone — it used to be findable only by scanning /campaigns.
+          const cloneId = res.id;
+          toast.success("Campaign cloned", { label: "Open clone →", onClick: () => router.push(`/campaigns/${cloneId}`) });
+        } else if (successMsg) toast.success(successMsg);
+      } catch {
+        toast.error("That didn't go through — check your connection and try again.");
+      } finally {
+        setBusy(null);
       }
-      setConfirmLaunch(false);
-      setWarmupWarn(null);
-      if (res && res.ok === false) toast.error(res.error ?? "Something went wrong.");
-      else if (successMsg) toast.success(successMsg);
       router.refresh();
     });
   }

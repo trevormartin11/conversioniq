@@ -14,9 +14,6 @@ export async function GET(req: NextRequest) {
   const denied = cronAuthorized(req);
   if (denied) return denied;
   const results = await checkConnections();
-  return NextResponse.json({
-    ok: results.every((r) => r.ok !== false),
-    results,
-    time: new Date().toISOString(),
-  });
+  const ok = results.every((r) => r.ok !== false);
+  return NextResponse.json({ ok, results, time: new Date().toISOString() }, { status: ok ? 200 : 500 });
 }

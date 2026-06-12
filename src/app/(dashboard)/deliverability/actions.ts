@@ -13,15 +13,15 @@ export async function pauseInboxAction(id: string) {
   await ensureData();
   const user = await getCurrentUser();
   // DB-level pause (mirrors the auto-pause guardrail); operator pauses warmup in Instantly.
-  await pauseInbox(id, user.name, "manual");
+  const inbox = await pauseInbox(id, user.name, "manual");
   revalidate();
-  return { ok: true };
+  return inbox ? { ok: true as const } : { ok: false as const, error: "Inbox not found — refresh." };
 }
 
 export async function resumeInboxAction(id: string) {
   await ensureData();
   const user = await getCurrentUser();
-  await resumeInbox(id, user.name);
+  const inbox = await resumeInbox(id, user.name);
   revalidate();
-  return { ok: true };
+  return inbox ? { ok: true as const } : { ok: false as const, error: "Inbox not found — refresh." };
 }
