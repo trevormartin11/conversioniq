@@ -112,9 +112,15 @@ export function PersonalizationLab({
     }
     setLoading(true);
     setLoadMsg(null);
-    const r = await loadPersonalizedLeadsAction(campaignId, approved);
-    setLoadMsg(r.ok ? { ok: true, text: `Loaded ${r.added} lead${r.added === 1 ? "" : "s"} with personalization${r.failed ? ` (${r.failed} failed)` : ""}.` } : { ok: false, text: r.error ?? "Failed." });
-    setLoading(false);
+    try {
+      const r = await loadPersonalizedLeadsAction(campaignId, approved);
+      setLoadMsg(r.ok ? { ok: true, text: `Loaded ${r.added} lead${r.added === 1 ? "" : "s"} with personalization${r.failed ? ` (${r.failed} failed)` : ""}.` } : { ok: false, text: r.error ?? "Failed." });
+    } catch {
+      // A rejected request used to strand the Load button spinning forever with no message.
+      setLoadMsg({ ok: false, text: "Load didn't go through — check your connection and try again." });
+    } finally {
+      setLoading(false);
+    }
   }
 
   const inputCls = "h-9 w-full rounded-lg border border-ink-700 bg-ink-950 px-3 text-sm text-slate-200 focus:border-brand-500 focus:outline-none";
