@@ -43,6 +43,7 @@ export const integrations = {
   millionverifier: has(process.env.MILLIONVERIFIER_API_KEY),
   // Phase-2 personalization: a pluggable social/LinkedIn-activity provider (off until keyed).
   socialSignals: has(process.env.SOCIAL_SIGNAL_API_KEY, process.env.SOCIAL_SIGNAL_API_URL),
+  proxycurl: has(process.env.PROXYCURL_API_KEY),
   vercel: has(process.env.VERCEL_TOKEN, process.env.VERCEL_PROJECT_ID),
   gmail: has(
     process.env.GMAIL_CLIENT_ID,

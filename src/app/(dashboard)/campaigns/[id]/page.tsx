@@ -248,7 +248,7 @@ export default async function CampaignDetail({ params }: { params: Promise<{ id:
                 { label: "Hiring", on: integrations.apolloPersonal, needs: "Apollo" },
                 { label: "Reviews", on: integrations.outscraper, needs: "Outscraper" },
                 { label: "News", on: integrations.outscraper, needs: "Outscraper" },
-                { label: "Social", on: integrations.socialSignals, needs: "a social provider" },
+                { label: "Social", on: integrations.proxycurl || integrations.socialSignals, needs: "a Proxycurl key (PROXYCURL_API_KEY)" },
               ]}
             />
           </CardBody>
