@@ -174,6 +174,9 @@ export async function setIcp(text: string, actor = "system"): Promise<string | n
 }
 
 // --- audit ------------------------------------------------------------------
+/** Best-effort: the audit log is observability, not correctness. It sits at the tail of
+ *  nearly every mutation — an audit-table hiccup must never fail (or retry-double) an
+ *  operation whose real writes already succeeded. */
 export async function pushAudit(
   actor: string,
   action: string,
@@ -181,10 +184,14 @@ export async function pushAudit(
   entityId: string | null,
   meta: Record<string, unknown> = {},
 ) {
-  const id = `a_${Math.random().toString(36).slice(2, 9)}`;
+  const id = `a_${crypto.randomUUID().slice(0, 13)}`;
   const createdAt = new Date().toISOString();
   db().audit.unshift({ id, actor, action, entity, entityId, meta, createdAt });
-  await liveUpsert("audit_log", { id, actor, action, entity, entity_id: entityId, meta, created_at: createdAt });
+  try {
+    await liveUpsert("audit_log", { id, actor, action, entity, entity_id: entityId, meta, created_at: createdAt });
+  } catch (e) {
+    console.warn(`[audit] write failed (non-fatal): ${(e as Error).message}`);
+  }
 }
 
 // --- reply mutations --------------------------------------------------------
@@ -198,6 +205,43 @@ export async function updateReplyStatus(id: string, status: ReplyStatus, actor: 
   await liveUpdate("replies", id, { status, handled_by: actor, handled_at: reply.handledAt });
   await pushAudit(actor, `reply.${status}`, "reply", id, { lead: reply.fromName });
   return reply;
+}
+
+/**
+ * Atomically claim a pending reply for sending. The DB write is CONDITIONAL on
+ * status='pending' (UPDATE … WHERE status='pending'), so two concurrent approvals —
+ * double-click, second tab, retry after a blip — can't both win: the loser gets null
+ * and must not send. Claim BEFORE the external send; on send failure, releaseReplyClaim.
+ */
+export async function claimReply(id: string, actor: string): Promise<Reply | null> {
+  const reply = getReply(id);
+  if (!reply || reply.status !== "pending") return null;
+  const handledAt = new Date().toISOString();
+  if (LIVE) {
+    const { data, error } = await supabaseAdmin()
+      .from("replies")
+      .update({ status: "sent", handled_by: actor, handled_at: handledAt })
+      .eq("id", id)
+      .eq("status", "pending")
+      .select("id");
+    if (error) throw new Error(`replies claim failed: ${error.message}`);
+    if (!data?.length) return null; // lost the race — another request already handled it
+  }
+  reply.status = "sent";
+  reply.handledBy = actor;
+  reply.handledAt = handledAt;
+  return reply;
+}
+
+/** Roll a claimed-but-unsent reply back to the queue (the send failed after the claim). */
+export async function releaseReplyClaim(id: string): Promise<void> {
+  const reply = getReply(id);
+  if (reply) {
+    reply.status = "pending";
+    reply.handledBy = null;
+    reply.handledAt = null;
+  }
+  await liveUpdate("replies", id, { status: "pending", handled_by: null, handled_at: null });
 }
 
 export async function saveReplyDraft(id: string, draft: string): Promise<Reply | null> {
@@ -259,7 +303,7 @@ export function dedupeAgainstUniverse<T extends { email: string }>(
 }
 
 export async function addSuppression(entry: Omit<SuppressionEntry, "id" | "createdAt">, actor = "system") {
-  const row: SuppressionEntry = { ...entry, id: `sup_${Math.random().toString(36).slice(2, 9)}`, createdAt: new Date().toISOString() };
+  const row: SuppressionEntry = { ...entry, id: `sup_${crypto.randomUUID().slice(0, 13)}`, createdAt: new Date().toISOString() };
   db().suppression.unshift(row);
   await liveUpsert("suppression", {
     id: row.id, email: row.email, domain: row.domain, reason: row.reason,
@@ -288,7 +332,7 @@ export function searchUniverse(query: string) {
 
 // --- costs (P&L) ------------------------------------------------------------
 export async function addCost(input: Omit<Cost, "id" | "startedAt" | "source" | "createdBy">, actor = "system"): Promise<Cost> {
-  const cost: Cost = { ...input, id: `co_${Math.random().toString(36).slice(2, 9)}`, startedAt: new Date().toISOString(), source: "manual", createdBy: actor };
+  const cost: Cost = { ...input, id: `co_${crypto.randomUUID().slice(0, 13)}`, startedAt: new Date().toISOString(), source: "manual", createdBy: actor };
   db().costs.unshift(cost);
   await liveUpsert("costs", {
     id: cost.id, category: cost.category, vendor: cost.vendor, description: cost.description,
@@ -313,7 +357,7 @@ export async function deleteCost(id: string, actor = "system"): Promise<boolean>
 export async function addCampaign(input: Pick<Campaign, "name" | "vertical" | "personaId" | "dailyCap">, actor = "system"): Promise<Campaign> {
   const slug = input.vertical.toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "") || "general";
   const campaign: Campaign = {
-    id: `c_${Math.random().toString(36).slice(2, 9)}`,
+    id: `c_${crypto.randomUUID().slice(0, 13)}`,
     name: input.name, vertical: input.vertical || "General", personaId: input.personaId,
     status: "draft", instantlyCampaignId: null, listVersion: `${slug}_v1`, inboxIds: [],
     dailyCap: input.dailyCap || 80, createdAt: new Date().toISOString(),
@@ -340,7 +384,7 @@ export async function setCampaignStatus(id: string, status: Campaign["status"], 
 export async function cloneCampaign(id: string, actor: string): Promise<Campaign | null> {
   const src = getCampaign(id);
   if (!src) return null;
-  const newId = `c_${Math.random().toString(36).slice(2, 9)}`;
+  const newId = `c_${crypto.randomUUID().slice(0, 13)}`;
   const clone: Campaign = { ...src, id: newId, name: `${src.name} (copy)`, status: "draft", instantlyCampaignId: null, createdAt: new Date().toISOString() };
   db().campaigns.unshift(clone);
   await liveUpsert("campaigns", {
@@ -393,7 +437,7 @@ export async function reassignCampaignLeads(fromId: string, toId: string, actor 
 export async function addLeads(inputs: NewLead[], actor = "system"): Promise<Lead[]> {
   if (!inputs.length) return [];
   const now = new Date().toISOString();
-  const created: Lead[] = inputs.map((i) => ({ ...i, id: `l_${Math.random().toString(36).slice(2, 9)}`, createdAt: now }));
+  const created: Lead[] = inputs.map((i) => ({ ...i, id: `l_${crypto.randomUUID().slice(0, 13)}`, createdAt: now }));
   for (const lead of created) db().leads.unshift(lead);
   if (LIVE) {
     const rows = created.map((l) => ({
@@ -430,20 +474,28 @@ export async function setLeadStatus(id: string, status: LeadStatus, actor = "sys
 
 // --- demos / pipeline (book -> CIQ deal -> outcome -> MRR) ------------------
 export async function addDemo(input: { leadId: string; scheduledAt: string; owner: string; mrr?: number | null }, actor = "system"): Promise<Demo> {
+  // Idempotency: one open demo per lead — a double-click on "Book demo" must not hand
+  // ConversionIQ two deals for the same prospect. Return the existing open demo instead.
+  const open = db().demos.find((d) => d.leadId === input.leadId && (d.status === "booked" || d.status === "showed" || d.status === "no_show"));
+  if (open) return open;
   const demo: Demo = {
-    id: `d_${Math.random().toString(36).slice(2, 9)}`,
+    id: `d_${crypto.randomUUID().slice(0, 13)}`,
     leadId: input.leadId, scheduledAt: input.scheduledAt, status: "booked",
     owner: input.owner, mrr: input.mrr ?? null,
     outcomeReason: null, outcomeNote: null, outcomeAt: null, civDealId: null, reminderSentAt: null,
   };
   db().demos.unshift(demo);
-  // Hand the booked demo straight into ConversionIQ's pipeline (fail-safe).
+  // Persist FIRST, push the CIQ deal after: a failed insert must not strand a deal in
+  // ConversionIQ's pipeline (the retry would create a second one their team has to chase).
+  await liveUpsert("demos", { id: demo.id, lead_id: demo.leadId, scheduled_at: demo.scheduledAt, status: demo.status, owner: demo.owner, mrr: demo.mrr });
   const lead = getLead(input.leadId);
   if (lead) {
     const { dealId } = await pushDemoDeal(lead, demo);
-    demo.civDealId = dealId;
+    if (dealId) {
+      demo.civDealId = dealId;
+      await liveUpdate("demos", demo.id, { civ_deal_id: dealId });
+    }
   }
-  await liveUpsert("demos", { id: demo.id, lead_id: demo.leadId, scheduled_at: demo.scheduledAt, status: demo.status, owner: demo.owner, mrr: demo.mrr, civ_deal_id: demo.civDealId });
   await setLeadStatus(demo.leadId, "demo_booked", actor);
   await pushAudit(actor, "demo.booked", "demo", demo.id, { leadId: demo.leadId, civDealId: demo.civDealId });
   return demo;
@@ -648,7 +700,7 @@ export async function recordConsent(
     saved.updatedAt = now;
   } else {
     saved = {
-      id: `cs_${Math.random().toString(36).slice(2, 9)}`,
+      id: `cs_${crypto.randomUUID().slice(0, 13)}`,
       leadId: input.leadId ?? null, channel: input.channel, handle, status,
       source: input.source, proof: input.proof ?? null, capturedAt: now, updatedAt: now, note: input.note ?? null,
     };
@@ -706,7 +758,7 @@ export async function addOutreach(input: NewOutreach, actor = "system"): Promise
   }
   const now = new Date().toISOString();
   const msg: OutreachMessage = {
-    id: `om_${Math.random().toString(36).slice(2, 9)}`,
+    id: `om_${crypto.randomUUID().slice(0, 13)}`,
     channel, leadId: input.leadId ?? null, campaignId: input.campaignId ?? null,
     accountId: input.accountId ?? defaultAccountFor(channel)?.id ?? null,
     toName: input.toName, toHandle, body: input.body, status, source: input.source ?? "manual",
@@ -765,6 +817,22 @@ export async function sendOutreach(id: string, actor: string): Promise<{ ok: boo
       await liveUpdate("outreach_messages", id, { status: m.status });
     }
     return { ok: false, error: GATE_REASONS[gate.reason] };
+  }
+  // CLAIM before the wire: conditionally flip the row to "sent" only while it's still in the
+  // state this request saw. Two concurrent invocations (double-click, second tab, retry after
+  // a blip) race on this DB update — the loser matches zero rows and bails, so the same person
+  // can't be texted twice. Claiming BEFORE the provider call also survives a failed status
+  // write AFTER Twilio accepted (the old ordering re-sent on retry because the DB still said
+  // "approved"). On provider failure the row is moved to "failed" below (retryable).
+  if (LIVE) {
+    const { data: won, error: claimErr } = await supabaseAdmin()
+      .from("outreach_messages")
+      .update({ status: "sent" })
+      .eq("id", id)
+      .eq("status", m.status)
+      .select("id");
+    if (claimErr) throw new Error(`outreach_messages claim failed: ${claimErr.message}`);
+    if (!won?.length) return { ok: false, error: "Already being sent elsewhere — refresh." };
   }
   // SMS goes on the wire via Twilio when configured (gate already passed). Social is human-sent,
   // and without Twilio keys SMS is simulated (demo) — both just mark sent below.
@@ -832,7 +900,7 @@ export interface NewChannelAccount {
 /** Register a sending identity (an SMS number / a social account) so a channel can send. */
 export async function addChannelAccount(input: NewChannelAccount, actor = "system"): Promise<ChannelAccount> {
   const account: ChannelAccount = {
-    id: `ca_${Math.random().toString(36).slice(2, 9)}`,
+    id: `ca_${crypto.randomUUID().slice(0, 13)}`,
     channel: input.channel,
     label: input.label,
     identifier: input.identifier,
@@ -903,7 +971,7 @@ export async function generateLandingPage(campaignId: string, actor = "system"):
   const now = new Date().toISOString();
   const existing = getLandingPage(campaignId);
   const page: LandingPage = {
-    id: existing?.id ?? `lp_${Math.random().toString(36).slice(2, 9)}`,
+    id: existing?.id ?? `lp_${crypto.randomUUID().slice(0, 13)}`,
     campaignId,
     vertical: c.vertical,
     domain: existing?.domain ?? null,

@@ -3,7 +3,7 @@ import { classifyReply } from "@/lib/ai/classify";
 import { appConfig, integrations } from "@/lib/config";
 import { addSuppression, ensureData, isSuppressed, recordInboxBounce } from "@/lib/data/store";
 import { addToBlocklist } from "@/lib/integrations/instantly";
-import { sendTelegram } from "@/lib/integrations/telegram";
+import { sendTelegram, tgEscape } from "@/lib/integrations/telegram";
 import { syncReplies, bodyText } from "@/lib/sync/replies";
 import { webhookAuthorized } from "@/lib/api-auth";
 
@@ -51,7 +51,7 @@ export async function POST(req: NextRequest) {
       // No DB (preview) or the sync failed: classify + hot-ping so nothing's silently dropped.
       const { classification, confidence } = await classifyReply(body);
       if (from && appConfig.hotClasses.includes(classification as (typeof appConfig.hotClasses)[number])) {
-        await sendTelegram(`🔥 *${classification}* reply from ${from}\n${body.slice(0, 240)}`);
+        await sendTelegram(`🔥 *${classification}* reply from ${tgEscape(from)}\n${tgEscape(body.slice(0, 240))}`);
       }
       return NextResponse.json({ ok: true, mode: "classified", classification, confidence });
     }

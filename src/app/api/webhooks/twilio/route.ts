@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { ensureData, recordConsent, setConsentStatus } from "@/lib/data/store";
 import { classifyInboundKeyword } from "@/lib/channels/policy";
 import { verifyTwilioSignature } from "@/lib/integrations/twilio";
+import { sendTelegram, tgEscape } from "@/lib/integrations/telegram";
 
 export const runtime = "nodejs"; // needs node:crypto for signature verification
 
@@ -50,15 +51,33 @@ export async function POST(req: NextRequest) {
 
   await ensureData();
   const today = new Date().toISOString().slice(0, 10);
-  if (intent === "opt_out") {
-    // Blocks future sends + re-parks queued drafts to needs_consent (handled in recordConsent).
-    await setConsentStatus("sms", from, "opted_out", "Twilio (inbound)", "reply_keyword");
-  } else {
-    // Re-subscribe. Safe to act on ONLY because the signature was verified above.
-    await recordConsent(
-      { channel: "sms", handle: from, status: "opted_in", source: "reply_keyword", proof: `Replied "${body.trim().slice(0, 40)}" via SMS on ${today}` },
-      "Twilio (inbound)",
-    );
+  // A STOP is a legally-mandated state change and Twilio does NOT redeliver failed inbound-SMS
+  // webhooks — a single DB blip here would lose the opt-out forever and the next send would
+  // text a number that opted out. Retry the write before giving up, and if it still fails,
+  // alert the operator and answer 500 so the failure is at least visible in Twilio's logs.
+  const attempt = async () => {
+    if (intent === "opt_out") {
+      // Blocks future sends + re-parks queued drafts to needs_consent (handled in recordConsent).
+      await setConsentStatus("sms", from, "opted_out", "Twilio (inbound)", "reply_keyword");
+    } else {
+      // Re-subscribe. Safe to act on ONLY because the signature was verified above.
+      await recordConsent(
+        { channel: "sms", handle: from, status: "opted_in", source: "reply_keyword", proof: `Replied "${body.trim().slice(0, 40)}" via SMS on ${today}` },
+        "Twilio (inbound)",
+      );
+    }
+  };
+  for (let tries = 0; ; tries++) {
+    try {
+      await attempt();
+      break;
+    } catch (e) {
+      if (tries >= 2) {
+        await sendTelegram(`🚨 SMS ${intent === "opt_out" ? "OPT-OUT" : "opt-in"} from ${tgEscape(from)} FAILED to record after 3 attempts: ${tgEscape((e as Error).message)}. Record it manually on the Channels page.`);
+        return NextResponse.json({ ok: false, error: "consent write failed" }, { status: 500 });
+      }
+      await new Promise((r) => setTimeout(r, 250 * (tries + 1)));
+    }
   }
   return twiml();
 }

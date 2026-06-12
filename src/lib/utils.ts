@@ -6,9 +6,11 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
-/** Stable id generator for seed/mock records and client-side optimistic rows. */
+/** Stable id generator for seed/mock records and client-side optimistic rows.
+ *  Crypto-seeded: Math.random ids collided often enough at scale (~6% at 100k) that an
+ *  id-keyed upsert could silently merge two unrelated rows. */
 export function uid(prefix = "id"): string {
-  return `${prefix}_${Math.random().toString(36).slice(2, 10)}`;
+  return `${prefix}_${crypto.randomUUID().slice(0, 13)}`;
 }
 
 /** Clamp a number into [min, max]. */
