@@ -3,6 +3,7 @@ import { ensureData } from "@/lib/data/store";
 import { runAllSyncs } from "@/lib/sync";
 import { enforceDeliverability } from "@/lib/jobs/deliverability";
 import { runSubjectTuner } from "@/lib/ai/subject-tuner";
+import { reconcileSends } from "@/lib/jobs/reconcile-sends";
 import { verifyAllDomains } from "@/lib/jobs/domain-auth";
 import { syncCivCustomers } from "@/lib/jobs/civ-suppression";
 import { sendDailyBrief } from "@/lib/jobs/digest";
@@ -38,6 +39,9 @@ async function run(req: NextRequest) {
     try { result.deliverability = await enforceDeliverability(); } catch (e) { result.deliverabilityError = (e as Error).message; }
     // Subject A/B tuner: needs today's variant counters (synced above) + the hydrated store.
     try { result.subjectTuner = await runSubjectTuner(); } catch (e) { result.subjectTunerError = (e as Error).message; }
+    // Send reconciler: diffs claimed-sent rows against what providers ACTUALLY sent (the
+    // claim-before-send crash window) — orphans return to the queue, ghosts get marked sent.
+    try { result.reconcile = await reconcileSends(); } catch (e) { result.reconcileError = (e as Error).message; }
     if (integrations.zohoCiq) {
       try { result.civSuppression = await syncCivCustomers(); } catch (e) { result.civSuppressionError = (e as Error).message; }
     }

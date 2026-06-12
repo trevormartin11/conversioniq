@@ -62,6 +62,34 @@ export async function sendSms(input: { to: string; body: string; from?: string }
 }
 
 /**
+ * Did Twilio actually accept a message to this number since `sinceIso`? Used by the send
+ * reconciler to verify hub rows that CLAIM an SMS was sent (the claim-before-send crash
+ * window). Returns null when unverifiable (no creds / API error) — the caller must treat
+ * null as "unknown", never as "not sent".
+ */
+export async function smsExistsTo(to: string, sinceIso: string): Promise<boolean | null> {
+  const accountSid = process.env.TWILIO_ACCOUNT_SID;
+  const token = process.env.TWILIO_AUTH_TOKEN;
+  if (!accountSid || !token) return null;
+  try {
+    const qs = new URLSearchParams({ To: to, "DateSent>": sinceIso.slice(0, 10), PageSize: "20" });
+    const res = await httpJson<{ messages?: { sid: string; status?: string; date_created?: string }[] }>(
+      "twilio",
+      `https://api.twilio.com/2010-04-01/Accounts/${accountSid}/Messages.json?${qs}`,
+      { headers: { Authorization: `Basic ${Buffer.from(`${accountSid}:${token}`).toString("base64")}` } },
+    );
+    const since = new Date(sinceIso).getTime();
+    return (res.messages ?? []).some((m) => {
+      if (["failed", "undelivered", "canceled"].includes(m.status ?? "")) return false;
+      const t = m.date_created ? new Date(m.date_created).getTime() : NaN;
+      return !Number.isFinite(t) || t >= since; // DateSent> is day-granular; refine in-memory
+    });
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Twilio's request signature: HMAC-SHA1 of (full URL + each POST param's key+value, sorted
  * by key), keyed by the Auth Token, base64-encoded. This is how we prove an inbound webhook
  * (e.g. a STOP) genuinely came from Twilio and isn't a forged opt-in/opt-out.
