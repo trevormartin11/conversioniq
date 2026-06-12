@@ -101,7 +101,17 @@ CIQ_ZOHO_WEBHOOK_SECRET=<any random string>
 - **Reconcile cron (belt-and-suspenders):** `/api/cron/civ-outcomes` (every 6h) polls CIQ for any handed-off demo still awaiting an outcome, so a missed webhook still closes the loop.
 - The CIQ pipeline stages (verified live) are: Discovery Call → Demo Scheduled → Demo Completed → Proposal Sent/Onboarding Scheduled → Onboarding Complete/Free Trial → **Closed Won** / **Closed Lost** → Paused Accounts — so the defaults above are correct.
 
-## 9. Landing-page publishing (Vercel + Namecheap)
+## 9. Social signals (Proxycurl — optional)
+
+```
+PROXYCURL_API_KEY=...   # https://nubela.co/proxycurl → API key
+```
+Turns on the "Social" personalization signal: company LinkedIn presence (recent posts,
+tagline) feeds the opener-line generator. Credit-metered per lookup; without the key the
+other signals (website, hiring, reviews, news) carry personalization on their own. The
+generic `SOCIAL_SIGNAL_API_URL/KEY` webhook adapter remains as an alternative.
+
+## 10. Landing-page publishing (Vercel + Namecheap)
 
 ```
 VERCEL_TOKEN=...        # Vercel → Account Settings → Tokens
@@ -114,7 +124,7 @@ With these set (plus Namecheap below), **Publish** on a campaign's landing page 
 (read-merge-write — other records untouched), and the page goes live at that URL.
 `NEXT_PUBLIC_APP_URL` must be set so the public router can tell landing hosts from the app host.
 
-## 10. Namecheap (DMARC / SPF auto-fix + landing CNAMEs)
+## 11. Namecheap (DMARC / SPF auto-fix + landing CNAMEs)
 
 ```
 NAMECHEAP_API_KEY=...

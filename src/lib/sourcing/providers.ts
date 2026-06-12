@@ -113,7 +113,44 @@ export async function companyNewsSignal(company: string, location?: string): Pro
  * shapes; returns ONE specific line or null (never invents). Confirm the wire format when a key is
  * added — the self-gating + defensive parse mean a mismatch degrades to null rather than breaking.
  */
+/**
+ * Proxycurl (nubela.co) — the standard LinkedIn-data API. Resolves the company from its
+ * domain, then summarizes the LinkedIn presence into one personalization signal. Credit-
+ * metered per call; only invoked when PROXYCURL_API_KEY is set, and any error/missing
+ * data returns null so personalization just uses its other signals.
+ */
+async function proxycurlCompanySignal(domain: string): Promise<string | null> {
+  const key = process.env.PROXYCURL_API_KEY;
+  if (!key) return null;
+  try {
+    const headers = { Authorization: `Bearer ${key}` };
+    const resolve = await httpJson<{ url?: string }>(
+      "proxycurl",
+      `https://nubela.co/proxycurl/api/linkedin/company/resolve?company_domain=${encodeURIComponent(domain)}`,
+      { headers, timeoutMs: 20000 },
+    );
+    if (!resolve.url) return null;
+    const co = await httpJson<{ tagline?: string; description?: string; follower_count?: number; specialities?: string[]; updates?: Array<{ text?: string }> }>(
+      "proxycurl",
+      `https://nubela.co/proxycurl/api/linkedin/company?url=${encodeURIComponent(resolve.url)}&use_cache=if-present`,
+      { headers, timeoutMs: 20000 },
+    );
+    const update = co.updates?.find((u) => (u.text ?? "").trim())?.text?.trim();
+    if (update) return `Recent LinkedIn post from the company: ${update.slice(0, 240)}`;
+    const about = (co.tagline || co.description || "").trim();
+    if (about) return `Their LinkedIn describes them as: ${about.slice(0, 200)}`;
+    return null;
+  } catch {
+    return null;
+  }
+}
+
 export async function socialActivitySignal(input: { domain?: string; company?: string }): Promise<string | null> {
+  // Preferred provider when keyed; the generic webhook adapter below stays as the fallback.
+  if (integrations.proxycurl && input.domain) {
+    const viaProxycurl = await proxycurlCompanySignal(input.domain);
+    if (viaProxycurl) return viaProxycurl;
+  }
   if (!integrations.socialSignals) return null;
   const base = process.env.SOCIAL_SIGNAL_API_URL;
   if (!base || (!input.domain && !input.company)) return null;
