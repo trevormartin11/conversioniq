@@ -4,6 +4,8 @@ import { ensureData, getCampaign, getCampaigns, getInboxes, getLeads, getVariant
 import {
   addLeadsToCampaign,
   createInstantlyCampaign,
+  deleteInstantlyCampaign,
+  listAllCampaigns,
   updateInstantlyCampaignSchedule,
   updateInstantlyCampaignSequence,
 } from "@/lib/integrations/instantly";
@@ -208,6 +210,11 @@ export async function executeTimezoneSplitAction(campaignId: string): Promise<{ 
   const inboxEmails = getInboxes().filter((i) => c.inboxIds.includes(i.id)).map((i) => i.email);
   if (!inboxEmails.length) return { ok: false, results: [], error: "No sending inboxes assigned to this campaign." };
 
+  // "Run once" used to be a comment, not a guard — a re-run (second click, second tab, retry)
+  // created a full duplicate set of children loaded with the SAME leads → double sends once
+  // launched. Enforce it: skip any zone whose child already exists in Instantly by name.
+  const existingNames = new Set((await listAllCampaigns()).map((x) => (x.name ?? "").trim()));
+
   const leads = getLeads().filter((l) => l.campaignId === campaignId);
   const { from, to } = optimalWindowHHMM();
   const results: TzSplitResultRow[] = [];
@@ -217,19 +224,35 @@ export async function executeTimezoneSplitAction(campaignId: string): Promise<{ 
     const bucket = leads.filter((l) => leadTimezone(l) === tz && !isSuppressed(l.email).suppressed);
     if (!bucket.length) continue;
     const label = `${TZ_LABEL[tz]} (${bucket.length})`;
+    const childName = `${c.name} — ${TZ_LABEL[tz]}`;
+    if (existingNames.has(childName)) {
+      results.push({ label, ok: false, error: `"${childName}" already exists in Instantly — this zone was split before (skipped to avoid duplicate sends).` });
+      continue;
+    }
+    let childId: string | undefined;
     try {
-      const child = await createInstantlyCampaign({ name: `${c.name} — ${TZ_LABEL[tz]}`, steps, inboxEmails, dailyLimit: c.dailyCap });
+      const child = await createInstantlyCampaign({ name: childName, steps, inboxEmails, dailyLimit: c.dailyCap });
       if (!child.id) {
         results.push({ label, ok: false, error: "create returned no id" });
         continue;
       }
+      childId = child.id;
       await updateInstantlyCampaignSchedule(child.id, { timezone: INSTANTLY_TZ[tz], from, to });
       const { added } = await addLeadsToCampaign(
         child.id,
         bucket.map((l) => ({ email: l.email, first_name: l.firstName, last_name: l.lastName, company_name: l.company, phone: l.phone ?? undefined })),
       );
+      if (added === 0) {
+        results.push({ label, ok: false, childId: child.id, leads: 0, error: "child created but no leads loaded — load them before launching it" });
+        continue;
+      }
       results.push({ label, ok: true, childId: child.id, leads: added });
     } catch (e) {
+      // Compensate: a child that exists with a wrong schedule / no leads is a trap — remove it
+      // so the re-run starts clean instead of orphaning drafts in Instantly.
+      if (childId) {
+        try { await deleteInstantlyCampaign(childId); } catch { /* best-effort cleanup */ }
+      }
       results.push({ label, ok: false, error: (e as Error).message });
     }
   }

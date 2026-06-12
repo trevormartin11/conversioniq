@@ -31,63 +31,94 @@ interface SeqStep { variants?: { subject?: string; body?: string }[] }
 interface Seq { steps?: SeqStep[] }
 
 export async function syncCampaigns() {
+  const syncStart = new Date().toISOString();
   const campaigns = await listAllCampaigns();
-  const campRows: Record<string, unknown>[] = [];
-  const variantRows: Record<string, unknown>[] = [];
 
-  // Preserve the original created_at on re-sync — don't reset every campaign's age each run
-  // (it skews the Staged-board ordering and any age-based logic).
-  const { data: existingCamps } = await supabaseAdmin().from("campaigns").select("id, created_at");
+  // Existing rows: preserve created_at on re-sync, and split insert vs update payloads so
+  // hub-owned attribution survives — the old single upsert re-derived vertical/persona from
+  // NAME KEYWORDS on every run (a pushed draft's authored "Med Spa" became "General") and
+  // zeroed every variant's sent/opens/replies/positives counters.
+  const db = supabaseAdmin();
+  const { data: existingCamps, error: exErr } = await db.from("campaigns").select("id, created_at");
+  if (exErr) throw new Error(`syncCampaigns: campaigns read failed: ${exErr.message}`);
   const createdAtById = new Map((existingCamps ?? []).map((r: { id: string; created_at: string }) => [r.id, r.created_at]));
+  const { data: existingVars, error: varErr } = await db.from("sequence_variants").select("id");
+  if (varErr) throw new Error(`syncCampaigns: variants read failed: ${varErr.message}`);
+  const knownVariantIds = new Set((existingVars ?? []).map((r: { id: string }) => r.id));
+
+  const campInserts: Record<string, unknown>[] = [];
+  const campUpdates: Record<string, unknown>[] = [];
+  const varInserts: Record<string, unknown>[] = [];
+  const varUpdates: Record<string, unknown>[] = [];
+  const liveIds = new Set<string>();
 
   for (const c of campaigns) {
     if (!c.id) continue;
     const cid = `c_${c.id}`;
-    campRows.push({
-      id: cid, name: c.name ?? "(untitled)", vertical: verticalFor(c.name ?? ""),
-      persona_id: personaFor(c.name ?? ""), status: statusFor(c.status),
-      instantly_campaign_id: c.id, list_version: "instantly",
+    liveIds.add(cid);
+    const shared = {
+      id: cid, name: c.name ?? "(untitled)", status: statusFor(c.status),
+      instantly_campaign_id: c.id,
       inbox_ids: (c.email_list ?? []).map((e) => `ib_${slug(e)}`),
-      daily_cap: c.daily_limit ?? 80, created_at: createdAtById.get(cid) ?? new Date().toISOString(),
-    });
+      daily_cap: c.daily_limit ?? 80,
+    };
+    if (createdAtById.has(cid)) {
+      campUpdates.push(shared); // vertical/persona_id/list_version/created_at: hub-owned, untouched
+    } else {
+      campInserts.push({
+        ...shared,
+        vertical: verticalFor(c.name ?? ""), persona_id: personaFor(c.name ?? ""),
+        list_version: "instantly", created_at: new Date().toISOString(),
+      });
+    }
     const seqs = (c.sequences as Seq[]) ?? [];
     for (const seq of seqs) {
       (seq.steps ?? []).forEach((step, stepIdx) => {
         (step.variants ?? []).forEach((v, vIdx) => {
-          variantRows.push({
-            id: `sv_${c.id}_${stepIdx}_${vIdx}`, campaign_id: cid, step: stepIdx + 1,
-            variant: String.fromCharCode(65 + vIdx), subject: v.subject ?? "",
-            body: stripHtml(v.body ?? ""), sent: 0, opens: 0, replies: 0, positives: 0, approved: true,
-          });
+          const vid = `sv_${c.id}_${stepIdx}_${vIdx}`;
+          const sharedVar = { id: vid, campaign_id: cid, step: stepIdx + 1, variant: String.fromCharCode(65 + vIdx), subject: v.subject ?? "", body: stripHtml(v.body ?? "") };
+          if (knownVariantIds.has(vid)) varUpdates.push(sharedVar); // counters untouched
+          else varInserts.push({ ...sharedVar, sent: 0, opens: 0, replies: 0, positives: 0, approved: true });
         });
       });
     }
   }
 
-  const campaignsWritten = await chunkedUpsert("campaigns", campRows);
-  const variantsWritten = variantRows.length ? await chunkedUpsert("sequence_variants", variantRows) : 0;
+  const campaignsWritten =
+    (campInserts.length ? await chunkedUpsert("campaigns", campInserts) : 0) +
+    (campUpdates.length ? await chunkedUpsert("campaigns", campUpdates) : 0);
+  const variantsWritten =
+    (varInserts.length ? await chunkedUpsert("sequence_variants", varInserts) : 0) +
+    (varUpdates.length ? await chunkedUpsert("sequence_variants", varUpdates) : 0);
 
   // Reconcile deletions. The sync is the source of truth for genuinely Instantly-synced campaigns, so a
   // hub campaign that has an instantly_campaign_id no longer in the live list was deleted there — prune it
   // (and its variants) so deletions propagate. Scope strictly to rows WITH an instantly_campaign_id: that
-  // leaves hub-native drafts AND clones (which inherit list_version='instantly' but have a null
-  // instantly_campaign_id until launched) untouched — otherwise a fresh clone would be pruned on next sync.
-  // Guard: only prune when the fetch actually returned campaigns, so a transient empty Instantly response
-  // can never wipe the hub.
-  const db = supabaseAdmin();
+  // leaves hub-native drafts AND clones untouched. Guards: only prune when the fetch actually returned
+  // campaigns (a transient empty Instantly response can never wipe the hub), and only rows created BEFORE
+  // this sync started — a campaign pushed mid-sync isn't in our stale snapshot of the live list.
   let pruned = 0;
-  if (campRows.length > 0) {
-    const liveIds = new Set(campRows.map((r) => r.id as string));
-    const { data: existing } = await db.from("campaigns").select("id").not("instantly_campaign_id", "is", null);
-    const stale = (existing ?? []).map((r) => r.id as string).filter((id) => !liveIds.has(id));
-    if (stale.length) {
-      await db.from("sequence_variants").delete().in("campaign_id", stale);
-      await db.from("campaigns").delete().in("id", stale);
-      pruned = stale.length;
+  if (liveIds.size > 0) {
+    const { data: existing, error: prErr } = await db.from("campaigns").select("id, created_at").not("instantly_campaign_id", "is", null);
+    if (prErr) throw new Error(`syncCampaigns: prune read failed: ${prErr.message}`);
+    const stale = (existing ?? [])
+      .filter((r: { id: string; created_at: string }) => !liveIds.has(r.id) && r.created_at < syncStart)
+      .map((r: { id: string }) => r.id);
+    const toDrop = [...stale, "c_medspa"]; // + the legacy seeded placeholder
+    // FK-aware prune order, errors CHECKED — the old unchecked deletes destroyed the variants,
+    // silently failed on the campaign FK, and reported `pruned` anyway, forever.
+    for (const [step, run] of [
+      ["leads detach", () => db.from("leads").update({ campaign_id: null }).in("campaign_id", toDrop)],
+      ["replies detach", () => db.from("replies").update({ campaign_id: null }).in("campaign_id", toDrop)],
+      ["metrics", () => db.from("daily_metrics").delete().in("campaign_id", toDrop)],
+      ["landing pages", () => db.from("landing_pages").delete().in("campaign_id", toDrop)],
+      ["variants", () => db.from("sequence_variants").delete().in("campaign_id", toDrop)],
+      ["campaigns", () => db.from("campaigns").delete().in("id", toDrop)],
+    ] as const) {
+      const { error } = await run();
+      if (error && error.code !== "42P01") throw new Error(`syncCampaigns: prune failed (${step}): ${error.message}`);
     }
-    // Drop the legacy seeded placeholder once real campaigns are present.
-    await db.from("sequence_variants").delete().eq("campaign_id", "c_medspa");
-    await db.from("campaigns").delete().eq("id", "c_medspa");
+    pruned = stale.length;
   }
 
   return { campaigns: campaignsWritten, variants: variantsWritten, pruned };

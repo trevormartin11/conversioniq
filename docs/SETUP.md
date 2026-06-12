@@ -9,7 +9,7 @@ The app runs in **preview mode** with no keys. Add the blocks below to `.env.loc
 ## 1. Hub database (Supabase)
 
 1. Create a **new, dedicated** Supabase project — **not** the Health OS project.
-2. In the SQL editor, paste and run [`db/migrations/0001_init.sql`](../db/migrations/0001_init.sql).
+2. In the SQL editor, paste and run **every** migration in [`db/migrations/`](../db/migrations/) **in order** (`0001_init.sql` through `0007_integrity.sql`). Running only 0001 leaves core writes broken — booking a demo, costs, channels/consent, and landing pages all depend on 0002–0007.
 3. Copy the project URL + anon key + service-role key into:
    ```
    NEXT_PUBLIC_SUPABASE_URL=...
