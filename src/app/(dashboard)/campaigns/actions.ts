@@ -156,7 +156,7 @@ export async function pushCampaignToInstantlyAction(id: string, inboxIds: string
     const draftLeads = getLeads().filter((l) => l.campaignId === id);
     if (draftLeads.length) {
       try {
-        await addLeadsToCampaign(instId, draftLeads.map((l) => ({ email: l.email, first_name: l.firstName, last_name: l.lastName, company_name: l.company, phone: l.phone ?? undefined })));
+        await addLeadsToCampaign(instId, draftLeads.map((l) => ({ email: l.email, first_name: l.firstName, last_name: l.lastName, company_name: l.company, phone: l.phone ?? undefined, personalization: "" })));
       } catch { /* non-fatal — leads remain re-loadable from the Leads page */ }
       await reassignCampaignLeads(id, newId, user.name);
     }

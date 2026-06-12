@@ -15,6 +15,7 @@ import {
   captureConsentAction,
   draftOutreachAction,
   optOutAction,
+  queueSocialFollowupsAction,
   regenerateOutreachAction,
   saveOutreachBodyAction,
   sendOutreachAction,
@@ -153,7 +154,10 @@ export function ChannelsBoard({
           </Card>
           <DraftComposer kind="social" leads={leads} aiOn={aiOn} />
           <div className="space-y-3">
-            <SectionHeader title="Review queue" subtitle="AI-drafted DMs — edit, then open the profile and send at human pace." />
+            <div className="flex flex-wrap items-end justify-between gap-2">
+              <SectionHeader title="Review queue" subtitle="AI-drafted DMs — edit, then open the profile and send at human pace." />
+              <AutoQueueButton aiOn={aiOn} />
+            </div>
             {socialQueue.length === 0 ? (
               <Empty icon={MessageSquare} title="No DMs queued">Draft one above, or let the sourcing job fill this queue.</Empty>
             ) : (
@@ -547,5 +551,43 @@ function ConsentLedger({ consent }: { consent: ConsentRecord[] }) {
         )}
       </div>
     </div>
+  );
+}
+
+/**
+ * One click fills the DM queue from engaged email repliers: Apollo resolves each prospect's
+ * LinkedIn from their email, the AI drafts the message, and the card arrives with the
+ * profile deep link attached — zero manual lookup. Loops until the audience is exhausted.
+ */
+function AutoQueueButton({ aiOn }: { aiOn: boolean }) {
+  const router = useRouter();
+  const [running, setRunning] = useState(false);
+
+  async function run() {
+    setRunning(true);
+    let queued = 0;
+    let noProfile = 0;
+    try {
+      for (;;) {
+        const r = await queueSocialFollowupsAction({ channel: "linkedin" });
+        queued += r.queued;
+        noProfile += r.noProfile.length;
+        if (!r.more) break;
+      }
+      if (queued === 0 && noProfile === 0) toast.success("Queue is current — no engaged repliers awaiting a DM follow-up.");
+      else toast.success(`Queued ${queued} DM${queued === 1 ? "" : "s"}${noProfile ? ` · ${noProfile} skipped (no LinkedIn found)` : ""}`);
+    } catch {
+      toast.error("Auto-queue stopped early — what's queued so far is kept. Run it again to continue.");
+    } finally {
+      setRunning(false);
+      router.refresh();
+    }
+  }
+
+  return (
+    <Button size="sm" variant="primary" disabled={running} onClick={run} title={aiOn ? "Find engaged repliers, resolve their LinkedIn, draft DMs" : "Works without AI too — uses the template draft"}>
+      {running ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5" />}
+      {running ? "Queuing…" : "Auto-queue from engaged repliers"}
+    </Button>
   );
 }

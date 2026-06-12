@@ -167,7 +167,9 @@ export async function loadLeadsIntoCampaignAction(input: { campaignId: string; l
     try {
       const res = await addLeadsToCampaign(
         campaign.instantlyCampaignId,
-        clean.map((l) => ({ email: l.email, first_name: l.firstName, last_name: l.lastName, company_name: l.company, phone: l.phone })),
+        // personalization defaults to empty so {{personalization}} renders blank deterministically
+        // for non-personalized leads (no reliance on Instantly's undefined-variable behavior).
+        clean.map((l) => ({ email: l.email, first_name: l.firstName, last_name: l.lastName, company_name: l.company, phone: l.phone, personalization: "" })),
       );
       instantlyAdded = res.added;
       instantlyFailed = res.failed;
