@@ -59,15 +59,20 @@ export async function syncVariantMetrics() {
   const known = new Set((vars ?? []).map((v: { id: string }) => v.id));
 
   let updated = 0;
+  let unmatched = 0; // analytics rows that didn't resolve to a hub variant id — a high count
+  // means the step/variant numbering assumptions have drifted (visible in the cron result).
   for (const c of (camps ?? []) as { id: string; instantly_campaign_id: string }[]) {
     const rows = await getCampaignStepAnalytics(c.instantly_campaign_id);
     if (!rows.length) continue;
     for (const m of mapStepAnalytics(c.instantly_campaign_id, rows)) {
-      if (!known.has(m.id)) continue; // analytics for a variant slot the hub doesn't track
+      if (!known.has(m.id)) {
+        unmatched++;
+        continue;
+      }
       const { error: uErr } = await db.from("sequence_variants").update({ sent: m.sent, opens: m.opens, replies: m.replies }).eq("id", m.id);
       if (uErr) throw new Error(`variant metrics: update failed for ${m.id}: ${uErr.message}`);
       updated++;
     }
   }
-  return { variants: updated };
+  return { variants: updated, unmatched };
 }

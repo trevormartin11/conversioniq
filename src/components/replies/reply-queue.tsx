@@ -154,10 +154,16 @@ export function ReplyQueue({
     }
     setLevelPending(level);
     startTransition(async () => {
-      const res = (await setAutomationAction(level)) as { ok?: boolean } | undefined;
-      setLevelPending(null);
-      if (res?.ok === false) toast.error("Couldn't change automation level.");
-      else toast.success(`Automation: ${DIAL.find((d) => d.level === level)?.label}`);
+      try {
+        const res = (await setAutomationAction(level)) as { ok?: boolean } | undefined;
+        if (res?.ok === false) toast.error("Couldn't change automation level.");
+        else toast.success(`Automation: ${DIAL.find((d) => d.level === level)?.label}`);
+      } catch {
+        // A thrown action used to leave the dial stuck on the optimistic value with no toast.
+        toast.error("Couldn't change automation level — try again.");
+      } finally {
+        setLevelPending(null);
+      }
       router.refresh();
     });
   }

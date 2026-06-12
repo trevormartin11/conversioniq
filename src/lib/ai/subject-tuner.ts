@@ -115,17 +115,17 @@ export async function runSubjectTuner(): Promise<{ examined: number; promoted: n
           challenger = alt.subject.trim();
         }
       }
-      await updateVariant(loser.id, { subject: challenger }, "subject-tuner");
-
-      // Push the full sequence so Instantly sends the new pairing.
+      // Push to Instantly FIRST, hub second: if the live PATCH fails, NOTHING changes —
+      // updating the hub before a failed push left it showing a challenger Instantly never sent.
       const byStep = new Map<number, { subject: string; body: string }[]>();
       for (const v of getVariants().filter((x) => x.campaignId === c.id).sort((a, b) => a.step - b.step || a.variant.localeCompare(b.variant))) {
         const arr = byStep.get(v.step) ?? [];
-        arr.push({ subject: v.subject, body: v.body });
+        arr.push({ subject: v.id === loser.id ? challenger : v.subject, body: v.body });
         byStep.set(v.step, arr);
       }
       const stepsVariants = [...byStep.keys()].sort((a, b) => a - b).map((k) => byStep.get(k)!);
       await updateInstantlyCampaignSequence(c.instantlyCampaignId!, stepsVariants);
+      await updateVariant(loser.id, { subject: challenger }, "subject-tuner");
 
       // Snapshot cumulative counters as the new baseline for BOTH slots.
       await pushAudit("subject-tuner", "copy.promoted", "campaign_step", `${c.id}:${step}`, {

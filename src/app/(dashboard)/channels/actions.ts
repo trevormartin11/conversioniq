@@ -150,7 +150,9 @@ export async function queueSocialFollowupsAction(input?: { campaignId?: string; 
 
   let queued = 0;
   const noProfile: string[] = [];
+  const failed: string[] = [];
   for (const l of candidates) {
+    try {
     const profile = await apolloSocialProfile(l.email);
     if (!profile?.linkedinUrl) {
       noProfile.push(l.email);
@@ -186,10 +188,13 @@ export async function queueSocialFollowupsAction(input?: { campaignId?: string; 
       user.name,
     );
     queued++;
+    } catch {
+      failed.push(l.email); // one bad lead (Apollo/AI hiccup) must not abort the whole batch
+    }
   }
   rev();
   const remaining = candidates.length === FOLLOWUP_BATCH; // a full batch means there may be more
-  return { ok: true as const, queued, considered: candidates.length, noProfile, more: remaining };
+  return { ok: true as const, queued, considered: candidates.length, noProfile, failed, more: remaining };
 }
 
 /** Regenerate the AI copy for an existing queued message (keeps it in place). */

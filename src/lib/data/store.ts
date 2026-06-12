@@ -437,6 +437,37 @@ export async function setCampaignAttribution(id: string, vertical: string, perso
   return c;
 }
 
+/**
+ * Atomically claim a draft for the push-to-Instantly flow. The in-memory guard only covers one
+ * lambda; two cold instances both saw instantlyCampaignId===null and BOTH created an Instantly
+ * campaign + queued every lead twice. The claim is a conditional write to list_version (a
+ * hub-owned text column) gated on instantly_campaign_id still being NULL — the loser matches
+ * zero rows and bails. On failure the caller releases; on success the draft is retired anyway.
+ */
+export async function claimCampaignPush(id: string): Promise<boolean> {
+  const c = getCampaign(id);
+  if (!c || c.instantlyCampaignId) return false;
+  if (LIVE) {
+    const { data, error } = await supabaseAdmin()
+      .from("campaigns")
+      .update({ list_version: `pushing_${crypto.randomUUID().slice(0, 8)}` })
+      .eq("id", id)
+      .is("instantly_campaign_id", null)
+      .not("list_version", "like", "pushing\\_%")
+      .select("id");
+    if (error) throw new Error(`campaign push claim failed: ${error.message}`);
+    if (!data?.length) return false; // another instance owns the push
+  }
+  return true;
+}
+
+/** Return a claimed-but-failed push to its pre-claim state so it can be retried. */
+export async function releaseCampaignPush(id: string, originalListVersion: string): Promise<void> {
+  const c = getCampaign(id);
+  if (c) c.listVersion = originalListVersion;
+  await liveUpdate("campaigns", id, { list_version: originalListVersion });
+}
+
 export async function setCampaignStatus(id: string, status: Campaign["status"], actor: string) {
   const c = getCampaign(id);
   if (!c) return null;
@@ -848,7 +879,7 @@ export async function addOutreach(input: NewOutreach, actor = "system"): Promise
     channel, leadId: input.leadId ?? null, campaignId: input.campaignId ?? null,
     accountId: input.accountId ?? defaultAccountFor(channel)?.id ?? null,
     toName: input.toName, toHandle, body: input.body, status, source: input.source ?? "manual",
-    consentId, profileUrl: input.profileUrl ?? null, rationale: input.rationale ?? null,
+    consentId, profileUrl: safeHttpUrl(input.profileUrl), rationale: input.rationale ?? null,
     createdAt: now, scheduledAt: null, sentAt: null, approvedBy: null, sentBy: null, note: null,
   };
   db().outreach.unshift(msg);
@@ -1147,6 +1178,18 @@ export async function approveLandingPage(campaignId: string, actor: string): Pro
   return p;
 }
 
+/** Only http(s) URLs may flow into hrefs/iframes — a javascript: value in the scheduler
+ *  field would execute on the PUBLIC landing page. Null when invalid (caller keeps prior). */
+export function safeHttpUrl(raw: string | null | undefined): string | null {
+  if (!raw?.trim()) return null;
+  try {
+    const u = new URL(raw.trim());
+    return u.protocol === "https:" || u.protocol === "http:" ? u.toString() : null;
+  } catch {
+    return null;
+  }
+}
+
 /** Set the page's domain + scheduler/video config (config values, not generated). */
 export async function setLandingConfig(
   campaignId: string,
@@ -1156,8 +1199,8 @@ export async function setLandingConfig(
   const p = getLandingPage(campaignId);
   if (!p) return null;
   if (cfg.domain !== undefined) p.domain = cfg.domain;
-  if (cfg.schedulerUrl !== undefined) p.schedulerUrl = cfg.schedulerUrl;
-  if (cfg.videoUrl !== undefined) p.videoUrl = cfg.videoUrl;
+  if (cfg.schedulerUrl !== undefined) p.schedulerUrl = safeHttpUrl(cfg.schedulerUrl);
+  if (cfg.videoUrl !== undefined) p.videoUrl = safeHttpUrl(cfg.videoUrl);
   p.updatedAt = new Date().toISOString();
   await liveUpdate("landing_pages", p.id, { domain: p.domain, scheduler_url: p.schedulerUrl, video_url: p.videoUrl, updated_at: p.updatedAt });
   await pushAudit(actor, "landing.config", "landing_page", p.id, { ...cfg });

@@ -27,7 +27,11 @@ async function run(req: NextRequest) {
     try { result.sync = await runAllSyncs(); } catch (e) { result.syncError = (e as Error).message; }
     // Hydrate AFTER the sync so the store-reading jobs below (domain auth, deliverability,
     // CIQ suppression, brief) see today's data — without this they ran against the mock seed.
-    await ensureData();
+    // Guarded like every other step: a hydration failure must degrade to a structured
+    // {ok:false} (it used to throw past all the per-job capture into a raw 500).
+    let hydrated = false;
+    try { await ensureData(); hydrated = true; } catch (e) { result.hydrationError = (e as Error).message; }
+    if (hydrated) {
     // Re-verify domain auth against live DNS so SPF/DKIM/DMARC reflect reality (sync seeds
     // dmarc:false; without this it never gets corrected). Runs after sync creates the domains.
     try { result.domainAuth = await verifyAllDomains(); } catch (e) { result.domainAuthError = (e as Error).message; }
@@ -37,8 +41,13 @@ async function run(req: NextRequest) {
     if (integrations.zohoCiq) {
       try { result.civSuppression = await syncCivCustomers(); } catch (e) { result.civSuppressionError = (e as Error).message; }
     }
+    }
   }
-  try { result.brief = await sendDailyBrief(); } catch (e) { result.briefError = (e as Error).message; }
+  // The brief reads the store — in live mode it must not report mock-seed numbers after a
+  // failed hydration, so it only runs when hydration succeeded (or in keyless preview mode).
+  if (!integrations.supabase || (result.hydrationError === undefined && integrations.supabase)) {
+    try { result.brief = await sendDailyBrief(); } catch (e) { result.briefError = (e as Error).message; }
+  }
   // Honest status: the route used to answer 200 {ok:true} even when every sub-job failed,
   // so cron monitors saw a permanently healthy day. Any *Error key (or a failed sync) flips
   // ok and the HTTP status, while still reporting everything that did run.
