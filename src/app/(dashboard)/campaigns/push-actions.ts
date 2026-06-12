@@ -1,6 +1,14 @@
 "use server";
 
-import { ensureData, getCampaign, getCampaigns, getInboxes, getLeads, getVariants, isSuppressed } from "@/lib/data/store";
+import {
+  ensureData,
+  getCampaign,
+  getCampaigns,
+  getInboxes,
+  getLeads,
+  getVariants,
+  isSuppressed,
+} from "@/lib/data/store";
 import {
   addLeadsToCampaign,
   createInstantlyCampaign,
@@ -11,7 +19,15 @@ import {
 } from "@/lib/integrations/instantly";
 import { integrations } from "@/lib/config";
 import { rewriteCopy } from "@/lib/ai/copy";
-import { INSTANTLY_TZ, OPTIMAL_DAYS, TZ_LABEL, bucketByTimezone, leadTimezone, optimalWindowHHMM, type Tz } from "@/lib/send-timing";
+import {
+  INSTANTLY_TZ,
+  OPTIMAL_DAYS,
+  TZ_LABEL,
+  bucketByTimezone,
+  leadTimezone,
+  optimalWindowHHMM,
+  type Tz,
+} from "@/lib/send-timing";
 
 const PERSONALIZATION_TAG = "{{personalization}}";
 
@@ -19,28 +35,42 @@ const PERSONALIZATION_TAG = "{{personalization}}";
 function sequenceFor(campaignId: string): { subject: string; body: string }[] {
   const vars = getVariants().filter((v) => v.campaignId === campaignId);
   const byStep = new Map<number, { subject: string; body: string }>();
-  for (const v of [...vars].sort((a, b) => a.step - b.step || a.variant.localeCompare(b.variant))) {
-    if (!byStep.has(v.step)) byStep.set(v.step, { subject: v.subject, body: v.body });
+  for (const v of [...vars].sort(
+    (a, b) => a.step - b.step || a.variant.localeCompare(b.variant),
+  )) {
+    if (!byStep.has(v.step))
+      byStep.set(v.step, { subject: v.subject, body: v.body });
   }
   return [...byStep.keys()].sort((a, b) => a - b).map((k) => byStep.get(k)!);
 }
 
 /** Push the hub's edited sequence copy to the live Instantly campaign (cadence preserved). */
-export async function pushCopyToInstantlyAction(campaignId: string): Promise<{ ok: boolean; error?: string }> {
+export async function pushCopyToInstantlyAction(
+  campaignId: string,
+): Promise<{ ok: boolean; error?: string }> {
   await ensureData();
   const c = getCampaign(campaignId);
-  if (!c?.instantlyCampaignId) return { ok: false, error: "This campaign isn't linked to an Instantly campaign yet." };
-  if (!integrations.instantly) return { ok: false, error: "Instantly isn't connected." };
+  if (!c?.instantlyCampaignId)
+    return {
+      ok: false,
+      error: "This campaign isn't linked to an Instantly campaign yet.",
+    };
+  if (!integrations.instantly)
+    return { ok: false, error: "Instantly isn't connected." };
   const vars = getVariants().filter((v) => v.campaignId === campaignId);
   if (!vars.length) return { ok: false, error: "No sequence copy to push." };
 
   const byStep = new Map<number, { subject: string; body: string }[]>();
-  for (const v of [...vars].sort((a, b) => a.step - b.step || a.variant.localeCompare(b.variant))) {
+  for (const v of [...vars].sort(
+    (a, b) => a.step - b.step || a.variant.localeCompare(b.variant),
+  )) {
     const arr = byStep.get(v.step) ?? [];
     arr.push({ subject: v.subject, body: v.body });
     byStep.set(v.step, arr);
   }
-  const stepsVariants = [...byStep.keys()].sort((a, b) => a - b).map((k) => byStep.get(k)!);
+  const stepsVariants = [...byStep.keys()]
+    .sort((a, b) => a - b)
+    .map((k) => byStep.get(k)!);
 
   try {
     await updateInstantlyCampaignSequence(c.instantlyCampaignId, stepsVariants);
@@ -58,16 +88,29 @@ export async function pushCopyToInstantlyAction(campaignId: string): Promise<{ o
  */
 export async function upgradeSequenceAction(
   campaignId: string,
-): Promise<{ ok: boolean; error?: string; steps?: number; subjectsAdded?: number; personalized?: boolean }> {
+): Promise<{
+  ok: boolean;
+  error?: string;
+  steps?: number;
+  subjectsAdded?: number;
+  personalized?: boolean;
+}> {
   await ensureData();
   const c = getCampaign(campaignId);
-  if (!c?.instantlyCampaignId) return { ok: false, error: "This campaign isn't linked to an Instantly campaign yet." };
-  if (!integrations.instantly) return { ok: false, error: "Instantly isn't connected." };
+  if (!c?.instantlyCampaignId)
+    return {
+      ok: false,
+      error: "This campaign isn't linked to an Instantly campaign yet.",
+    };
+  if (!integrations.instantly)
+    return { ok: false, error: "Instantly isn't connected." };
   const vars = getVariants().filter((v) => v.campaignId === campaignId);
   if (!vars.length) return { ok: false, error: "No sequence copy to upgrade." };
 
   const byStep = new Map<number, { subject: string; body: string }[]>();
-  for (const v of [...vars].sort((a, b) => a.step - b.step || a.variant.localeCompare(b.variant))) {
+  for (const v of [...vars].sort(
+    (a, b) => a.step - b.step || a.variant.localeCompare(b.variant),
+  )) {
     const arr = byStep.get(v.step) ?? [];
     arr.push({ subject: v.subject, body: v.body });
     byStep.set(v.step, arr);
@@ -80,8 +123,14 @@ export async function upgradeSequenceAction(
   for (const step of stepKeys) {
     const variants = byStep.get(step)!.map((v) => ({ ...v }));
     // 1) personalization opener on step 1's primary variant
-    if (step === stepKeys[0] && !variants[0].body.includes(PERSONALIZATION_TAG)) {
-      variants[0] = { ...variants[0], body: `${PERSONALIZATION_TAG}\n\n${variants[0].body}` };
+    if (
+      step === stepKeys[0] &&
+      !variants[0].body.includes(PERSONALIZATION_TAG)
+    ) {
+      variants[0] = {
+        ...variants[0],
+        body: `${PERSONALIZATION_TAG}\n\n${variants[0].body}`,
+      };
       personalized = true;
     }
     // 2) add a second subject variant (A/B) when the step has only one
@@ -89,10 +138,15 @@ export async function upgradeSequenceAction(
       const alt = await rewriteCopy({
         subject: variants[0].subject,
         body: variants[0].body,
-        instruction: "Write ONLY an alternate subject line for an A/B test — same intent, a different angle (more direct or more curiosity-driven). Keep it short and lowercase. Do not change the body.",
+        instruction:
+          "Write ONLY an alternate subject line for an A/B test — same intent, a different angle (more direct or more curiosity-driven). Keep it short and lowercase. Do not change the body.",
       });
       const altSubject = alt.subject.trim();
-      if (alt.source === "ai" && altSubject && altSubject.toLowerCase() !== variants[0].subject.trim().toLowerCase()) {
+      if (
+        alt.source === "ai" &&
+        altSubject &&
+        altSubject.toLowerCase() !== variants[0].subject.trim().toLowerCase()
+      ) {
         variants.push({ subject: altSubject, body: variants[0].body });
         subjectsAdded++;
       }
@@ -109,21 +163,35 @@ export async function upgradeSequenceAction(
 }
 
 /** Apply the optimal send window to the live campaign, in the timezone of its dominant lead bucket. */
-export async function applyOptimalScheduleAction(campaignId: string): Promise<{ ok: boolean; timezone?: string; error?: string }> {
+export async function applyOptimalScheduleAction(
+  campaignId: string,
+): Promise<{ ok: boolean; timezone?: string; error?: string }> {
   await ensureData();
   const c = getCampaign(campaignId);
-  if (!c?.instantlyCampaignId) return { ok: false, error: "This campaign isn't linked to an Instantly campaign yet." };
-  if (!integrations.instantly) return { ok: false, error: "Instantly isn't connected." };
+  if (!c?.instantlyCampaignId)
+    return {
+      ok: false,
+      error: "This campaign isn't linked to an Instantly campaign yet.",
+    };
+  if (!integrations.instantly)
+    return { ok: false, error: "Instantly isn't connected." };
 
   const leads = getLeads().filter((l) => l.campaignId === campaignId);
   const dominant = bucketByTimezone(leads)
     .filter((b) => b.tz !== "unknown")
-    .sort((a, b) => b.count - a.count)[0]?.tz as Exclude<Tz, "unknown"> | undefined;
+    .sort((a, b) => b.count - a.count)[0]?.tz as
+    | Exclude<Tz, "unknown">
+    | undefined;
   const timezone = dominant ? INSTANTLY_TZ[dominant] : "America/Chicago";
   const { from, to } = optimalWindowHHMM();
 
   try {
-    await updateInstantlyCampaignSchedule(c.instantlyCampaignId, { timezone, from, to, days: OPTIMAL_DAYS });
+    await updateInstantlyCampaignSchedule(c.instantlyCampaignId, {
+      timezone,
+      from,
+      to,
+      days: OPTIMAL_DAYS,
+    });
     return { ok: true, timezone };
   } catch (e) {
     return { ok: false, error: (e as Error).message };
@@ -142,20 +210,40 @@ export async function normalizeAllSchedulesAction(): Promise<{
   results: { name: string; ok: boolean; timezone?: string; error?: string }[];
 }> {
   await ensureData();
-  if (!integrations.instantly) return { ok: false, applied: 0, failed: 0, results: [{ name: "Instantly", ok: false, error: "Instantly isn't connected." }] };
+  if (!integrations.instantly)
+    return {
+      ok: false,
+      applied: 0,
+      failed: 0,
+      results: [
+        { name: "Instantly", ok: false, error: "Instantly isn't connected." },
+      ],
+    };
   const { from, to } = optimalWindowHHMM();
   const live = getCampaigns().filter((c) => c.instantlyCampaignId);
-  const results: { name: string; ok: boolean; timezone?: string; error?: string }[] = [];
+  const results: {
+    name: string;
+    ok: boolean;
+    timezone?: string;
+    error?: string;
+  }[] = [];
   let applied = 0;
   let failed = 0;
   for (const c of live) {
     const leads = getLeads().filter((l) => l.campaignId === c.id);
     const dominant = bucketByTimezone(leads)
       .filter((b) => b.tz !== "unknown")
-      .sort((a, b) => b.count - a.count)[0]?.tz as Exclude<Tz, "unknown"> | undefined;
+      .sort((a, b) => b.count - a.count)[0]?.tz as
+      | Exclude<Tz, "unknown">
+      | undefined;
     const timezone = dominant ? INSTANTLY_TZ[dominant] : "America/Chicago";
     try {
-      await updateInstantlyCampaignSchedule(c.instantlyCampaignId!, { timezone, from, to, days: OPTIMAL_DAYS });
+      await updateInstantlyCampaignSchedule(c.instantlyCampaignId!, {
+        timezone,
+        from,
+        to,
+        days: OPTIMAL_DAYS,
+      });
       applied++;
       results.push({ name: c.name, ok: true, timezone });
     } catch (e) {
@@ -175,14 +263,22 @@ export interface TzSplitPlanRow {
 }
 
 /** Preview the timezone split: how many of this campaign's leads land in each bucket. Read-only. */
-export async function previewTimezoneSplitAction(campaignId: string): Promise<{ rows: TzSplitPlanRow[]; unknown: number; hasSequence: boolean }> {
+export async function previewTimezoneSplitAction(
+  campaignId: string,
+): Promise<{ rows: TzSplitPlanRow[]; unknown: number; hasSequence: boolean }> {
   await ensureData();
   const leads = getLeads().filter((l) => l.campaignId === campaignId);
   const buckets = bucketByTimezone(leads);
   const { from, to } = optimalWindowHHMM();
   const rows = buckets
     .filter((b) => b.tz !== "unknown")
-    .map((b) => ({ tz: b.tz, label: b.label, count: b.count, zone: INSTANTLY_TZ[b.tz as Exclude<Tz, "unknown">], window: `${from}–${to}` }));
+    .map((b) => ({
+      tz: b.tz,
+      label: b.label,
+      count: b.count,
+      zone: INSTANTLY_TZ[b.tz as Exclude<Tz, "unknown">],
+      window: `${from}–${to}`,
+    }));
   const unknown = buckets.find((b) => b.tz === "unknown")?.count ?? 0;
   return { rows, unknown, hasSequence: sequenceFor(campaignId).length > 0 };
 }
@@ -200,61 +296,128 @@ export interface TzSplitResultRow {
  * each scheduled for that zone's optimal local window, with that bucket's leads loaded. Children
  * are drafts (never auto-activated); the operator reviews + launches each. Run once.
  */
-export async function executeTimezoneSplitAction(campaignId: string): Promise<{ ok: boolean; results: TzSplitResultRow[]; error?: string }> {
+// In-flight splits (per instance) — narrows the read-then-create TOCTOU window where two
+// concurrent runs both snapshot the Instantly list before either creates its children.
+const splitting: Set<string> = ((
+  globalThis as unknown as { __ciqSplitting?: Set<string> }
+).__ciqSplitting ??= new Set());
+
+export async function executeTimezoneSplitAction(
+  campaignId: string,
+): Promise<{ ok: boolean; results: TzSplitResultRow[]; error?: string }> {
   await ensureData();
   const c = getCampaign(campaignId);
   if (!c) return { ok: false, results: [], error: "Campaign not found." };
-  if (!integrations.instantly) return { ok: false, results: [], error: "Instantly isn't connected." };
+  if (!integrations.instantly)
+    return { ok: false, results: [], error: "Instantly isn't connected." };
+  if (splitting.has(campaignId))
+    return {
+      ok: false,
+      results: [],
+      error: "This split is already running — give it a few seconds.",
+    };
   const steps = sequenceFor(campaignId);
-  if (!steps.length) return { ok: false, results: [], error: "No sequence to copy — add copy first." };
-  const inboxEmails = getInboxes().filter((i) => c.inboxIds.includes(i.id)).map((i) => i.email);
-  if (!inboxEmails.length) return { ok: false, results: [], error: "No sending inboxes assigned to this campaign." };
+  if (!steps.length)
+    return {
+      ok: false,
+      results: [],
+      error: "No sequence to copy — add copy first.",
+    };
+  const inboxEmails = getInboxes()
+    .filter((i) => c.inboxIds.includes(i.id))
+    .map((i) => i.email);
+  if (!inboxEmails.length)
+    return {
+      ok: false,
+      results: [],
+      error: "No sending inboxes assigned to this campaign.",
+    };
 
-  // "Run once" used to be a comment, not a guard — a re-run (second click, second tab, retry)
-  // created a full duplicate set of children loaded with the SAME leads → double sends once
-  // launched. Enforce it: skip any zone whose child already exists in Instantly by name.
-  const existingNames = new Set((await listAllCampaigns()).map((x) => (x.name ?? "").trim()));
+  splitting.add(campaignId);
+  try {
+    // "Run once" used to be a comment, not a guard — a re-run (second click, second tab, retry)
+    // created a full duplicate set of children loaded with the SAME leads → double sends once
+    // launched. Enforce it: skip any zone whose child already exists in Instantly by name.
+    const existingNames = new Set(
+      (await listAllCampaigns()).map((x) => (x.name ?? "").trim()),
+    );
 
-  const leads = getLeads().filter((l) => l.campaignId === campaignId);
-  const { from, to } = optimalWindowHHMM();
-  const results: TzSplitResultRow[] = [];
-  for (const tz of ["ET", "CT", "MT", "PT"] as const) {
-    // Re-apply the suppression gate at split time — a lead suppressed since the original load
-    // must not be re-introduced to sending in a child campaign.
-    const bucket = leads.filter((l) => leadTimezone(l) === tz && !isSuppressed(l.email).suppressed);
-    if (!bucket.length) continue;
-    const label = `${TZ_LABEL[tz]} (${bucket.length})`;
-    const childName = `${c.name} — ${TZ_LABEL[tz]}`;
-    if (existingNames.has(childName)) {
-      results.push({ label, ok: false, error: `"${childName}" already exists in Instantly — this zone was split before (skipped to avoid duplicate sends).` });
-      continue;
-    }
-    let childId: string | undefined;
-    try {
-      const child = await createInstantlyCampaign({ name: childName, steps, inboxEmails, dailyLimit: c.dailyCap });
-      if (!child.id) {
-        results.push({ label, ok: false, error: "create returned no id" });
-        continue;
-      }
-      childId = child.id;
-      await updateInstantlyCampaignSchedule(child.id, { timezone: INSTANTLY_TZ[tz], from, to });
-      const { added } = await addLeadsToCampaign(
-        child.id,
-        bucket.map((l) => ({ email: l.email, first_name: l.firstName, last_name: l.lastName, company_name: l.company, phone: l.phone ?? undefined, personalization: "" })),
+    const leads = getLeads().filter((l) => l.campaignId === campaignId);
+    const { from, to } = optimalWindowHHMM();
+    const results: TzSplitResultRow[] = [];
+    for (const tz of ["ET", "CT", "MT", "PT"] as const) {
+      // Re-apply the suppression gate at split time — a lead suppressed since the original load
+      // must not be re-introduced to sending in a child campaign.
+      const bucket = leads.filter(
+        (l) => leadTimezone(l) === tz && !isSuppressed(l.email).suppressed,
       );
-      if (added === 0) {
-        results.push({ label, ok: false, childId: child.id, leads: 0, error: "child created but no leads loaded — load them before launching it" });
+      if (!bucket.length) continue;
+      const label = `${TZ_LABEL[tz]} (${bucket.length})`;
+      const childName = `${c.name} — ${TZ_LABEL[tz]}`;
+      if (existingNames.has(childName)) {
+        results.push({
+          label,
+          ok: false,
+          error: `"${childName}" already exists in Instantly — this zone was split before (skipped to avoid duplicate sends).`,
+        });
         continue;
       }
-      results.push({ label, ok: true, childId: child.id, leads: added });
-    } catch (e) {
-      // Compensate: a child that exists with a wrong schedule / no leads is a trap — remove it
-      // so the re-run starts clean instead of orphaning drafts in Instantly.
-      if (childId) {
-        try { await deleteInstantlyCampaign(childId); } catch { /* best-effort cleanup */ }
+      let childId: string | undefined;
+      try {
+        const child = await createInstantlyCampaign({
+          name: childName,
+          steps,
+          inboxEmails,
+          dailyLimit: c.dailyCap,
+        });
+        if (!child.id) {
+          results.push({ label, ok: false, error: "create returned no id" });
+          continue;
+        }
+        childId = child.id;
+        await updateInstantlyCampaignSchedule(child.id, {
+          timezone: INSTANTLY_TZ[tz],
+          from,
+          to,
+        });
+        const { added } = await addLeadsToCampaign(
+          child.id,
+          bucket.map((l) => ({
+            email: l.email,
+            first_name: l.firstName,
+            last_name: l.lastName,
+            company_name: l.company,
+            phone: l.phone ?? undefined,
+            personalization: "",
+          })),
+        );
+        if (added === 0) {
+          results.push({
+            label,
+            ok: false,
+            childId: child.id,
+            leads: 0,
+            error:
+              "child created but no leads loaded — load them before launching it",
+          });
+          continue;
+        }
+        results.push({ label, ok: true, childId: child.id, leads: added });
+      } catch (e) {
+        // Compensate: a child that exists with a wrong schedule / no leads is a trap — remove it
+        // so the re-run starts clean instead of orphaning drafts in Instantly.
+        if (childId) {
+          try {
+            await deleteInstantlyCampaign(childId);
+          } catch {
+            /* best-effort cleanup */
+          }
+        }
+        results.push({ label, ok: false, error: (e as Error).message });
       }
-      results.push({ label, ok: false, error: (e as Error).message });
     }
+    return { ok: results.some((r) => r.ok), results };
+  } finally {
+    splitting.delete(campaignId);
   }
-  return { ok: results.some((r) => r.ok), results };
 }

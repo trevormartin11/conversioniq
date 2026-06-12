@@ -40,6 +40,20 @@ describe("dedupeAgainstUniverse — Set-based suppression lookup", () => {
     expect(clean.map((c) => c.email)).toEqual(["fresh@brand-new-spa.com"]);
     expect(rejected).toHaveLength(1);
   });
+
+  it("rejects malformed input fed DIRECTLY to the gate (defense-in-depth behind extractEmail)", async () => {
+    // Mutation check M1 found this guard untested: a caller that skips extractEmail must
+    // still have garbage rejected here, not persisted into a campaign.
+    const { ensureData, dedupeAgainstUniverse } = await import("@/lib/data/store");
+    await ensureData();
+    const { clean, rejected } = dedupeAgainstUniverse([
+      { email: "not-an-email" },
+      { email: "  " },
+      { email: "a@@b.com" },
+    ]);
+    expect(clean).toHaveLength(0);
+    expect(rejected.map((r) => r.reason)).toEqual(["invalid", "invalid", "invalid"]);
+  });
 });
 
 describe("isLikelyEmail", () => {

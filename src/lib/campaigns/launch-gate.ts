@@ -23,6 +23,12 @@ export function launchBlocker(
       return { reason: "not_live", message: "This campaign isn't on Instantly yet — open it and push to Instantly (assign sending inboxes) before launching." };
     if (c.inboxIds.length === 0)
       return { reason: "no_inboxes", message: "No sending inboxes are assigned — assign at least one before launching." };
+    // Assigned ids that ALL fail to resolve to a hub inbox is a HARD block, not an overridable
+    // warmup warning: a warmup override is a judgment call about under-warmed inboxes, never a
+    // licence to launch with zero resolvable inboxes (every assigned id vanished from the fleet).
+    const resolvable = new Set(opts.inboxes.map((i) => i.id));
+    if (!c.inboxIds.some((id) => resolvable.has(id)))
+      return { reason: "no_inboxes", message: "None of the assigned sending inboxes resolve to a hub inbox anymore (deleted/renamed in sync) — reassign before launching." };
   }
   // Never start sending from under-warmed / inactive inboxes — that burns the fleet. (Overridable.)
   // Iterate the ASSIGNED ids (not the resolvable inboxes): an id that no longer resolves to a hub

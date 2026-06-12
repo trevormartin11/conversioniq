@@ -99,6 +99,21 @@ describe("loadLeadsIntoCampaignAction — suppression gate, attribution, Instant
     expect(getLeads().some((l) => l.email.includes("owner@elitelaserspa.com"))).toBe(false);
   });
 
+  it("is idempotent: re-loading the SAME list does not double-persist the leads", async () => {
+    await ensureData();
+    const campaign = await addCampaign({ name: "Load Test Idem", vertical: "Med Spas", personaId: "pe_trevor", dailyCap: 80 }, "Test Operator");
+    const list = [sourced("idem-lead@example-freshspa.com")];
+
+    const first = await loadLeadsIntoCampaignAction({ campaignId: campaign.id, leads: list });
+    expect(first.ok).toBe(true);
+    if (first.ok) expect(first.persisted).toBe(1);
+
+    // Same list again (double-click / retry) — the address is now a persisted hub lead.
+    const second = await loadLeadsIntoCampaignAction({ campaignId: campaign.id, leads: list });
+    expect(second.ok).toBe(false); // nothing new to load
+    expect(getLeads().filter((l) => l.email === "idem-lead@example-freshspa.com")).toHaveLength(1);
+  });
+
   it("keeps the first occurrence's data on an in-batch duplicate", async () => {
     await ensureData();
     const campaign = await addCampaign({ name: "Load Test Dupe", vertical: "Med Spas", personaId: "pe_trevor", dailyCap: 80 }, "Test Operator");
