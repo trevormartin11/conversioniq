@@ -9,7 +9,11 @@ import {
   ensureData,
   getChannelAccount,
   getLead,
+  getLeads,
+  getOutreach,
   getOutreachMessage,
+  getReplies,
+  isSuppressed,
   recordConsent,
   removeChannelAccount,
   sendOutreach,
@@ -19,8 +23,9 @@ import {
   updateOutreachBody,
 } from "@/lib/data/store";
 import { draftChannelMessage } from "@/lib/ai/channels";
+import { apolloHiringSignal, apolloSocialProfile } from "@/lib/integrations/apollo";
 import { isValidHandle, normalizeHandle } from "@/lib/channels/policy";
-import type { ChannelAccountStatus, ConsentSource, OutreachChannel, TenDlcStatus } from "@/lib/data/types";
+import type { ChannelAccountStatus, ConsentSource, OutreachChannel, ReplyClass, TenDlcStatus } from "@/lib/data/types";
 
 /** Daily caps are the anti-ban chokepoint — keep them sane (1–1000). Returns null if invalid. */
 function cleanCap(raw: unknown): number | null {
@@ -95,6 +100,96 @@ export async function draftOutreachAction(input: {
   );
   rev();
   return { ok: true as const, id: msg.id, status: msg.status, source: draft.source };
+}
+
+/** Reply classes that mark a lead "engaged but not booked" — the DM follow-up audience. */
+const ENGAGED_CLASSES: ReplyClass[] = ["interested", "question", "not_now"];
+/** Per click: each lead costs ~2 Apollo lookups + 1 Claude draft — 8 fits the action budget. */
+const FOLLOWUP_BATCH = 8;
+
+/**
+ * Auto-queue social-DM follow-ups with ZERO manual lookup. Finds leads who replied to the
+ * email campaign (interested / question / not-now) but haven't booked, resolves each one's
+ * LinkedIn profile from their email via Apollo (free personal key, no credit spend), pulls a
+ * hiring signal when one exists, AI-drafts the DM, and queues it with the profile deep link
+ * attached. The human's only remaining job is the platform-required one: open profile →
+ * paste → send. Re-running continues where it left off (already-queued leads are skipped).
+ */
+export async function queueSocialFollowupsAction(input?: { campaignId?: string; channel?: "linkedin" | "instagram" }) {
+  await ensureData();
+  const user = await getCurrentUser();
+  const channel = input?.channel ?? "linkedin";
+
+  // Latest reply classification per lead (replies sorted oldest → newest, so last write wins).
+  const latestByLead = new Map<string, ReplyClass>();
+  for (const r of [...getReplies()].sort((a, b) => a.receivedAt.localeCompare(b.receivedAt))) {
+    if (r.leadId) latestByLead.set(r.leadId, r.classification);
+  }
+  // Never double-queue a lead on the same channel (skipped messages don't block a retry).
+  const alreadyQueued = new Set(
+    getOutreach().filter((m) => m.channel === channel && m.status !== "skipped" && m.leadId).map((m) => m.leadId as string),
+  );
+  const BOOKED_OR_GONE = new Set(["demo_booked", "demo_showed", "closed", "lost"]);
+  // Suppression nuance: "contacted" means we EMAILED them — for a DM follow-up to a replier
+  // that's the audience, not a blocker. Only a real opt-out signal blocks the DM.
+  const OPTED_OUT_REASONS = new Set(["dnc", "unsubscribed", "manual"]);
+  const optedOut = (email: string) => {
+    const { entry } = isSuppressed(email);
+    return !!entry && OPTED_OUT_REASONS.has(entry.reason);
+  };
+  const candidates = getLeads()
+    .filter(
+      (l) =>
+        (!input?.campaignId || l.campaignId === input.campaignId) &&
+        ENGAGED_CLASSES.includes(latestByLead.get(l.id) as ReplyClass) &&
+        !BOOKED_OR_GONE.has(l.status) &&
+        !alreadyQueued.has(l.id) &&
+        !optedOut(l.email),
+    )
+    .slice(0, FOLLOWUP_BATCH);
+
+  let queued = 0;
+  const noProfile: string[] = [];
+  for (const l of candidates) {
+    const profile = await apolloSocialProfile(l.email);
+    if (!profile?.linkedinUrl) {
+      noProfile.push(l.email);
+      continue;
+    }
+    const handle = profile.linkedinUrl.replace(/\/+$/, "").split("/").pop() || l.email;
+    const signal = await apolloHiringSignal(l.domain);
+    const cls = latestByLead.get(l.id);
+    const draft = await draftChannelMessage({
+      channel,
+      firstName: l.firstName,
+      company: l.company,
+      title: profile.title ?? l.title,
+      vertical: l.vertical,
+      signal: signal ?? undefined,
+      angle:
+        cls === "not_now"
+          ? "they replied to our email saying the timing was off — a light, no-pressure check-in"
+          : "they replied to our email with real interest but haven't booked — reference that thread and make booking effortless",
+    });
+    await addOutreach(
+      {
+        channel,
+        leadId: l.id,
+        campaignId: l.campaignId,
+        toName: `${l.firstName} ${l.lastName}`.trim(),
+        toHandle: handle,
+        body: draft.body,
+        source: draft.source,
+        profileUrl: profile.linkedinUrl,
+        rationale: draft.rationale,
+      },
+      user.name,
+    );
+    queued++;
+  }
+  rev();
+  const remaining = candidates.length === FOLLOWUP_BATCH; // a full batch means there may be more
+  return { ok: true as const, queued, considered: candidates.length, noProfile, more: remaining };
 }
 
 /** Regenerate the AI copy for an existing queued message (keeps it in place). */

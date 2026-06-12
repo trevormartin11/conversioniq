@@ -240,7 +240,7 @@ export async function executeTimezoneSplitAction(campaignId: string): Promise<{ 
       await updateInstantlyCampaignSchedule(child.id, { timezone: INSTANTLY_TZ[tz], from, to });
       const { added } = await addLeadsToCampaign(
         child.id,
-        bucket.map((l) => ({ email: l.email, first_name: l.firstName, last_name: l.lastName, company_name: l.company, phone: l.phone ?? undefined })),
+        bucket.map((l) => ({ email: l.email, first_name: l.firstName, last_name: l.lastName, company_name: l.company, phone: l.phone ?? undefined, personalization: "" })),
       );
       if (added === 0) {
         results.push({ label, ok: false, childId: child.id, leads: 0, error: "child created but no leads loaded — load them before launching it" });

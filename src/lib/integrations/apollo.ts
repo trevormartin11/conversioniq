@@ -38,6 +38,37 @@ export async function enrichById(id: string): Promise<unknown> {
   });
 }
 
+export interface ApolloSocialProfile {
+  linkedinUrl: string | null;
+  title: string | null;
+}
+
+/**
+ * Resolve a prospect's social profile from their email — the lookup that makes DM follow-ups
+ * zero-typing (the operator used to hunt down the LinkedIn page by hand). PERSONAL (free) key
+ * only; explicitly opts out of personal-email/phone reveal so no paid credits can be consumed.
+ * Null on no key / no match / error — callers just skip that lead.
+ */
+export async function apolloSocialProfile(email: string): Promise<ApolloSocialProfile | null> {
+  if (!integrations.apolloPersonal || !email) return null;
+  try {
+    const res = await httpJson<{ person?: { linkedin_url?: string; title?: string } }>(
+      "apollo",
+      `${BASE}/people/match`,
+      {
+        method: "POST",
+        headers: { "X-Api-Key": personalKey(), "content-type": "application/json" },
+        body: JSON.stringify({ email, reveal_personal_emails: false, reveal_phone_number: false }),
+      },
+    );
+    const p = res.person;
+    if (!p?.linkedin_url && !p?.title) return null;
+    return { linkedinUrl: p.linkedin_url ?? null, title: p.title ?? null };
+  } catch {
+    return null;
+  }
+}
+
 /**
  * Best-effort hiring signal for personalization — via the PERSONAL (free) key only, NEVER the
  * gated CIQ key. Enriches the org by domain, then reads active job postings. Returns null on
