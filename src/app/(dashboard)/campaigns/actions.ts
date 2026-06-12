@@ -71,8 +71,11 @@ export async function launchCampaignAction(id: string, override = false) {
     // test send, the landing read — are human attestations the server can't verify, so they stay
     // UI-gated; but a direct action call must not slip past broken copy.)
     const vars = getVariants().filter((v) => v.campaignId === id);
-    if (vars.some((v) => !v.subject.trim() || !v.body.trim())) {
-      return { ok: false as const, blocked: "incomplete_copy" as const, error: "A sequence step has an empty subject or body — fix the copy before launching." };
+    // ZERO variants must block too — .some() on an empty array is vacuously false, which let a
+    // synced-in empty campaign (or the push-fallback window before variants backfill) launch
+    // while "sending" nothing.
+    if (integrations.instantly && (vars.length === 0 || vars.some((v) => !v.subject.trim() || !v.body.trim()))) {
+      return { ok: false as const, blocked: "incomplete_copy" as const, error: vars.length === 0 ? "This campaign has no sequence copy in the hub — sync or add copy before launching." : "A sequence step has an empty subject or body — fix the copy before launching." };
     }
   }
   if (c?.instantlyCampaignId && integrations.instantly) {

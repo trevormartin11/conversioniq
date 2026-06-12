@@ -38,7 +38,7 @@ Each is a 2-minute check. Do them in order; 1 and 2 gate the rest.
 - Launch **ONE** campaign, **100–150 leads**, daily cap ≈ 10–15/inbox on a few inboxes.
 - Let it run a full day. What "clean" looks like:
   - Telegram: no auto-pause alerts, no reconciler orphans.
-  - Automation page: every job `ok`; `variant_metrics` shows counts with `unmatched: 0`.
+  - Automation page: every job `ok`. In the daily cron's JSON response, `sync.variant_metrics` shows counts with `unmatched: 0`.
   - Replies appear classified in the queue within ~10 min of arriving.
   - No bounce spike on Deliverability (auto-pause guards at the configured threshold).
 
@@ -56,12 +56,13 @@ Each is a 2-minute check. Do them in order; 1 and 2 gate the rest.
    outbound reply then requires a human click.
 3. **An inbox burning** → Pause it on Deliverability (the auto-pause usually beats you
    to it).
-4. **Everything** → pause campaigns in Instantly directly; the hub mirrors on next sync.
+4. **Everything** → pause campaigns in Instantly directly; the hub mirrors on the next
+   daily sync (~24h) — or hit Settings → Sync now to mirror immediately.
 
 ## If something looks wrong
 
-- Cron answered non-2xx / a job shows `error` → the daily result names the failing job and
-  message verbatim (Automation page or the cron response).
+- Cron answered non-2xx / a job shows `error` → the Automation page shows WHICH job failed;
+  the cron's JSON response carries the error message verbatim.
 - A reply claims "sent" but the prospect saw nothing → the reconciler returns it to the
   queue within 24h and pings Telegram; to force it, hit `/api/cron/daily` with the secret.
 - Suppression doubts → Leads page universe counts; the DNC gate fails closed (a Supabase

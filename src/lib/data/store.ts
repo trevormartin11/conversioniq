@@ -134,6 +134,9 @@ export async function ensureData(collections?: HubCollection[]): Promise<void> {
     let p = rt.inflight.get("settings");
     if (!p) {
       p = loadSettings().then((s) => {
+        // null = transient settings-read failure: KEEP the prior in-memory values (a blip must
+        // not silently flip the automation dial to defaults) and don't stamp, so we retry.
+        if (!s) return;
         rt.automationLevel = s.automationLevel;
         rt.assumptions = s.assumptions;
         rt.icp = s.icp;
@@ -346,7 +349,7 @@ function norm(s: string) {
 export function isSuppressed(email: string): { suppressed: boolean; entry?: SuppressionEntry } {
   const e = norm(email);
   const domain = e.split("@")[1] ?? "";
-  const entry = db().suppression.find(
+  const entry = col("suppression").find(
     (s) => (s.email && norm(s.email) === e) || (s.domain && norm(s.domain) === domain),
   );
   return { suppressed: !!entry, entry };
@@ -362,7 +365,7 @@ export function dedupeAgainstUniverse<T extends { email: string }>(
   // O(candidates × suppression): measured 7.1s of event-loop-blocking CPU at 10k × 10k.
   const supByEmail = new Map<string, SuppressionEntry>();
   const supByDomain = new Map<string, SuppressionEntry>();
-  for (const s of db().suppression) {
+  for (const s of col("suppression")) {
     if (s.email && !supByEmail.has(norm(s.email))) supByEmail.set(norm(s.email), s);
     if (s.domain && !supByDomain.has(norm(s.domain))) supByDomain.set(norm(s.domain), s);
   }
@@ -414,14 +417,14 @@ export function searchUniverse(query: string) {
   const q = norm(query);
   if (!q) return { leads: [], suppression: [] };
   return {
-    leads: db().leads.filter(
+    leads: col("leads").filter(
       (l) =>
         l.email.toLowerCase().includes(q) ||
         l.domain.toLowerCase().includes(q) ||
         l.company.toLowerCase().includes(q) ||
         `${l.firstName} ${l.lastName}`.toLowerCase().includes(q),
     ).slice(0, 50),
-    suppression: db().suppression.filter(
+    suppression: col("suppression").filter(
       (s) => s.email?.toLowerCase().includes(q) || s.domain?.toLowerCase().includes(q),
     ).slice(0, 50),
   };
@@ -1138,7 +1141,7 @@ export function getLandingByHost(host: string): LandingPage | null {
   const h = host.trim().toLowerCase();
   if (!h) return null;
   return (
-    db().landingPages.find((p) => {
+    col("landingPages").find((p) => {
       if (p.status !== "published" || !p.publishedUrl) return false;
       try {
         return new URL(p.publishedUrl).hostname.toLowerCase() === h;

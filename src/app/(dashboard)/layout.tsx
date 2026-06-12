@@ -5,7 +5,10 @@ import { commandSummary } from "@/lib/data/queries";
 import { integrationStatuses } from "@/lib/integrations";
 
 export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
-  await ensureData();
+  // The layout renders on EVERY document request — a bare (full) hydration here negated the
+  // per-page wins on hard loads. Declared footprint: commandSummary (metrics/replies/inboxes/
+  // demos/campaigns) + the nav user + last-sync stamp.
+  await ensureData(["users", "jobs", "metrics", "replies", "inboxes", "demos", "campaigns"]);
   const user = await getCurrentUser();
   const summary = commandSummary();
   const statuses = integrationStatuses();

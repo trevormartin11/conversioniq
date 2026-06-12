@@ -96,8 +96,10 @@ export interface HubSettings {
   icp: string | null;
 }
 
-/** All operator settings in ONE query (the three separate lookups cost 3×RTT per request). */
-export async function loadSettings(): Promise<HubSettings> {
+/** All operator settings in ONE query (the three separate lookups cost 3×RTT per request).
+ *  Returns NULL on a transient failure — the caller keeps prior values rather than silently
+ *  resetting the automation dial / assumptions to defaults. */
+export async function loadSettings(): Promise<HubSettings | null> {
   const def: HubSettings = {
     automationLevel: "approve_all",
     assumptions: { closeRate: appConfig.projection.assumedCloseRate, monthlyMrr: appConfig.projection.assumedMonthlyMrr },
@@ -123,7 +125,7 @@ export async function loadSettings(): Promise<HubSettings> {
       icp: str(get("icp_fit")).trim() || null,
     };
   } catch {
-    return def;
+    return null;
   }
 }
 

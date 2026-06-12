@@ -110,6 +110,7 @@ export async function loadLeadsIntoCampaignAction(input: { campaignId: string; l
   // (dedupeAgainstUniverse only checks suppression + in-batch dupes, not existing lead rows.)
   const existingLeadEmails = new Set(getLeads().map((l) => l.email.toLowerCase()));
   const clean = vetted.filter((l) => !existingLeadEmails.has(l.email.toLowerCase()));
+  const skippedExisting = vetted.length - clean.length;
   if (!clean.length) return { ok: false as const, error: "Every lead was already in the hub, suppressed, invalid, or a duplicate." };
 
   // Attribution at source — resolved from the campaign.
@@ -185,6 +186,8 @@ export async function loadLeadsIntoCampaignAction(input: { campaignId: string; l
   } else {
     note = "Persisted + created in Zoho. Push this campaign to Instantly to load these into sending.";
   }
+  // Partial drops must be visible — a shrinking persisted count with no reason reads as a bug.
+  if (skippedExisting > 0) note = `${skippedExisting} address${skippedExisting === 1 ? " was" : "es were"} already in the hub (skipped — one lead row per address). ${note}`.trim();
 
   await pushAudit(user.name, "leads.loaded_into_campaign", "campaign", campaign.id, {
     persisted: persisted.length, zohoCreated, instantlyAdded, instantlyFailed,

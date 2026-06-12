@@ -66,11 +66,21 @@ export function verifyEmailClaims(claims: EmailClaim[], unibox: InstantlyEmail[]
       continue;
     }
     const ourInbox = (c.inboxEmail ?? inbound.eaccount ?? "").toLowerCase();
+    if (!ourInbox) {
+      out.unverifiable.push(c.id); // can't even establish which inbox sent — never an orphan
+      continue;
+    }
+    // Lower bound: the answer must postdate BOTH the handling claim (minus provider skew) AND
+    // the prospect's inbound itself — otherwise the original cold email (a fast replier puts it
+    // inside the slack window) or our answer to an EARLIER sibling reply false-verifies a
+    // crashed claim, hiding a real orphan.
+    const receivedAt = c.receivedAt ? new Date(c.receivedAt).getTime() : NaN;
+    const lowerBound = Math.max(handledAt - slackMs, Number.isFinite(receivedAt) ? receivedAt : -Infinity);
     const outbound = (byThread.get(inbound.thread_id) ?? []).some((e) => {
       if (e.id === inbound.id) return false;
-      if ((e.from_address_email ?? "").toLowerCase() !== ourInbox || !ourInbox) return false;
+      if ((e.from_address_email ?? "").toLowerCase() !== ourInbox) return false;
       const t = e.timestamp_email ? new Date(e.timestamp_email).getTime() : NaN;
-      return Number.isFinite(t) && t >= handledAt - slackMs;
+      return Number.isFinite(t) && t >= lowerBound;
     });
     (outbound ? out.verified : out.orphans).push(c.id);
   }
@@ -85,12 +95,43 @@ export function verifyEmailClaims(claims: EmailClaim[], unibox: InstantlyEmail[]
  *  always contains earlier outbound — the campaign's own cold emails — and matching those
  *  would mark every pending reply "sent" and silently empty the queue. */
 export function findGhostPending(pending: EmailClaim[], unibox: InstantlyEmail[], now = Date.now()): string[] {
-  const anchored = pending
-    .filter((p) => p.receivedAt) // no inbound timestamp → can't anchor → never a ghost
-    .map((p) => ({ ...p, handledAt: p.receivedAt }));
-  // The grace window doubles as protection for replies a human is answering right now.
-  const { verified } = verifyEmailClaims(anchored, unibox, now, 0);
-  return verified;
+  const byId = new Map(unibox.map((e) => [e.id, e]));
+  const byThread = new Map<string, InstantlyEmail[]>();
+  for (const e of unibox) {
+    if (!e.thread_id) continue;
+    const arr = byThread.get(e.thread_id) ?? [];
+    arr.push(e);
+    byThread.set(e.thread_id, arr);
+  }
+
+  const ghosts: string[] = [];
+  for (const p of pending) {
+    const receivedAt = p.receivedAt ? new Date(p.receivedAt).getTime() : NaN;
+    if (!Number.isFinite(receivedAt) || now - receivedAt < GRACE_MS) continue; // unanchorable / human may be answering
+    const inbound = p.instantlyEmailId ? byId.get(p.instantlyEmailId) : undefined;
+    if (!inbound?.thread_id) continue; // unverifiable → never a ghost
+    const ourInbox = (p.inboxEmail ?? inbound.eaccount ?? "").toLowerCase();
+    if (!ourInbox) continue;
+    const thread = byThread.get(inbound.thread_id) ?? [];
+    // Upper bound: the prospect's NEXT message after this one. An answer sent after a LATER
+    // sibling reply belongs to that sibling — counting it here would silently close an
+    // earlier, genuinely-unanswered pending question.
+    const nextInbound = Math.min(
+      ...thread
+        .filter((e) => e.id !== inbound.id && (e.from_address_email ?? "").toLowerCase() !== ourInbox)
+        .map((e) => (e.timestamp_email ? new Date(e.timestamp_email).getTime() : NaN))
+        .filter((t) => Number.isFinite(t) && t > receivedAt),
+      Infinity,
+    );
+    const answered = thread.some((e) => {
+      if (e.id === inbound.id) return false;
+      if ((e.from_address_email ?? "").toLowerCase() !== ourInbox) return false;
+      const t = e.timestamp_email ? new Date(e.timestamp_email).getTime() : NaN;
+      return Number.isFinite(t) && t >= receivedAt && t < nextInbound;
+    });
+    if (answered) ghosts.push(p.id);
+  }
+  return ghosts;
 }
 
 export interface ReconcileResult {
@@ -141,11 +182,27 @@ export async function reconcileSends(): Promise<ReconcileResult> {
       const { orphans, unverifiable } = verifyEmailClaims(claims, unibox);
       result.unverifiable = unverifiable.length;
 
-      for (const id of orphans) {
-        // Claimed sent, nothing in the thread — back to the human queue, loudly.
-        const { error } = await db.from("replies").update({ status: "pending", handled_by: null, handled_at: null }).eq("id", id).in("status", ["sent", "auto_sent"]);
-        if (error) throw new Error(`reconcile: orphan revert failed for ${id}: ${error.message}`);
-        result.orphans++;
+      // CIRCUIT BREAKER: a mass of "orphans" is far more likely a provider/format change than
+      // dozens of independent crash windows — reverting them all would flood the queue and
+      // invite duplicate sends. Alert instead of acting.
+      const breaker = orphans.length > Math.max(5, Math.ceil(claims.length * 0.2));
+      if (breaker) {
+        await sendTelegram(tgEscape(`🚨 Send reconciler found ${orphans.length}/${claims.length} claimed-sent replies with no trace — too many to be crash windows. NOT auto-reverting; investigate the Instantly thread matching before trusting these.`));
+      } else {
+        const claimById = new Map(claims.map((c) => [c.id, c]));
+        for (const id of orphans) {
+          // Claimed sent, nothing in the thread — back to the human queue, loudly. The
+          // handled_at compare-and-swap pins the exact claim we verified, so a stale verdict
+          // from an overlapping run can't revert a row that was legitimately re-sent since.
+          const { error } = await db
+            .from("replies")
+            .update({ status: "pending", handled_by: null, handled_at: null })
+            .eq("id", id)
+            .in("status", ["sent", "auto_sent"])
+            .eq("handled_at", claimById.get(id)!.handledAt);
+          if (error) throw new Error(`reconcile: orphan revert failed for ${id}: ${error.message}`);
+          result.orphans++;
+        }
       }
       for (const id of findGhostPending(pending, unibox)) {
         // Our answer IS in the thread but the row says pending — a retry would double-email.
@@ -164,6 +221,7 @@ export async function reconcileSends(): Promise<ReconcileResult> {
       .eq("channel", "sms")
       .eq("status", "sent")
       .gte("sent_at", since)
+      .order("sent_at", { ascending: false })
       .limit(50);
     if (sErr) throw new Error(`reconcile: sms read failed: ${sErr.message}`);
     for (const m of (smsRows ?? []) as { id: string; to_handle: string; sent_at: string | null }[]) {
@@ -183,9 +241,9 @@ export async function reconcileSends(): Promise<ReconcileResult> {
   if (result.orphans || result.ghosts || result.smsOrphans) {
     await sendTelegram(
       tgEscape(
-        `🔎 Send reconciler: ${result.orphans} reply${result.orphans === 1 ? "" : "ies"} claimed sent but never left (returned to the queue), ` +
+        `🔎 Send reconciler: ${result.orphans} repl${result.orphans === 1 ? "y" : "ies"} claimed sent but never left (returned to the queue), ` +
           `${result.ghosts} actually-sent repl${result.ghosts === 1 ? "y" : "ies"} corrected to sent, ` +
-          `${result.smsOrphans} SMS reverted for retry. Review the Replies queue.`,
+          `${result.smsOrphans} SMS reverted for retry${result.unverifiable ? ` (${result.unverifiable} unverifiable — outside the unibox window)` : ""}. Review the Replies queue.`,
       ),
     );
   }
