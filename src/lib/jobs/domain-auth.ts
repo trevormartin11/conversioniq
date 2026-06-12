@@ -1,17 +1,24 @@
 /**
  * Real SPF / DKIM / DMARC verification via live DNS — replaces the hardcoded auth
- * status the sync writes. Runs server-side (Vercel) where DNS + the domain list are
- * available; fail-safe (a lookup that times out reads as "not found", never throws).
+ * status the sync writes. Lookups go over DNS-over-HTTPS (plain fetch): raw UDP DNS
+ * from a serverless function is unreliable, and a silent resolver failure here meant
+ * the verifier never corrected the sync's dmarc:false placeholder. Fail-safe — a
+ * lookup that errors or times out reads as "not found", never throws.
  */
-import { Resolver } from "node:dns/promises";
 import { getDomains, updateDomainAuth } from "@/lib/data/store";
-
-const resolver = new Resolver({ timeout: 5000, tries: 2 });
-resolver.setServers(["8.8.8.8", "1.1.1.1"]);
 
 async function txt(name: string): Promise<string[]> {
   try {
-    return (await resolver.resolveTxt(name)).map((chunks) => chunks.join(""));
+    const res = await fetch(`https://dns.google/resolve?name=${encodeURIComponent(name)}&type=TXT`, {
+      signal: AbortSignal.timeout(5000),
+      cache: "no-store",
+    });
+    if (!res.ok) return [];
+    const j = (await res.json()) as { Answer?: { type?: number; data?: string }[] };
+    // TXT data may arrive as `"chunk" "chunk"` for >255-char records — strip quotes and join.
+    return (j.Answer ?? [])
+      .filter((a) => a.type === 16 && typeof a.data === "string")
+      .map((a) => (a.data as string).replace(/"\s+"/g, "").replace(/^"|"$/g, ""));
   } catch {
     return [];
   }
@@ -54,13 +61,14 @@ export async function checkDomainAuth(domain: string): Promise<DomainAuth> {
   return { domain, spf: spf.present, spfGoogle: spf.google, dkim: dkimPresent(dkimTxt), dmarc: dmarc.present, dmarcPolicy: dmarc.policy };
 }
 
-/** Verify every known domain and write the real status back to the hub. */
+/** Verify every known domain and write the real status back to the hub. Checks run in
+ *  parallel so the whole fleet fits comfortably inside the daily cron's time budget. */
 export async function verifyAllDomains(): Promise<{ checked: number; results: DomainAuth[] }> {
-  const results: DomainAuth[] = [];
-  for (const d of getDomains()) {
-    const a = await checkDomainAuth(d.domain);
-    await updateDomainAuth(d.id, { spf: a.spf, dkim: a.dkim, dmarc: a.dmarc });
-    results.push(a);
+  const domains = getDomains();
+  const results = await Promise.all(domains.map((d) => checkDomainAuth(d.domain)));
+  for (let i = 0; i < domains.length; i++) {
+    const a = results[i];
+    await updateDomainAuth(domains[i].id, { spf: a.spf, dkim: a.dkim, dmarc: a.dmarc });
   }
   return { checked: results.length, results };
 }

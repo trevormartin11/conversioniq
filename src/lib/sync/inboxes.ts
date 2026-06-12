@@ -1,6 +1,6 @@
 /** Sync Instantly inboxes + their domains into the hub DB. */
 import { listAllAccounts } from "@/lib/integrations/instantly";
-import { chunkedUpsert } from "@/lib/data/supabase";
+import { chunkedUpsert, supabaseAdmin } from "@/lib/data/supabase";
 
 function personaFor(local: string): string | null {
   const l = local.toLowerCase();
@@ -54,8 +54,14 @@ export async function syncInboxes() {
     });
   }
 
-  // domain is the natural unique key (ids may differ from earlier placeholders)
-  const domainCount = await chunkedUpsert("domains", [...domains.values()], "domain");
+  // Only INSERT domains we've never seen. This used to upsert every domain with placeholder
+  // auth values (spf/dkim true, dmarc false) — re-clobbering the verifier's real DNS results
+  // on every sync, so DMARC showed red forever no matter what was in DNS. New domains get the
+  // placeholders as a starting point until the next domain-auth verification corrects them.
+  const { data: existing } = await supabaseAdmin().from("domains").select("domain");
+  const known = new Set(((existing ?? []) as { domain: string }[]).map((r) => r.domain));
+  const newDomains = [...domains.values()].filter((d) => !known.has(d.domain as string));
+  const domainCount = newDomains.length ? await chunkedUpsert("domains", newDomains, "domain") : 0;
   const inboxCount = await chunkedUpsert("inboxes", inboxes);
   return { domains: domainCount, inboxes: inboxCount };
 }
