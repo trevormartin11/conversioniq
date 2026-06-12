@@ -103,7 +103,7 @@ function reset(opts?: { inbox?: Partial<Row> }) {
     ["leads", []],
     ["suppression", []],
     ["campaigns", []],
-    ["inboxes", [{ id: "ib_sender_x_com", status: "active", daily_cap: 10, sent_today: 0, ...(opts?.inbox ?? {}) }]],
+    ["inboxes", [{ id: "ib_sender_x_com", email: "sender@x.com", status: "active", daily_cap: 10, sent_today: 0, ...(opts?.inbox ?? {}) }]],
   ]);
   dbState.claims = [];
   dbState.updates = [];

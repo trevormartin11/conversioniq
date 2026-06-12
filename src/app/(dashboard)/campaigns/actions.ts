@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { getCurrentUser } from "@/lib/auth";
-import { addCampaign, cloneCampaign, deleteCampaign, ensureData, getCampaign, getInboxes, getLeads, getVariants, pushAudit, reassignCampaignLeads, seedCampaignVariants, setCampaignStatus } from "@/lib/data/store";
+import { addCampaign, cloneCampaign, deleteCampaign, ensureData, getCampaign, getInboxes, getLeads, getVariants, pushAudit, reassignCampaignLeads, seedCampaignVariants, setCampaignAttribution, setCampaignStatus, upsertCanonicalCampaign } from "@/lib/data/store";
 import { activateCampaign, addLeadsToCampaign, createInstantlyCampaign, deleteInstantlyCampaign, pauseCampaign } from "@/lib/integrations/instantly";
 import { syncCampaigns } from "@/lib/sync/campaigns";
 import { launchBlocker } from "@/lib/campaigns/launch-gate";
@@ -113,6 +113,10 @@ export async function createCampaignAction(input: {
  * any leads already on the draft, then retire the staging draft. Returns the new campaign id to navigate to.
  * The created Instantly campaign is a DRAFT — it never auto-launches.
  */
+// In-flight pushes (per instance) — a double-click/double-submit on "Push" used to create
+// TWO Instantly campaigns and queue every draft lead for sending twice.
+const pushing: Set<string> = ((globalThis as unknown as { __ciqPushing?: Set<string> }).__ciqPushing ??= new Set());
+
 export async function pushCampaignToInstantlyAction(id: string, inboxIds: string[]) {
   await ensureData();
   const user = await getCurrentUser();
@@ -120,16 +124,33 @@ export async function pushCampaignToInstantlyAction(id: string, inboxIds: string
   const c = getCampaign(id);
   if (!c) return { ok: false as const, error: "Campaign not found." };
   if (c.instantlyCampaignId) return { ok: false as const, error: "This campaign is already on Instantly." };
+  if (pushing.has(id)) return { ok: false as const, error: "This campaign is already being pushed — give it a few seconds." };
   const steps = sequenceFor(id);
   if (!steps.length) return { ok: false as const, error: "Add sequence copy before pushing to Instantly." };
   const chosen = getInboxes().filter((i) => inboxIds.includes(i.id));
   if (!chosen.length) return { ok: false as const, error: "Select at least one sending inbox." };
 
+  pushing.add(id);
   try {
     const { id: instId } = await createInstantlyCampaign({ name: c.name, steps, inboxEmails: chosen.map((i) => i.email), dailyLimit: c.dailyCap });
     if (!instId) return { ok: false as const, error: "Instantly did not return a campaign id." };
     await syncCampaigns(); // creates the canonical c_<instId> row (draft) with sequence + inbox_ids
     const newId = `c_${instId}`;
+
+    // VERIFY the canonical row exists before retiring anything — if Instantly's list lagged
+    // (eventual consistency), reassigning leads onto a missing row silently FK-failed and the
+    // draft was then half-retired. Create the row directly from the draft as the fallback.
+    await ensureData();
+    if (!getCampaign(newId)) {
+      await upsertCanonicalCampaign({
+        id: newId, name: c.name, vertical: c.vertical, personaId: c.personaId,
+        instantlyCampaignId: instId, inboxIds: chosen.map((i) => i.id), dailyCap: c.dailyCap,
+      });
+    } else {
+      // Carry the draft's authored attribution onto the canonical row — the sync derives
+      // vertical/persona from name keywords, which loses what the operator actually set.
+      await setCampaignAttribution(newId, c.vertical, c.personaId);
+    }
 
     // Carry over any leads already attached to the staging draft (best-effort into Instantly; always re-attribute).
     const draftLeads = getLeads().filter((l) => l.campaignId === id);
@@ -147,5 +168,7 @@ export async function pushCampaignToInstantlyAction(id: string, inboxIds: string
     return { ok: true as const, id: newId, leads: draftLeads.length };
   } catch (e) {
     return { ok: false as const, error: (e as Error).message };
+  } finally {
+    pushing.delete(id);
   }
 }

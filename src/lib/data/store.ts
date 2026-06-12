@@ -111,7 +111,9 @@ async function liveUpdate(table: string, id: string, patch: Record<string, unkno
 }
 async function liveDeleteRow(table: string, id: string) {
   if (!LIVE) return;
-  await supabaseAdmin().from(table).delete().eq("id", id);
+  const { error } = await supabaseAdmin().from(table).delete().eq("id", id);
+  // A silently-failed delete diverges memory from DB and the row resurrects next hydration.
+  if (error) throw new Error(`${table} delete failed: ${error.message}`);
 }
 
 export function dataMode() {
@@ -319,12 +321,27 @@ export function dedupeAgainstUniverse<T extends { email: string }>(
 }
 
 export async function addSuppression(entry: Omit<SuppressionEntry, "id" | "createdAt">, actor = "system") {
-  const row: SuppressionEntry = { ...entry, id: `sup_${crypto.randomUUID().slice(0, 13)}`, createdAt: new Date().toISOString() };
+  // Deterministic id from the suppressed identity. The table's REAL uniqueness is the
+  // lower(email) index, but upserts conflict on `id` — with random ids, two concurrent
+  // suppressions of the same address (webhook retry, operator + sync race) hit 23505 and
+  // aborted the whole DNC chain mid-way. A deterministic id makes the second write converge
+  // on the same row instead of violating the index. Duplicate-as-success, never as error.
+  const identity = norm(entry.email ?? entry.domain ?? crypto.randomUUID());
+  const idSafe = identity.replace(/[^a-z0-9]+/g, "_").slice(0, 48);
+  const row: SuppressionEntry = { ...entry, id: `sup_${idSafe}`, createdAt: new Date().toISOString() };
+  if (db().suppression.some((s) => s.id === row.id)) return row; // already suppressed — idempotent
   db().suppression.unshift(row);
-  await liveUpsert("suppression", {
-    id: row.id, email: row.email, domain: row.domain, reason: row.reason,
-    source: row.source, lead_id: row.leadId, note: row.note, created_at: row.createdAt,
-  });
+  try {
+    await liveUpsert("suppression", {
+      id: row.id, email: row.email, domain: row.domain, reason: row.reason,
+      source: row.source, lead_id: row.leadId, note: row.note, created_at: row.createdAt,
+    });
+  } catch (e) {
+    // A unique-index hit (lower(email) — e.g. a pre-existing row under an older random id)
+    // means the address is ALREADY suppressed: that's success for this call, not failure —
+    // throwing here aborted the rest of the DNC chain (Zoho DNC, blocklist, lead → lost).
+    if (!/duplicate key/i.test((e as Error).message)) throw e;
+  }
   await pushAudit(actor, "lead.suppressed", "suppression", row.id, { reason: row.reason, email: row.email });
   return row;
 }
@@ -388,6 +405,38 @@ export async function addCampaign(input: Pick<Campaign, "name" | "vertical" | "p
   return campaign;
 }
 
+/** Insert the canonical Instantly-linked campaign row directly — the post-push fallback for
+ *  when the sync hasn't surfaced it yet (Instantly's list API is eventually consistent).
+ *  Without this, the push flow reassigned leads onto a missing row (silent FK failure) and
+ *  then half-retired the staging draft. */
+export async function upsertCanonicalCampaign(input: { id: string; name: string; vertical: string; personaId: string; instantlyCampaignId: string; inboxIds: string[]; dailyCap: number }): Promise<Campaign> {
+  const existing = getCampaign(input.id);
+  if (existing) return existing;
+  const campaign: Campaign = {
+    id: input.id, name: input.name, vertical: input.vertical, personaId: input.personaId,
+    status: "draft", instantlyCampaignId: input.instantlyCampaignId, listVersion: "instantly",
+    inboxIds: input.inboxIds, dailyCap: input.dailyCap, createdAt: new Date().toISOString(),
+  };
+  db().campaigns.unshift(campaign);
+  await liveUpsert("campaigns", {
+    id: campaign.id, name: campaign.name, vertical: campaign.vertical, persona_id: campaign.personaId,
+    status: campaign.status, instantly_campaign_id: campaign.instantlyCampaignId, list_version: campaign.listVersion,
+    inbox_ids: campaign.inboxIds, daily_cap: campaign.dailyCap, created_at: campaign.createdAt,
+  });
+  return campaign;
+}
+
+/** Stamp hub-owned attribution (vertical/persona) onto a campaign — used to carry a pushed
+ *  draft's authored values onto the canonical row (the sync derives them from name keywords). */
+export async function setCampaignAttribution(id: string, vertical: string, personaId: string) {
+  const c = getCampaign(id);
+  if (!c) return null;
+  c.vertical = vertical;
+  c.personaId = personaId;
+  await liveUpdate("campaigns", id, { vertical, persona_id: personaId });
+  return c;
+}
+
 export async function setCampaignStatus(id: string, status: Campaign["status"], actor: string) {
   const c = getCampaign(id);
   if (!c) return null;
@@ -422,12 +471,30 @@ export async function cloneCampaign(id: string, actor: string): Promise<Campaign
 export async function deleteCampaign(id: string, actor: string): Promise<Campaign | null> {
   const c = getCampaign(id);
   if (!c) return null;
+  // FK-aware delete order, every error CHECKED. The 0001 FKs have no ON DELETE behavior, so
+  // leads/replies/daily_metrics referencing this campaign block the delete — the old unchecked
+  // calls destroyed the variants, silently failed the campaign delete, reported success, and
+  // the campaign resurrected on the next hydration as a zombie with no sequence.
+  if (LIVE) {
+    const db_ = supabaseAdmin();
+    const detachLeads = await db_.from("leads").update({ campaign_id: null }).eq("campaign_id", id);
+    if (detachLeads.error) throw new Error(`campaign delete failed (leads detach): ${detachLeads.error.message}`);
+    const detachReplies = await db_.from("replies").update({ campaign_id: null }).eq("campaign_id", id);
+    if (detachReplies.error) throw new Error(`campaign delete failed (replies detach): ${detachReplies.error.message}`);
+    const delMetrics = await db_.from("daily_metrics").delete().eq("campaign_id", id);
+    if (delMetrics.error) throw new Error(`campaign delete failed (metrics): ${delMetrics.error.message}`);
+    const delLanding = await db_.from("landing_pages").delete().eq("campaign_id", id);
+    if (delLanding.error && delLanding.error.code !== "42P01") throw new Error(`campaign delete failed (landing page): ${delLanding.error.message}`);
+    const delVariants = await db_.from("sequence_variants").delete().eq("campaign_id", id);
+    if (delVariants.error) throw new Error(`campaign delete failed (variants): ${delVariants.error.message}`);
+    const delCampaign = await db_.from("campaigns").delete().eq("id", id);
+    if (delCampaign.error) throw new Error(`campaign delete failed: ${delCampaign.error.message}`);
+  }
   db().campaigns = db().campaigns.filter((x) => x.id !== id);
   db().variants = db().variants.filter((v) => v.campaignId !== id);
-  if (LIVE) {
-    await supabaseAdmin().from("sequence_variants").delete().eq("campaign_id", id);
-    await supabaseAdmin().from("campaigns").delete().eq("id", id);
-  }
+  for (const l of db().leads) if (l.campaignId === id) l.campaignId = null;
+  for (const r of db().replies) if (r.campaignId === id) r.campaignId = null;
+  db().landingPages = db().landingPages.filter((p) => p.campaignId !== id);
   await pushAudit(actor, "campaign.deleted", "campaign", id, { name: c.name });
   return c;
 }
@@ -442,7 +509,10 @@ export async function reassignCampaignLeads(fromId: string, toId: string, actor 
   if (!moving.length) return 0;
   for (const l of moving) l.campaignId = toId;
   if (LIVE) {
-    await supabaseAdmin().from("leads").update({ campaign_id: toId }).eq("campaign_id", fromId);
+    const { error } = await supabaseAdmin().from("leads").update({ campaign_id: toId }).eq("campaign_id", fromId);
+    // A silent FK failure here (target campaign row missing) left leads pointing at a draft the
+    // caller then deleted — surface it so the push flow can stop instead of half-retiring.
+    if (error) throw new Error(`leads reassign failed: ${error.message}`);
   }
   await pushAudit(actor, "leads.reassigned", "campaign", toId, { from: fromId, count: moving.length });
   return moving.length;

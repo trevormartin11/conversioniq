@@ -9,8 +9,6 @@ import { integrations } from "@/lib/config";
 import { stripHtml } from "@/lib/utils";
 import type { ReplyClass } from "@/lib/data/types";
 
-const slug = (s: string) => s.replace(/[^a-z0-9]+/gi, "_").toLowerCase();
-
 export function bodyText(body: unknown): string {
   if (!body) return "";
   if (typeof body === "string") return stripHtml(body);
@@ -53,14 +51,17 @@ export async function syncReplies(limit = 1000) {
     selectAll("leads", "id,email,first_name,company,vertical,title", "id"),
     selectAll("suppression", "id,email", "id"),
     selectAll("campaigns", "id", "id"),
-    selectAll("inboxes", "id,status,daily_cap,sent_today", "id"),
+    selectAll("inboxes", "id,email,status,daily_cap,sent_today", "id"),
   ]);
 
   const existing = new Set(existingReplies.map((r) => String(r.id)));
   const campIds = new Set(campRows.map((r) => String(r.id)));
-  const inboxState = new Map<string, InboxSendState>();
-  for (const r of inboxRows as { id: string; status?: string; daily_cap?: number; sent_today?: number }[]) {
-    inboxState.set(r.id, { status: r.status ?? "", sentToday: Number(r.sent_today ?? 0), dailyCap: Number(r.daily_cap ?? 0) });
+  // Keyed by EMAIL (the natural key) — deriving `ib_${slug(eaccount)}` re-implemented the
+  // inbox-id scheme here and broke (fail-closed, but still broke) the moment ids diverged.
+  const inboxState = new Map<string, InboxSendState & { id: string }>();
+  for (const r of inboxRows as { id: string; email?: string; status?: string; daily_cap?: number; sent_today?: number }[]) {
+    if (!r.email) continue;
+    inboxState.set(r.email.toLowerCase(), { id: r.id, status: r.status ?? "", sentToday: Number(r.sent_today ?? 0), dailyCap: Number(r.daily_cap ?? 0) });
   }
   const supEmails = new Set(supRows.map((r) => String(r.email ?? "").toLowerCase()).filter(Boolean));
   const leadByEmail = new Map<string, LeadLite>();
@@ -102,7 +103,7 @@ export async function syncReplies(limit = 1000) {
     const baseRow = {
       id, lead_id: lead?.id ?? null,
       campaign_id: e.campaign_id && campIds.has(`c_${e.campaign_id}`) ? `c_${e.campaign_id}` : null,
-      inbox_id: e.eaccount && inboxState.has(`ib_${slug(e.eaccount)}`) ? `ib_${slug(e.eaccount)}` : null,
+      inbox_id: e.eaccount ? inboxState.get(e.eaccount.toLowerCase())?.id ?? null : null,
       instantly_email_id: e.id,
       from_email: from, from_name: fromName, subject: e.subject ?? "", body: text,
       received_at: e.timestamp_email ?? now, classification: cls, confidence,
@@ -117,9 +118,9 @@ export async function syncReplies(limit = 1000) {
     if (status === "auto_sent") {
       const subject = (e.subject ?? "").toLowerCase().startsWith("re:") ? (e.subject ?? "") : `Re: ${e.subject ?? ""}`.trim();
       // Inbox guard: never auto-send through a paused/errored, capped-out, or untracked inbox.
-      const inboxId = e.eaccount ? `ib_${slug(e.eaccount)}` : "";
-      const state = inboxState.get(inboxId);
-      const gate = inboxAutoSendGate(state ? { ...state, sentToday: state.sentToday + (sentThisRun.get(inboxId) ?? 0) } : state);
+      const inboxKey = (e.eaccount ?? "").toLowerCase();
+      const state = inboxState.get(inboxKey);
+      const gate = inboxAutoSendGate(state ? { ...state, sentToday: state.sentToday + (sentThisRun.get(inboxKey) ?? 0) } : state);
       if (!gate.ok) {
         status = "pending"; // inbox can't carry the send — route to the human queue instead
       } else if (integrations.instantly && e.eaccount && aiDraft?.trim()) {
@@ -133,7 +134,7 @@ export async function syncReplies(limit = 1000) {
         try {
           await replyToEmail({ replyToUuid: e.id, eaccount: e.eaccount, subject, bodyText: aiDraft });
           autoSent++;
-          sentThisRun.set(inboxId, (sentThisRun.get(inboxId) ?? 0) + 1);
+          sentThisRun.set(inboxKey, (sentThisRun.get(inboxKey) ?? 0) + 1);
         } catch {
           // Send failed after the claim — return it to the human queue (best-effort).
           await db.from("replies").update({ status: "pending", handled_by: null, handled_at: null }).eq("id", id);
