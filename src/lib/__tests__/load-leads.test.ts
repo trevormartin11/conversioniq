@@ -114,6 +114,27 @@ describe("loadLeadsIntoCampaignAction — suppression gate, attribution, Instant
     expect(getLeads().filter((l) => l.email === "idem-lead@example-freshspa.com")).toHaveLength(1);
   });
 
+  it("surfaces a PARTIAL overlap: persists only the new addresses and reports the skip count", async () => {
+    await ensureData();
+    const campaign = await addCampaign({ name: "Load Test Partial", vertical: "Med Spas", personaId: "pe_trevor", dailyCap: 80 }, "Test Operator");
+
+    const first = await loadLeadsIntoCampaignAction({ campaignId: campaign.id, leads: [sourced("partial-a@example-freshspa.com")] });
+    expect(first.ok).toBe(true);
+
+    // Re-submit A alongside a new B (an overlapping retry) — only B persists, and the
+    // shrinking count is explained in the note instead of reading like a silent drop.
+    const second = await loadLeadsIntoCampaignAction({
+      campaignId: campaign.id,
+      leads: [sourced("partial-a@example-freshspa.com"), sourced("partial-b@example-freshspa.com")],
+    });
+    expect(second.ok).toBe(true);
+    if (!second.ok) return;
+    expect(second.persisted).toBe(1);
+    expect(second.note).toMatch(/1 address was already in the hub/i);
+    expect(getLeads().filter((l) => l.email === "partial-a@example-freshspa.com")).toHaveLength(1);
+    expect(getLeads().filter((l) => l.email === "partial-b@example-freshspa.com")).toHaveLength(1);
+  });
+
   it("keeps the first occurrence's data on an in-batch duplicate", async () => {
     await ensureData();
     const campaign = await addCampaign({ name: "Load Test Dupe", vertical: "Med Spas", personaId: "pe_trevor", dailyCap: 80 }, "Test Operator");

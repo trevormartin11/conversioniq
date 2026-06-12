@@ -73,14 +73,16 @@ export function verifyEmailClaims(claims: EmailClaim[], unibox: InstantlyEmail[]
     // Lower bound: the answer must postdate BOTH the handling claim (minus provider skew) AND
     // the prospect's inbound itself — otherwise the original cold email (a fast replier puts it
     // inside the slack window) or our answer to an EARLIER sibling reply false-verifies a
-    // crashed claim, hiding a real orphan.
+    // crashed claim, hiding a real orphan. STRICT on receivedAt: an instant auto-reply (OOO)
+    // lands in the SAME second as the cold send, and >= would count the cold email itself as
+    // the answer. A real answer always postdates the inbound (classify → claim → send).
     const receivedAt = c.receivedAt ? new Date(c.receivedAt).getTime() : NaN;
     const lowerBound = Math.max(handledAt - slackMs, Number.isFinite(receivedAt) ? receivedAt : -Infinity);
     const outbound = (byThread.get(inbound.thread_id) ?? []).some((e) => {
       if (e.id === inbound.id) return false;
       if ((e.from_address_email ?? "").toLowerCase() !== ourInbox) return false;
       const t = e.timestamp_email ? new Date(e.timestamp_email).getTime() : NaN;
-      return Number.isFinite(t) && t >= lowerBound;
+      return Number.isFinite(t) && t >= lowerBound && (!Number.isFinite(receivedAt) || t > receivedAt);
     });
     (outbound ? out.verified : out.orphans).push(c.id);
   }
@@ -127,7 +129,10 @@ export function findGhostPending(pending: EmailClaim[], unibox: InstantlyEmail[]
       if (e.id === inbound.id) return false;
       if ((e.from_address_email ?? "").toLowerCase() !== ourInbox) return false;
       const t = e.timestamp_email ? new Date(e.timestamp_email).getTime() : NaN;
-      return Number.isFinite(t) && t >= receivedAt && t < nextInbound;
+      // STRICT lower bound (matches the contract above): an outbound stamped in the same
+      // second as this inbound answers something EARLIER — ghost-marking off it would
+      // silently close a reply that was never answered.
+      return Number.isFinite(t) && t > receivedAt && t < nextInbound;
     });
     if (answered) ghosts.push(p.id);
   }

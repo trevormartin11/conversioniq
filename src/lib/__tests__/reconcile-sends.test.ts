@@ -81,6 +81,19 @@ describe("verifyEmailClaims — claimed-sent vs the actual thread", () => {
     expect(res.orphans).toEqual(["i_r2b"]); // answer1 predates reply #2 — not its answer
   });
 
+  it("does NOT verify off a cold send in the SAME second as an instant auto-reply (tie regression)", () => {
+    // OOO auto-replies land in the same second as the cold send that triggered them — same
+    // timestamp at Instantly's granularity. The cold email must not count as our answer.
+    const autoReply = email({ id: "e_in4", thread_id: "t4", from_address_email: "p4@spa.com", timestamp_email: ago(125) });
+    const coldEmail = email({ id: "e_cold4", thread_id: "t4", from_address_email: "us@ciqsends.com", timestamp_email: ago(125) });
+    const res = verifyEmailClaims(
+      [claim({ id: "i_r4", instantlyEmailId: "e_in4", receivedAt: ago(125), handledAt: ago(124) })],
+      [autoReply, coldEmail],
+      NOW,
+    );
+    expect(res.orphans).toEqual(["i_r4"]); // a real answer always postdates the inbound
+  });
+
   it("ignores outbound from a different inbox (not our send)", () => {
     const other = email({ id: "e_other", from_address_email: "someoneelse@x.com", timestamp_email: ago(60) });
     const res = verifyEmailClaims([claim({})], [inbound, other], NOW);
@@ -116,6 +129,20 @@ describe("findGhostPending — actually-sent rows stuck on pending", () => {
       NOW,
     );
     expect(ghosts).toEqual([]); // the answer belongs to reply #2's window, not #1's
+  });
+
+  it("does NOT ghost-mark off an outbound in the SAME second as the inbound (tie regression)", () => {
+    // An outbound stamped in the same second as the prospect's inbound answers something
+    // EARLIER (a real answer takes minutes: classify → claim → send) — counting it would
+    // silently mark an unanswered reply sent and drop it from the queue.
+    const in5 = email({ id: "e_in5", thread_id: "t5", from_address_email: "p5@spa.com", timestamp_email: ago(180) });
+    const sameSecond = email({ id: "e_out5", thread_id: "t5", from_address_email: "us@ciqsends.com", timestamp_email: ago(180) });
+    const ghosts = findGhostPending(
+      [claim({ id: "i_r5", status: "pending", handledAt: null, instantlyEmailId: "e_in5", receivedAt: ago(180) })],
+      [in5, sameSecond],
+      NOW,
+    );
+    expect(ghosts).toEqual([]);
   });
 
   it("leaves a fresh pending reply alone (grace window — a human may be answering it now)", () => {
