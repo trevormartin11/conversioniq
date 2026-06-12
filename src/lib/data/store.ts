@@ -1037,6 +1037,36 @@ export async function removeChannelAccount(id: string, actor = "system"): Promis
 export const getLandingPages = () => db().landingPages;
 export const getLandingPage = (campaignId: string) => db().landingPages.find((p) => p.campaignId === campaignId) ?? null;
 
+/** Resolve a PUBLISHED page by the public hostname serving it — the public router's lookup.
+ *  Only published pages resolve: a draft/approved page must never be publicly reachable. */
+export function getLandingByHost(host: string): LandingPage | null {
+  const h = host.trim().toLowerCase();
+  if (!h) return null;
+  return (
+    db().landingPages.find((p) => {
+      if (p.status !== "published" || !p.publishedUrl) return false;
+      try {
+        return new URL(p.publishedUrl).hostname.toLowerCase() === h;
+      } catch {
+        return false;
+      }
+    }) ?? null
+  );
+}
+
+/** Mark the page live at `url` (the action has already attached the domain + DNS). */
+export async function publishLandingPage(campaignId: string, url: string, actor: string): Promise<LandingPage | null> {
+  const p = getLandingPage(campaignId);
+  if (!p) return null;
+  p.status = "published";
+  p.publishedUrl = url;
+  p.publishedAt = new Date().toISOString();
+  p.updatedAt = p.publishedAt;
+  await liveUpdate("landing_pages", p.id, { status: p.status, published_url: p.publishedUrl, published_at: p.publishedAt, updated_at: p.updatedAt });
+  await pushAudit(actor, "landing.published", "landing_page", p.id, { campaignId, url });
+  return p;
+}
+
 function landingRow(p: LandingPage): Record<string, unknown> {
   return {
     id: p.id, campaign_id: p.campaignId, vertical: p.vertical, domain: p.domain, status: p.status,

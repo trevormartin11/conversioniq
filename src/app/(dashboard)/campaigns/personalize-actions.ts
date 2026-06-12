@@ -17,21 +17,41 @@ export interface CampaignPersonalizationRow {
   basis: string | null;
 }
 
+/** Per-lead wall-clock budget. A slow prospect site (or a slow Outscraper lookup) must not
+ *  eat the whole serverless budget — that lead just returns "nothing found" and can be re-run. */
+const PER_LEAD_TIMEOUT_MS = 25_000;
+/** Leads per action call. The client loops batches so a 500-lead campaign personalizes in
+ *  many small requests (progress + retry-able) instead of one doomed 60s+ invocation. */
+const PERSONALIZE_BATCH_SIZE = 5;
+
+function withTimeout<T>(p: Promise<T>, fallback: T): Promise<T> {
+  return Promise.race([p, new Promise<T>((resolve) => setTimeout(() => resolve(fallback), PER_LEAD_TIMEOUT_MS))]);
+}
+
 /**
- * Generate personalization for a sample of THIS campaign's real leads (those with a website),
- * for review. Capped + parallel; nothing is pushed to sending — that's a separate gated step.
+ * Generate personalization for ONE batch of this campaign's leads (those with a website).
+ * The Lab calls this in a loop until `done` — covering EVERY lead on the campaign, not a
+ * sample — then the operator reviews/edits/approves and loads. Nothing here pushes to sending.
  */
-export async function previewCampaignPersonalizationAction(campaignId: string): Promise<{ items: CampaignPersonalizationRow[] }> {
+export async function personalizeCampaignBatchAction(
+  campaignId: string,
+  offset: number,
+): Promise<{ items: CampaignPersonalizationRow[]; total: number; done: boolean }> {
   await ensureData();
-  if (!getCampaign(campaignId)) return { items: [] };
-  const leads = getLeads().filter((l) => l.campaignId === campaignId && l.domain).slice(0, 6);
+  if (!getCampaign(campaignId)) return { items: [], total: 0, done: true };
+  const all = getLeads().filter((l) => l.campaignId === campaignId && l.domain);
+  const safeOffset = Math.max(0, Math.floor(offset));
+  const batch = all.slice(safeOffset, safeOffset + PERSONALIZE_BATCH_SIZE);
   const items = await Promise.all(
-    leads.map(async (l) => {
-      const r = await personalizeFromUrl(l.domain, { company: l.company, vertical: l.vertical });
+    batch.map(async (l) => {
+      const r = await withTimeout(
+        personalizeFromUrl(l.domain, { company: l.company, vertical: l.vertical }),
+        { line: null, basis: null, source: "none" as const },
+      );
       return { email: l.email, company: l.company, line: r.line, basis: r.basis };
     }),
   );
-  return { items };
+  return { items, total: all.length, done: safeOffset + batch.length >= all.length };
 }
 
 /**

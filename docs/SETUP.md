@@ -101,7 +101,20 @@ CIQ_ZOHO_WEBHOOK_SECRET=<any random string>
 - **Reconcile cron (belt-and-suspenders):** `/api/cron/civ-outcomes` (every 6h) polls CIQ for any handed-off demo still awaiting an outcome, so a missed webhook still closes the loop.
 - The CIQ pipeline stages (verified live) are: Discovery Call → Demo Scheduled → Demo Completed → Proposal Sent/Onboarding Scheduled → Onboarding Complete/Free Trial → **Closed Won** / **Closed Lost** → Paused Accounts — so the defaults above are correct.
 
-## 9. Namecheap (DMARC / SPF auto-fix)
+## 9. Landing-page publishing (Vercel + Namecheap)
+
+```
+VERCEL_TOKEN=...        # Vercel → Account Settings → Tokens
+VERCEL_PROJECT_ID=...   # Project → Settings → General
+VERCEL_TEAM_ID=...      # only if the project is in a team
+LANDING_SUBDOMAIN=go    # optional; default "go"
+```
+With these set (plus Namecheap below), **Publish** on a campaign's landing page attaches
+`go.<sending-domain>` to this Vercel project, creates the CNAME at Namecheap
+(read-merge-write — other records untouched), and the page goes live at that URL.
+`NEXT_PUBLIC_APP_URL` must be set so the public router can tell landing hosts from the app host.
+
+## 10. Namecheap (DMARC / SPF auto-fix + landing CNAMEs)
 
 ```
 NAMECHEAP_API_KEY=...

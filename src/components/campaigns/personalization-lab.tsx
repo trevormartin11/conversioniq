@@ -4,7 +4,7 @@ import { useState } from "react";
 import { Loader2, Sparkles, UploadCloud, Users } from "lucide-react";
 import {
   loadPersonalizedLeadsAction,
-  previewCampaignPersonalizationAction,
+  personalizeCampaignBatchAction,
   previewPersonalizationAction,
 } from "@/app/(dashboard)/campaigns/personalize-actions";
 
@@ -48,6 +48,7 @@ export function PersonalizationLab({
   // batch review queue
   const [rows, setRows] = useState<BatchRow[] | null>(null);
   const [batchPending, setBatchPending] = useState(false);
+  const [progress, setProgress] = useState<{ done: number; total: number } | null>(null);
   const [loading, setLoading] = useState(false);
   const [loadMsg, setLoadMsg] = useState<{ ok: boolean; text: string } | null>(null);
 
@@ -67,19 +68,35 @@ export function PersonalizationLab({
     }
   }
 
+  // Loop server batches until every lead on the campaign is covered — small requests keep
+  // each call inside the serverless budget and give live progress for big lists.
   async function runBatch() {
     if (!campaignId) return;
     setBatchPending(true);
-    setRows(null);
+    setRows([]);
     setLoadMsg(null);
+    setProgress(null);
     try {
-      const r = await previewCampaignPersonalizationAction(campaignId);
-      setRows(r.items.map((i) => ({ email: i.email, company: i.company, line: i.line ?? "", approved: !!i.line })));
+      let offset = 0;
+      for (;;) {
+        const r = await personalizeCampaignBatchAction(campaignId, offset);
+        setRows((prev) => [
+          ...(prev ?? []),
+          ...r.items.map((i) => ({ email: i.email, company: i.company, line: i.line ?? "", approved: !!i.line })),
+        ]);
+        offset += r.items.length;
+        setProgress({ done: offset, total: r.total });
+        if (r.done) break;
+      }
     } catch {
-      setRows([]);
+      setLoadMsg({ ok: false, text: "Generation stopped early — the lines below are still usable; run again to continue." });
     } finally {
       setBatchPending(false);
     }
+  }
+
+  function approveAll(approved: boolean) {
+    setRows((prev) => (prev ? prev.map((r) => ({ ...r, approved: approved && !!r.line.trim() })) : prev));
   }
 
   function updateRow(email: string, patch: Partial<BatchRow>) {
@@ -153,12 +170,27 @@ export function PersonalizationLab({
         <div className="border-t border-ink-800 pt-3">
           <button onClick={runBatch} disabled={batchPending || !aiOn} className={btn}>
             {batchPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Users className="h-4 w-4 text-brand-400" />}
-            {batchPending ? "Generating…" : "Generate for this campaign's leads"}
+            {batchPending ? `Generating… ${progress ? `${progress.done}/${progress.total}` : ""}` : "Generate for ALL of this campaign's leads"}
           </button>
+          {progress && !batchPending && (
+            <span className="ml-2 text-[11px] text-slate-500">
+              {progress.done}/{progress.total} leads scanned · {rows?.filter((r) => r.line.trim()).length ?? 0} with a line worth sending
+            </span>
+          )}
           {rows && rows.length === 0 && <p className="mt-2 text-[11px] text-slate-500">No leads with a website on this campaign yet.</p>}
           {rows && rows.length > 0 && (
             <div className="mt-3 space-y-2">
-              <p className="text-[11px] text-slate-500">Review &amp; edit each line, untick to skip, then load the approved ones. Empty = standard opener.</p>
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <p className="text-[11px] text-slate-500">Review &amp; edit each line, untick to skip, then load the approved ones. Empty = standard opener.</p>
+                <span className="flex shrink-0 gap-2">
+                  <button onClick={() => approveAll(true)} className="rounded border border-ink-700 px-2 py-1 text-[11px] text-slate-300 hover:border-ink-600">
+                    Approve all with a line
+                  </button>
+                  <button onClick={() => approveAll(false)} className="rounded border border-ink-700 px-2 py-1 text-[11px] text-slate-500 hover:border-ink-600">
+                    Clear all
+                  </button>
+                </span>
+              </div>
               {rows.map((r) => (
                 <div key={r.email} className="rounded-lg border border-ink-700 bg-ink-900/40 p-3">
                   <div className="flex items-center justify-between gap-2">
