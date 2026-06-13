@@ -9,6 +9,7 @@ import {
   getVariants,
   isSuppressed,
 } from "@/lib/data/store";
+import { syncCampaigns } from "@/lib/sync/campaigns";
 import {
   addLeadsToCampaign,
   createInstantlyCampaign,
@@ -156,10 +157,17 @@ export async function upgradeSequenceAction(
 
   try {
     await updateInstantlyCampaignSequence(c.instantlyCampaignId, stepsVariants);
-    return { ok: true, steps: stepKeys.length, subjectsAdded, personalized };
   } catch (e) {
     return { ok: false, error: (e as Error).message };
   }
+  // Mirror the upgrade back into the hub's variant rows by re-syncing from Instantly —
+  // the same path that created the canonical rows, so ids stay in the one convention
+  // (sv_<instId>_<step0>_<v0>). Without this the launch checklist reports "no opener"
+  // against a live sequence that has one, variant-metrics can't match the new B arm,
+  // and a later "Push copy to Instantly" CLOBBERS the upgrade with the stale hub copy.
+  // Caught live in the pre-launch sweep (2026-06-13).
+  await syncCampaigns();
+  return { ok: true, steps: stepKeys.length, subjectsAdded, personalized };
 }
 
 /** Apply the optimal send window to the live campaign, in the timezone of its dominant lead bucket. */

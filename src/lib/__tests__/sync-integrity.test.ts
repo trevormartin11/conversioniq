@@ -126,9 +126,10 @@ describe("syncVariantMetrics — update-only, drift-visible", () => {
   it("only UPDATEs variant ids the hub already knows (never inserts), and counts unmatched drift — mutation #10", async () => {
     dbState.tables.set("campaigns", [{ id: "c_7", instantly_campaign_id: "7" }]);
     dbState.tables.set("sequence_variants", [{ id: "sv_7_0_0" }]); // hub knows slot A only
+    // Live-verified shape: ZERO-based digit-string step/variant (see variant-metrics.ts).
     instantly.stepAnalytics = [
-      { step: 1, variant: "A", sent: 120, opened: 40, replies: 6 }, // → sv_7_0_0 (known)
-      { step: 1, variant: "B", sent: 118, opened: 22, replies: 3 }, // → sv_7_0_1 (UNKNOWN → unmatched)
+      { step: "0", variant: "0", sent: 120, opened: 40, replies: 6 }, // → sv_7_0_0 (known)
+      { step: "0", variant: "1", sent: 118, opened: 22, replies: 3 }, // → sv_7_0_1 (UNKNOWN → unmatched)
     ];
 
     const res = await syncVariantMetrics();

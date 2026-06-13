@@ -37,18 +37,29 @@ describe("netStats — cumulative counters minus the last promotion's baseline",
 });
 
 describe("mapStepAnalytics — Instantly rows → hub variant ids", () => {
-  it("maps 1-based steps and letter/index variants, tolerating field drift", () => {
-    const rows = mapStepAnalytics("inst1", [
-      { step: 1, variant: "A", sent: 120, opened: 40, replies: 6 },
-      { step: 1, variant: 1, emails_sent_count: 118, open_count: 22, reply_count: 3 },
-      { step: 2, variant: "B", sent: 90, opened: 30, replies: 2 },
-      { variant: "A", sent: 10 }, // no step → unmappable, skipped
+  it("maps the LIVE-verified shape: ZERO-based digit-string steps and variants, no offset", () => {
+    // Exactly what the real endpoint returned for the first send of a live campaign.
+    const { counters, dropped } = mapStepAnalytics("inst1", [
+      { step: "0", variant: "0", sent: 1, opened: 0, replies: 0 },
+      { step: "0", variant: 1, emails_sent_count: 118, open_count: 22, reply_count: 3 },
+      { step: 1, variant: "B", sent: 90, opened: 30, replies: 2 },
+      { variant: "A", sent: 10 }, // no step → unmappable, counted as dropped
     ]);
-    expect(rows).toEqual([
-      { id: "sv_inst1_0_0", sent: 120, opens: 40, replies: 6 },
+    expect(counters).toEqual([
+      { id: "sv_inst1_0_0", sent: 1, opens: 0, replies: 0 },
       { id: "sv_inst1_0_1", sent: 118, opens: 22, replies: 3 },
       { id: "sv_inst1_1_1", sent: 90, opens: 30, replies: 2 },
     ]);
+    expect(dropped).toBe(1);
+  });
+
+  it("never confuses an ABSENT step with a real step-0 row (regression: Number(v)||0)", () => {
+    const { counters, dropped } = mapStepAnalytics("inst1", [
+      { step_number: "garbage", variant: "A", sent: 5 },
+      { step: -1, variant: "A", sent: 5 },
+    ]);
+    expect(counters).toEqual([]);
+    expect(dropped).toBe(2);
   });
 
   it("parses variant identifiers in every observed shape", () => {
