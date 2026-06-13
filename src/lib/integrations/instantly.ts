@@ -161,12 +161,15 @@ export async function addToBlocklist(entries: string[]): Promise<unknown> {
 
 /** Pause a campaign (deliverability auto-pause / operator control). */
 export async function pauseCampaign(id: string): Promise<unknown> {
-  return httpJson("instantly", `${BASE}/campaigns/${id}/pause`, { method: "POST", headers: headers() });
+  // body "{}" is required: headers() sets content-type: application/json, and Instantly
+  // 400s a body-less POST carrying that header ("Body cannot be empty…") — which silently
+  // broke Launch AND Pause (incl. the deliverability auto-pause) in live mode.
+  return httpJson("instantly", `${BASE}/campaigns/${id}/pause`, { method: "POST", headers: headers(), body: "{}" });
 }
 
 /** Activate (launch / resume) a campaign. */
 export async function activateCampaign(id: string): Promise<unknown> {
-  return httpJson("instantly", `${BASE}/campaigns/${id}/activate`, { method: "POST", headers: headers() });
+  return httpJson("instantly", `${BASE}/campaigns/${id}/activate`, { method: "POST", headers: headers(), body: "{}" });
 }
 
 // --- full campaign detail (sequence + cadence), for the control page --------

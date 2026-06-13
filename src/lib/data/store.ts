@@ -788,6 +788,29 @@ export async function seedCampaignVariants(
   return n;
 }
 
+/** Add one sequence variant row (e.g. the B arm of an A/B upgrade). Idempotent by
+ *  deterministic id — re-adding the same (campaign, step, variant) overwrites. */
+export async function addSequenceVariant(
+  campaignId: string,
+  step: number,
+  variant: string,
+  subject: string,
+  body: string,
+  actor = "system",
+): Promise<SequenceVariant> {
+  const id = `sv_${campaignId}_${step}_${variant}`;
+  const row: SequenceVariant = { id, campaignId, step, variant, subject, body, sent: 0, opens: 0, replies: 0, positives: 0, approved: true };
+  const idx = db().variants.findIndex((v) => v.id === id);
+  if (idx >= 0) db().variants[idx] = row;
+  else db().variants.push(row);
+  await liveUpsert("sequence_variants", {
+    id, campaign_id: campaignId, step, variant,
+    subject, body, sent: 0, opens: 0, replies: 0, positives: 0, approved: true,
+  });
+  await pushAudit(actor, "variant.added", "campaign", campaignId, { variantId: id, step, variant });
+  return row;
+}
+
 // --- campaign copy (inline sequence editing) --------------------------------
 export async function updateVariant(id: string, patch: { subject?: string; body?: string }, actor = "system"): Promise<SequenceVariant | null> {
   const v = db().variants.find((x) => x.id === id);

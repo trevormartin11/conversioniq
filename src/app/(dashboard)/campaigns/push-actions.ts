@@ -1,6 +1,7 @@
 "use server";
 
 import {
+  addSequenceVariant,
   ensureData,
   getCampaign,
   getCampaigns,
@@ -8,6 +9,7 @@ import {
   getLeads,
   getVariants,
   isSuppressed,
+  updateVariant,
 } from "@/lib/data/store";
 import {
   addLeadsToCampaign,
@@ -107,21 +109,28 @@ export async function upgradeSequenceAction(
   const vars = getVariants().filter((v) => v.campaignId === campaignId);
   if (!vars.length) return { ok: false, error: "No sequence copy to upgrade." };
 
-  const byStep = new Map<number, { subject: string; body: string }[]>();
+  const rowsByStep = new Map<number, typeof vars>();
   for (const v of [...vars].sort(
     (a, b) => a.step - b.step || a.variant.localeCompare(b.variant),
   )) {
-    const arr = byStep.get(v.step) ?? [];
-    arr.push({ subject: v.subject, body: v.body });
-    byStep.set(v.step, arr);
+    const arr = rowsByStep.get(v.step) ?? [];
+    arr.push(v);
+    rowsByStep.set(v.step, arr);
   }
-  const stepKeys = [...byStep.keys()].sort((a, b) => a - b);
+  const stepKeys = [...rowsByStep.keys()].sort((a, b) => a - b);
 
   let subjectsAdded = 0;
   let personalized = false;
   const stepsVariants: { subject: string; body: string }[][] = [];
+  // Hub write-backs, applied ONLY after the Instantly push succeeds — the hub's variant
+  // rows must mirror the live sequence, or the launch checklist reports "no opener",
+  // variant-metrics can't match the new B arm, and a later "Push copy to Instantly"
+  // CLOBBERS the upgraded live copy with the stale hub version.
+  let openerWriteBack: { id: string; body: string } | null = null;
+  const additions: { step: number; variant: string; subject: string; body: string }[] = [];
   for (const step of stepKeys) {
-    const variants = byStep.get(step)!.map((v) => ({ ...v }));
+    const rows = rowsByStep.get(step)!;
+    const variants = rows.map((v) => ({ subject: v.subject, body: v.body }));
     // 1) personalization opener on step 1's primary variant
     if (
       step === stepKeys[0] &&
@@ -131,6 +140,7 @@ export async function upgradeSequenceAction(
         ...variants[0],
         body: `${PERSONALIZATION_TAG}\n\n${variants[0].body}`,
       };
+      openerWriteBack = { id: rows[0].id, body: variants[0].body };
       personalized = true;
     }
     // 2) add a second subject variant (A/B) when the step has only one
@@ -148,6 +158,7 @@ export async function upgradeSequenceAction(
         altSubject.toLowerCase() !== variants[0].subject.trim().toLowerCase()
       ) {
         variants.push({ subject: altSubject, body: variants[0].body });
+        additions.push({ step, variant: String.fromCharCode(65 + rows.length), subject: altSubject, body: variants[0].body });
         subjectsAdded++;
       }
     }
@@ -156,10 +167,16 @@ export async function upgradeSequenceAction(
 
   try {
     await updateInstantlyCampaignSequence(c.instantlyCampaignId, stepsVariants);
-    return { ok: true, steps: stepKeys.length, subjectsAdded, personalized };
   } catch (e) {
     return { ok: false, error: (e as Error).message };
   }
+  // Persist the same upgrade to the hub rows (idempotent: a re-run sees the opener present
+  // and two variants per step, and changes nothing).
+  if (openerWriteBack) await updateVariant(openerWriteBack.id, { body: openerWriteBack.body }, "sequence upgrade");
+  for (const a of additions) {
+    await addSequenceVariant(campaignId, a.step, a.variant, a.subject, a.body, "sequence upgrade");
+  }
+  return { ok: true, steps: stepKeys.length, subjectsAdded, personalized };
 }
 
 /** Apply the optimal send window to the live campaign, in the timezone of its dominant lead bucket. */
