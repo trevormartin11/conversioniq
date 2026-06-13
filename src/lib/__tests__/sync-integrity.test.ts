@@ -86,6 +86,20 @@ describe("syncCampaigns — insert/update split preserves hub-owned attribution"
     expect(row).not.toHaveProperty("created_at");
   });
 
+  it("SELF-HEALS a poisoned existing row: a null vertical updates to the name-derived value, never re-pushing null", async () => {
+    // A row whose vertical was nulled (manual edit / older insert path) used to re-push that
+    // null on every sync and wedge the whole sync_campaigns job with a NOT-NULL violation,
+    // forever. The update path now falls back to the derived value so the bad row repairs itself.
+    dbState.tables.set("campaigns", [{ id: "c_42", created_at: "2026-01-01", vertical: null, persona_id: null }]);
+    dbState.tables.set("sequence_variants", []);
+    instantly.campaigns = [{ id: "42", name: "Med Spa relaunch — Jon", status: 1, email_list: [], sequences: [] }];
+
+    await syncCampaigns();
+    const row = upsertRows("campaigns").find((r) => r.id === "c_42")!;
+    expect(row.vertical).toBe("Med Spa"); // healed from the name, NOT null
+    expect(row.persona_id).toBe("pe_jon"); // healed too
+  });
+
   it("a NEW campaign takes the INSERT path WITH derived vertical + created_at", async () => {
     dbState.tables.set("campaigns", []);
     dbState.tables.set("sequence_variants", []);
