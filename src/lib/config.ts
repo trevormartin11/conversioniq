@@ -51,7 +51,10 @@ export const integrations = {
     process.env.GMAIL_REFRESH_TOKEN,
   ),
   telegram: has(process.env.TELEGRAM_BOT_TOKEN, process.env.TELEGRAM_CHAT_ID),
-  // DNS provider for the sending domains — powers DMARC/SPF auto-fix.
+  // DNS providers for the sending domains — power landing-page CNAME + DMARC/SPF auto-fix.
+  // Cloudflare is token-auth (no IP allow-list), so it works from Vercel's dynamic IPs;
+  // Namecheap needs a whitelisted static IP. When both are set, Cloudflare wins.
+  cloudflare: has(process.env.CLOUDFLARE_API_TOKEN),
   namecheap: has(process.env.NAMECHEAP_API_KEY, process.env.NAMECHEAP_USERNAME),
 } as const;
 
