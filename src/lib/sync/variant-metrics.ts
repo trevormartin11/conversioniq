@@ -28,26 +28,44 @@ export function variantIndex(v: unknown): number | null {
   return null;
 }
 
+/** Strict 0-based index parse for the step field: integer ≥ 0 or a digit string. Letters are
+ *  not steps; absent/garbage is null (the old `Number(v) || 0` turned BOTH "absent" and
+ *  malformed into step 0, indistinguishable from a real first-step row). */
+export function stepIndex(v: unknown): number | null {
+  if (typeof v === "number" && Number.isInteger(v) && v >= 0) return v;
+  if (typeof v === "string" && /^\d+$/.test(v.trim())) return Number(v.trim());
+  return null;
+}
+
 /**
  * Map one campaign's step-analytics rows to hub variant ids (`sv_<instId>_<step0>_<v0>`).
- * Tolerant of field-name drift across Instantly responses; rows that can't be located
- * (no step, no variant) are skipped rather than guessed.
+ *
+ * LIVE-VERIFIED (2026-06-13, real send): /campaigns/analytics/steps returns ZERO-based
+ * `step` and `variant` as digit strings — `{"step":"0","variant":"0","sent":1}` for the
+ * first sequence position — matching the sv_ id convention with NO offset. The previous
+ * 1-based assumption dropped every step-"0" row silently, so the first step's counters
+ * (where the A/B subject experiment lives) never synced while `unmatched` stayed 0.
+ * Rows with an unparseable step/variant are returned in `dropped` so the cron's health
+ * counter surfaces shape drift instead of hiding it.
  */
-export function mapStepAnalytics(instantlyCampaignId: string, rows: Record<string, unknown>[]): VariantCounters[] {
-  const out: VariantCounters[] = [];
+export function mapStepAnalytics(instantlyCampaignId: string, rows: Record<string, unknown>[]): { counters: VariantCounters[]; dropped: number } {
+  const counters: VariantCounters[] = [];
+  let dropped = 0;
   for (const r of rows) {
-    const stepRaw = n(r.step ?? r.sequence_step ?? r.step_number);
-    if (stepRaw < 1) continue; // Instantly steps are 1-based; 0/absent means unmappable
+    const step = stepIndex(r.step ?? r.sequence_step ?? r.step_number);
     const vIdx = variantIndex(r.variant ?? r.variant_index ?? r.step_variant);
-    if (vIdx === null) continue;
-    out.push({
-      id: `sv_${instantlyCampaignId}_${stepRaw - 1}_${vIdx}`,
+    if (step === null || vIdx === null) {
+      dropped++;
+      continue;
+    }
+    counters.push({
+      id: `sv_${instantlyCampaignId}_${step}_${vIdx}`,
       sent: n(r.sent ?? r.emails_sent_count ?? r.contacted),
       opens: n(r.opened ?? r.open_count ?? r.opens),
       replies: n(r.replies ?? r.reply_count ?? r.replied),
     });
   }
-  return out;
+  return { counters, dropped };
 }
 
 export async function syncVariantMetrics() {
@@ -64,7 +82,9 @@ export async function syncVariantMetrics() {
   for (const c of (camps ?? []) as { id: string; instantly_campaign_id: string }[]) {
     const rows = await getCampaignStepAnalytics(c.instantly_campaign_id);
     if (!rows.length) continue;
-    for (const m of mapStepAnalytics(c.instantly_campaign_id, rows)) {
+    const { counters, dropped } = mapStepAnalytics(c.instantly_campaign_id, rows);
+    unmatched += dropped;
+    for (const m of counters) {
       if (!known.has(m.id)) {
         unmatched++;
         continue;
