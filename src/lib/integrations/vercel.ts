@@ -24,8 +24,15 @@ export async function addProjectDomain(host: string): Promise<{ ok: boolean; err
     return { ok: true };
   } catch (e) {
     const msg = (e as Error).message;
-    // 409 "domain already in use by this project" — the state we want.
-    if (/already.*(in use|exists|added)/i.test(msg) || /409/.test(msg)) return { ok: true };
+    // Vercel's literal error code is domain_already_in_use (underscores — the prose-style
+    // /already.*in use/ never matched it, so every re-publish failed loudly). Already on
+    // THIS project = the state we want; on a DIFFERENT project = a real conflict.
+    if (/domain_already_in_use/i.test(msg)) {
+      return msg.includes(process.env.VERCEL_PROJECT_ID!)
+        ? { ok: true }
+        : { ok: false, error: `${host} is attached to a different Vercel project — detach it there, then publish again. (${msg})` };
+    }
+    if (/already.*(in use|exists|added)/i.test(msg) || /\b409\b/.test(msg)) return { ok: true };
     return { ok: false, error: msg };
   }
 }
