@@ -17,9 +17,10 @@ vi.mock("@/lib/integrations/vercel", () => ({
   addProjectDomain: vi.fn(async () => ({ ok: true })),
 }));
 vi.mock("@/lib/integrations/namecheap", () => ({ ensureCname: vi.fn(async () => ({ added: true })) }));
+vi.mock("@/lib/integrations/cloudflare", () => ({ ensureCname: vi.fn(async () => ({ added: true })) }));
 
 // Toggled per-test before importing the action's config reads.
-const integrations = { supabase: true, namecheap: false } as Record<string, boolean>;
+const integrations = { supabase: true, namecheap: false, cloudflare: false } as Record<string, boolean>;
 vi.mock("@/lib/config", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/lib/config")>();
   return { ...actual, get integrations() { return { ...actual.integrations, ...integrations }; } };
@@ -28,6 +29,7 @@ vi.mock("@/lib/config", async (importOriginal) => {
 import { publishLandingPageAction } from "@/app/(dashboard)/campaigns/landing-actions";
 import { addCampaign, ensureData, generateLandingPage, approveLandingPage } from "@/lib/data/store";
 import { ensureCname } from "@/lib/integrations/namecheap";
+import { ensureCname as cfEnsureCname } from "@/lib/integrations/cloudflare";
 
 async function approvedPage(name: string) {
   await ensureData();
@@ -41,11 +43,15 @@ async function approvedPage(name: string) {
   return c;
 }
 
-describe("publishLandingPageAction — DNS reachability signal", () => {
-  beforeEach(() => { vi.mocked(ensureCname).mockClear(); });
-
-  it("flags dnsManual when Namecheap is NOT connected (page attached but unreachable)", async () => {
+describe("publishLandingPageAction — DNS reachability signal + per-domain provider fallback", () => {
+  beforeEach(() => {
+    vi.mocked(ensureCname).mockClear().mockResolvedValue({ added: true, live: true });
+    vi.mocked(cfEnsureCname).mockClear().mockResolvedValue({ added: true, live: true });
     integrations.namecheap = false;
+    integrations.cloudflare = false;
+  });
+
+  it("flags dnsManual when NO provider is connected (page attached but unreachable)", async () => {
     const c = await approvedPage("LP DNS Off");
     const res = await publishLandingPageAction(c.id);
     expect(res.ok).toBe(true);
@@ -54,6 +60,7 @@ describe("publishLandingPageAction — DNS reachability signal", () => {
     expect(res.dnsManual!.target).toBe("cname.vercel-dns.com");
     expect(res.dnsManual!.host).toMatch(/^go\./);
     expect(vi.mocked(ensureCname)).not.toHaveBeenCalled();
+    expect(vi.mocked(cfEnsureCname)).not.toHaveBeenCalled();
   });
 
   it("does NOT flag dnsManual when Namecheap created the CNAME", async () => {
@@ -64,5 +71,52 @@ describe("publishLandingPageAction — DNS reachability signal", () => {
     if (!res.ok) return;
     expect(res.dnsManual).toBeNull();
     expect(vi.mocked(ensureCname)).toHaveBeenCalledTimes(1);
+  });
+
+  it("uses Cloudflare (preferred) when it manages the zone — Namecheap untouched", async () => {
+    integrations.cloudflare = true;
+    integrations.namecheap = true;
+    const c = await approvedPage("LP CF On");
+    const res = await publishLandingPageAction(c.id);
+    expect(res.ok).toBe(true);
+    if (!res.ok) return;
+    expect(res.dnsManual).toBeNull();
+    expect(vi.mocked(cfEnsureCname)).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(ensureCname)).not.toHaveBeenCalled(); // Namecheap never hit
+  });
+
+  it("FALLS BACK to Namecheap when the domain isn't on Cloudflare (zone not found)", async () => {
+    integrations.cloudflare = true;
+    integrations.namecheap = true;
+    vi.mocked(cfEnsureCname).mockRejectedValueOnce(new Error("cloudflare: zone not found for go.x.com"));
+    const c = await approvedPage("LP CF Fallback NC");
+    const res = await publishLandingPageAction(c.id);
+    expect(res.ok).toBe(true);
+    if (!res.ok) return;
+    expect(res.dnsManual).toBeNull();
+    expect(vi.mocked(cfEnsureCname)).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(ensureCname)).toHaveBeenCalledTimes(1); // fell through to Namecheap
+  });
+
+  it("falls back to the MANUAL warning when the domain is on neither provider", async () => {
+    integrations.cloudflare = true;
+    integrations.namecheap = false;
+    vi.mocked(cfEnsureCname).mockRejectedValueOnce(new Error("cloudflare: zone not found for go.x.com"));
+    const c = await approvedPage("LP CF Fallback Manual");
+    const res = await publishLandingPageAction(c.id);
+    expect(res.ok).toBe(true);
+    if (!res.ok) return;
+    expect(res.dnsManual).not.toBeNull();
+  });
+
+  it("a REAL Cloudflare error (not zone-not-found) fails the publish, never silently falls through", async () => {
+    integrations.cloudflare = true;
+    integrations.namecheap = true;
+    vi.mocked(cfEnsureCname).mockRejectedValueOnce(new Error("cloudflare: Invalid request headers"));
+    const c = await approvedPage("LP CF Real Error");
+    const res = await publishLandingPageAction(c.id);
+    expect(res.ok).toBe(false);
+    expect(!res.ok && res.error).toMatch(/Invalid request headers/);
+    expect(vi.mocked(ensureCname)).not.toHaveBeenCalled(); // did NOT fall through on a real error
   });
 });

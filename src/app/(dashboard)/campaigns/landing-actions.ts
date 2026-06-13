@@ -86,18 +86,37 @@ export async function publishLandingPageAction(campaignId: string) {
     const dom = await addProjectDomain(host);
     if (!dom.ok) return { ok: false as const, error: `Vercel domain attach failed: ${dom.error}` };
     notes.push(`Vercel: ${host} attached`);
-    // Prefer Cloudflare (token auth → works from serverless) over Namecheap (IP allow-listed).
-    const dnsProvider = integrations.cloudflare ? "cloudflare" : integrations.namecheap ? "namecheap" : null;
-    if (dnsProvider) {
+    // Per-DOMAIN provider selection, not global: Cloudflare is preferred (token auth works from
+    // serverless), but it only manages the zones actually added to that account. A domain still
+    // on Namecheap throws "zone not found" from Cloudflare — that must FALL THROUGH to Namecheap
+    // (or the manual warning), not hard-fail the publish. (A real Cloudflare error — bad token,
+    // rate limit — still surfaces.) The dns record name is the same regardless of provider.
+    const recName = recordNameFor(host, domain);
+    let dnsDone = false;
+    if (integrations.cloudflare) {
       try {
-        const ensure = dnsProvider === "cloudflare" ? cfEnsureCname : ncEnsureCname;
-        const dns = await ensure(domain, recordNameFor(host, domain), VERCEL_CNAME_TARGET);
-        notes.push(dns.added ? `DNS (${dnsProvider}): CNAME ${host} → ${VERCEL_CNAME_TARGET} created` : `DNS (${dnsProvider}): record already present`);
+        const dns = await cfEnsureCname(domain, recName, VERCEL_CNAME_TARGET);
+        notes.push(dns.added ? `DNS (cloudflare): CNAME ${host} → ${VERCEL_CNAME_TARGET} created` : "DNS (cloudflare): record already present");
+        dnsDone = true;
+      } catch (e) {
+        const msg = (e as Error).message;
+        if (!/zone not found/i.test(msg)) {
+          return { ok: false as const, error: `DNS failed: ${msg}. Add the CNAME manually (${host} → ${VERCEL_CNAME_TARGET}) and publish again.` };
+        }
+        notes.push(`DNS: ${domain} isn't on Cloudflare — falling back`); // try Namecheap / manual below
+      }
+    }
+    if (!dnsDone && integrations.namecheap) {
+      try {
+        const dns = await ncEnsureCname(domain, recName, VERCEL_CNAME_TARGET);
+        notes.push(dns.added ? `DNS (namecheap): CNAME ${host} → ${VERCEL_CNAME_TARGET} created` : "DNS (namecheap): record already present");
+        dnsDone = true;
       } catch (e) {
         return { ok: false as const, error: `DNS failed: ${(e as Error).message}. Add the CNAME manually (${host} → ${VERCEL_CNAME_TARGET}) and publish again.` };
       }
-    } else {
-      notes.push(`DNS: no DNS provider connected — add CNAME ${host} → ${VERCEL_CNAME_TARGET} manually`);
+    }
+    if (!dnsDone) {
+      notes.push(`DNS: no connected provider manages ${domain} — add CNAME ${host} → ${VERCEL_CNAME_TARGET} manually`);
       dnsManual = { host, target: VERCEL_CNAME_TARGET };
     }
   } else {
