@@ -23,8 +23,14 @@ Each is a 2-minute check. Do them in order; 1 and 2 gate the rest.
    `unmatched` count in the daily cron's `variant_metrics` result means the same thing.
 3. **Landing publish on a TEST domain.** Note the domain's existing DNS records first.
    Generate → Approve → Publish. Confirm: success toast with URL, the original MX/SPF/DKIM
-   records all survive in Namecheap, only a `go` CNAME was added, page loads after DNS
-   propagates (1–5 min). Re-publish → "record already present" (idempotent).
+   records all survive, only a `go` CNAME was added, page loads after DNS propagates (1–5 min).
+   Re-publish → success again (idempotent — Vercel's "already attached" case is handled).
+   **DNS reachability gate (verified live 2026-06-13):** the CNAME is auto-created ONLY when
+   Namecheap is connected (Settings → Integrations). If it shows **Off**, Publish attaches the
+   Vercel domain and marks the page published, but it is **NOT reachable** until you add the
+   CNAME by hand. Publish now warns with the exact record (`go.<domain>` → `cname.vercel-dns.com`)
+   instead of a green "Live at…". Connect Namecheap, or add that CNAME at your DNS host, before
+   relying on any landing link.
 4. **STOP text.** From a phone with a recorded opt-in, text STOP to the Twilio number.
    The Channels consent ledger shows `opted_out` within seconds; Twilio's log shows 200.
 5. **Apollo zero-credit check.** Note the personal key's credit balance, run "Auto-queue
@@ -57,7 +63,10 @@ Each is a 2-minute check. Do them in order; 1 and 2 gate the rest.
 3. **An inbox burning** → Pause it on Deliverability (the auto-pause usually beats you
    to it).
 4. **Everything** → pause campaigns in Instantly directly; the hub mirrors on the next
-   daily sync (~24h) — or hit Settings → Sync now to mirror immediately.
+   daily sync (~24h), or force it immediately by hitting `/api/sync` (or `/api/cron/daily`)
+   with the secret: `curl -H "Authorization: Bearer $CRON_SECRET" https://<hub>/api/sync`.
+   (There is no "Sync now" button in the UI — reply detection in real time runs off the
+   Instantly `reply_received` webhook, which is configured and active.)
 
 ## If something looks wrong
 

@@ -60,7 +60,14 @@ export function LandingControls({
       try {
         const r = await publishLandingPageAction(campaignId);
         if (!r.ok) return toast.error(r.error);
-        toast.success(`Live at ${r.url} (DNS can take a few minutes)`, { label: "Open →", onClick: () => window.open(r.url, "_blank") });
+        // DNS couldn't be auto-created (Namecheap not connected): the page is NOT reachable
+        // until the operator adds the CNAME by hand. Warn loudly with the exact record — a
+        // bare "Live at…" here would lie, and prospects clicking the link would get nothing.
+        if (r.dnsManual) {
+          toast.error(`Attached, but NOT reachable yet — add a CNAME at your DNS host: ${r.dnsManual.host} → ${r.dnsManual.target}, then it goes live in a few minutes.`);
+        } else {
+          toast.success(`Live at ${r.url} (DNS can take a few minutes)`, { label: "Open →", onClick: () => window.open(r.url, "_blank") });
+        }
       } catch {
         toast.error("Publish didn't go through — try again.");
       }

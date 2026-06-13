@@ -72,6 +72,10 @@ export async function publishLandingPageAction(campaignId: string) {
   const host = publishHostFor(domain);
   const url = `https://${host}`;
   const notes: string[] = [];
+  // When DNS can't be auto-created (Namecheap not connected), the page is NOT actually
+  // reachable until the operator adds this CNAME by hand. Surfaced to the caller so the UI
+  // can warn loudly instead of showing a bare "Live at…" that lies about reachability.
+  let dnsManual: { host: string; target: string } | null = null;
 
   // Live mode requires the real plumbing; preview/demo mode simulates the publish.
   if (integrations.supabase) {
@@ -90,6 +94,7 @@ export async function publishLandingPageAction(campaignId: string) {
       }
     } else {
       notes.push(`DNS: Namecheap not connected — add CNAME ${host} → ${VERCEL_CNAME_TARGET} manually`);
+      dnsManual = { host, target: VERCEL_CNAME_TARGET };
     }
   } else {
     notes.push("Preview mode — publish simulated (no DNS/Vercel calls)");
@@ -97,7 +102,7 @@ export async function publishLandingPageAction(campaignId: string) {
 
   await publishLandingPage(campaignId, url, user.name);
   rev();
-  return { ok: true as const, url, notes };
+  return { ok: true as const, url, notes, dnsManual };
 }
 
 export async function setLandingConfigAction(campaignId: string, cfg: { domain?: string | null; schedulerUrl?: string | null; videoUrl?: string | null }) {
