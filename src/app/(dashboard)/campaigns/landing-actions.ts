@@ -5,7 +5,8 @@ import { getCurrentUser } from "@/lib/auth";
 import { approveLandingPage, ensureData, generateLandingPage, getCampaign, getDomains, getInboxes, getLandingPage, publishLandingPage, setLandingConfig, updateLandingContent } from "@/lib/data/store";
 import { publishHostFor, recordNameFor, VERCEL_CNAME_TARGET } from "@/lib/landing/publish";
 import { addProjectDomain, vercelConfigured } from "@/lib/integrations/vercel";
-import { ensureCname } from "@/lib/integrations/namecheap";
+import { ensureCname as ncEnsureCname } from "@/lib/integrations/namecheap";
+import { ensureCname as cfEnsureCname } from "@/lib/integrations/cloudflare";
 import { integrations } from "@/lib/config";
 import type { LandingContent } from "@/lib/data/types";
 
@@ -85,15 +86,18 @@ export async function publishLandingPageAction(campaignId: string) {
     const dom = await addProjectDomain(host);
     if (!dom.ok) return { ok: false as const, error: `Vercel domain attach failed: ${dom.error}` };
     notes.push(`Vercel: ${host} attached`);
-    if (integrations.namecheap) {
+    // Prefer Cloudflare (token auth → works from serverless) over Namecheap (IP allow-listed).
+    const dnsProvider = integrations.cloudflare ? "cloudflare" : integrations.namecheap ? "namecheap" : null;
+    if (dnsProvider) {
       try {
-        const dns = await ensureCname(domain, recordNameFor(host, domain), VERCEL_CNAME_TARGET);
-        notes.push(dns.added ? `DNS: CNAME ${host} → ${VERCEL_CNAME_TARGET} created` : "DNS: record already present");
+        const ensure = dnsProvider === "cloudflare" ? cfEnsureCname : ncEnsureCname;
+        const dns = await ensure(domain, recordNameFor(host, domain), VERCEL_CNAME_TARGET);
+        notes.push(dns.added ? `DNS (${dnsProvider}): CNAME ${host} → ${VERCEL_CNAME_TARGET} created` : `DNS (${dnsProvider}): record already present`);
       } catch (e) {
         return { ok: false as const, error: `DNS failed: ${(e as Error).message}. Add the CNAME manually (${host} → ${VERCEL_CNAME_TARGET}) and publish again.` };
       }
     } else {
-      notes.push(`DNS: Namecheap not connected — add CNAME ${host} → ${VERCEL_CNAME_TARGET} manually`);
+      notes.push(`DNS: no DNS provider connected — add CNAME ${host} → ${VERCEL_CNAME_TARGET} manually`);
       dnsManual = { host, target: VERCEL_CNAME_TARGET };
     }
   } else {
