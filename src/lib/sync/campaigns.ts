@@ -67,9 +67,16 @@ export async function syncCampaigns() {
       // Updates go through the same upsert call — and Postgres builds the INSERT tuple
       // BEFORE conflict arbitration, so every NOT-NULL column must be present even though
       // the row exists (first live cron run failed exactly here on `vertical`). Echo the
-      // EXISTING hub-owned values: constraint satisfied, nothing clobbered.
+      // EXISTING hub-owned values: constraint satisfied, nothing clobbered. SELF-HEAL on a
+      // null — a poisoned row (manual edit / older insert path) would otherwise re-push the
+      // null and wedge EVERY future sync forever; fall back to the name-derived value, which
+      // is never null for `vertical`, so the bad row repairs itself on the next run.
       const prev = existingById.get(cid)!;
-      campUpdates.push({ ...shared, vertical: prev.vertical, persona_id: prev.persona_id });
+      campUpdates.push({
+        ...shared,
+        vertical: prev.vertical ?? verticalFor(c.name ?? ""),
+        persona_id: prev.persona_id ?? personaFor(c.name ?? ""),
+      });
     } else {
       campInserts.push({
         ...shared,
